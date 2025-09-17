@@ -17,15 +17,13 @@ app.use(express.json());
 
 // Only allow requests from your frontend
 app.use(cors({
-  origin: "http://localhost:5173", 
+  origin: "https://frontend-payroll-six.vercel.app/", 
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 }));
 
-app.get("/", (req, res) => {
-  res.send("Backend is live and running!");
-});
+
 
 // API routes
 app.use("/api/payrolls", payrollRoutes);
