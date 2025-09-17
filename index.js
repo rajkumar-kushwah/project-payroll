@@ -15,15 +15,22 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://frontend-payroll-six.vercel.app"
+];
+
 // Only allow requests from your frontend
 app.use(cors({
-  origin: "https://frontend-payroll-six.vercel.app/", 
+  origin:  allowedOrigins, 
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 }));
 
-
+app.get("/", (req, res) => {
+  res.send("Backend is live and running!");
+});
 
 // API routes
 app.use("/api/payrolls", payrollRoutes);
