@@ -3,12 +3,10 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
+
 import employeeRoutes from "./routes/employees.js";
-import candidateRoutes from "./routes/candidates.js";
-import dashboardRoutes from "./routes/dashboard.js";
-import notification from "./routes/notification.js";
-import message from "./routes/message.js";
-import payrollRoutes from "./routes/payroll.js";
+
+
 
 dotenv.config();
 
@@ -33,13 +31,8 @@ app.get("/", (req, res) => {
 });
 
 // API routes
-app.use("/api/payrolls", payrollRoutes);
-app.use("/api/employees", employeeRoutes);
-app.use("/api/candidates", candidateRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/notifications", notification);
-app.use("/api/messages", message);
 app.use("/api/auth", authRoutes);
+app.use("/api/employees", employeeRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
