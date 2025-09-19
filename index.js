@@ -30,9 +30,15 @@ app.get("/", (req, res) => {
   res.send("Backend is live and running!");
 });
 
+// Ping route (UptimeRobot isko call karega)
+app.get("/ping", (req, res) => {
+  res.send("pong");
+});
+
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
+
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
