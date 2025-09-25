@@ -27,7 +27,22 @@ export const getEmployeeById = async (req, res) => {
 export const addEmployee = async (req, res) => {
   try {
     const emp = await Employee.create(req.body);
-    res.status(201).json(emp);
+    
+     // 2️⃣ Automatically create initial salary record
+    await Salary.create({
+      EmployeeId: emp._id,
+      month: new Date().toISOString().slice(0, 7), // Current month in yyyy-mm
+      baseSalary: emp.salary || 0,
+      bonus: 0,
+      deductions: 0,
+      leaves: 0,
+      netPay: emp.salary || 0,
+    });
+
+    res.status(201).json({
+      message: "Employee added successfully",
+      data: emp,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

@@ -3,8 +3,8 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
-
 import employeeRoutes from "./routes/employees.js";
+import salaryRoutes from "./routes/salaries.js";
 
 
 
@@ -38,6 +38,7 @@ app.get("/ping", (req, res) => {
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
+app.use("/api/salaries", salaryRoutes);
 
 
 // Connect to MongoDB
