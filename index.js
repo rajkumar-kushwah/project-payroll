@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import employeeRoutes from "./routes/employees.js";
-import salaryRoutes from "./routes/salaries.js";
+import salaryRoutes from "./routes/salary.js";
 
 
 
@@ -38,7 +38,7 @@ app.get("/ping", (req, res) => {
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
-app.use("/api/salaries", salaryRoutes);
+app.use("/api/salary", salaryRoutes);
 
 
 // Connect to MongoDB

@@ -27,20 +27,17 @@ export const getEmployeeById = async (req, res) => {
 export const addEmployee = async (req, res) => {
   try {
     const emp = await Employee.create(req.body);
-
-    try {
-      await Salary.create({
-        EmployeeId: emp._id,
-        month: new Date().toISOString().slice(0, 7), // yyyy-mm
-        baseSalary: emp.salary || 0,
-        bonus: 0,
-        deductions: 0,
-        leaves: 0,
-        netPay: emp.salary || 0,
-      });
-    } catch (err) {
-      console.error("Initial salary creation failed:", err.message);
-    }
+    
+     // 2️⃣ Automatically create initial salary record
+    await Salary.create({
+      EmployeeId: emp._id,
+      month: new Date().toISOString().slice(0, 7), // Current month in yyyy-mm
+      baseSalary: emp.salary || 0,
+      bonus: 0,
+      deductions: 0,
+      leaves: 0,
+      netPay: emp.salary || 0,
+    });
 
     res.status(201).json({
       message: "Employee added successfully",
@@ -51,7 +48,6 @@ export const addEmployee = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 // Update employee
 export const updateEmployee = async (req, res) => {
