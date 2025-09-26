@@ -53,3 +53,26 @@ export const paySalary = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// Get Salary by ID
+export const getSalaryById = async (req, res) => {
+  try {
+    const salary = await Salary.findById(req.params.id);
+    if (!salary) return res.status(404).json({ error: "Salary not found" });
+    res.json(salary);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// salaryRoutes.js
+// router.get("/single/:id", async (req, res) => {
+//   try {
+//     const salary = await Salary.findById(req.params.id);
+//     if (!salary) return res.status(404).json({ error: "Salary not found" });
+//     res.json(salary);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
