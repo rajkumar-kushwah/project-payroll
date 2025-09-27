@@ -7,6 +7,8 @@ const userSchema = new mongoose.Schema({
   role: { type: String, default: "Administrator" },
   resetPasswordOTP: { type: String },
   otpExpire: { type: Date },
+  lastLogin: { type: Date }
+
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

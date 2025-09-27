@@ -6,6 +6,7 @@ import User from '../models/User.js';
 import Blacklist from "../models/Blacklist.js";
 import verifyToken from '../middleware/authMiddleware.js';
 import { sendOtpEmail } from '../utils/sendEmail.js';
+import moment from 'moment-timezone';
 
 const router = express.Router();
 
@@ -34,6 +35,10 @@ router.post('/register', async (req, res) => {
     // Token generate karo
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
+ // Dates in IST
+    const registeredAt = moment(newUser.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const updatedAt = moment(newUser.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+
     // Profile info hata diya
     res.json({
       message: "User registered successfully",
@@ -42,7 +47,9 @@ router.post('/register', async (req, res) => {
         _id: newUser._id,
         name: newUser.name,
         email: newUser.email,
-        role: newUser.role || "User"  // optional
+        role: newUser.role || "User",  // optional
+        registeredAt,
+        updatedAt
       }
     });
 
@@ -63,10 +70,24 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'Account not registered' });
 
+    // Update lastLogin field
+    user.lastLogin = new Date();
+await user.save();
+
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid password' });
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+
+      // IST formatted dates
+    const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const lastLoginIST= moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+
+    console.log("Registered At (IST):", registeredAt);
+console.log("Updated At (IST):", updatedAt);
+console.log("Last Login (IST):", lastLoginIST);
 
    res.status(200).json({
   token,
@@ -74,7 +95,10 @@ router.post('/login', async (req, res) => {
     id: user._id,
     name: user.name,
     email: user.email,
-     role: user.role,   
+     role: user.role, 
+    registeredAt,
+    updatedAt,
+    lastLogin:lastLoginIST,
     
     // agar profile image ka path save karte ho
   },

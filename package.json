@@ -19,7 +19,8 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.18.0",
+    "moment-timezone": "^0.6.0",
+    "mongoose": "^8.18.2",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^7.0.6",
@@ -28,5 +29,13 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rajkumar-kushwah/project-payroll.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rajkumar-kushwah/project-payroll/issues"
+  },
+  "homepage": "https://github.com/rajkumar-kushwah/project-payroll#readme"
 }
