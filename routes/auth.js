@@ -92,7 +92,7 @@ router.post('/logout', async (req, res) => {
       const token = req.headers["authorization"]?.split(" ")[1];
       if (!token) return res.status(401).json({ message: 'No token provided' });
 
-         // token blacklist में डाल दो
+         // token blacklist karo
          await Blacklist.create({ token });
 
          res.json({ message: 'Logged out successfully'});
@@ -145,7 +145,7 @@ router.post("/verify-otp", async (req, res) => {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    // ✅ OTP verified → issue reset token
+    //  OTP verified → issue reset token
     const resetToken = jwt.sign(
       { id: user._id, email: user.email },
       process.env.JWT_SECRET,
@@ -170,7 +170,7 @@ router.post("/reset-password", async (req, res) => {
   const { email, newPassword, resetToken } = req.body;
 
   try {
-    // ✅ Verify resetToken
+    //  Verify resetToken
     const decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
     if (!decoded || decoded.email !== email) {
       return res.status(400).json({ message: "Invalid or expired reset token" });
@@ -182,7 +182,7 @@ router.post("/reset-password", async (req, res) => {
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
 
-    res.json({ message: "Password reset successfully ✅" });
+    res.json({ message: "Password reset successfully " });
   } catch (err) {
     console.error("Reset password error:", err);
     res.status(500).json({ message: "Server error" });
