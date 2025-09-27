@@ -9,6 +9,8 @@ const userSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
   resetPasswordOTP: { type: String },
   otpExpire: { type: Date },
+  lastLogin: { type: Date }
+
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

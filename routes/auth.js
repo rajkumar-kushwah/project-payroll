@@ -34,6 +34,17 @@ router.post('/register', async (req, res) => {
     // Token generate karo
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
+
+    // Correct date formatting
+    const registeredAt = moment(newUser.createdAt)
+      .tz("Asia/Kolkata")
+      .format("DD/MM/YYYY hh:mm:ss A");
+
+    const updatedAt = moment(newUser.updatedAt)
+      .tz("Asia/Kolkata")
+      .format("DD/MM/YYYY hh:mm:ss A");
+
+
     // Profile info hata diya
     res.json({
       message: "User registered successfully",
@@ -42,7 +53,9 @@ router.post('/register', async (req, res) => {
         _id: newUser._id,
         name: newUser.name,
         email: newUser.email,
-        role: newUser.role || "User"  // optional
+        role: newUser.role || "User" , // optional
+        registeredAt,
+        updatedAt,
       }
     });
 
@@ -63,10 +76,27 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'Account not registered' });
 
+    user.lastLogin = new Date();  // current time set
+    await user.save();
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid password' });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    // Date-time format
+    const registeredAt = moment(user.createdAt)
+      .tz("Asia/Kolkata")
+      .format("DD/MM/YYYY hh:mm:ss A");
+
+    const updatedAt = moment(user.updatedAt)
+      .tz("Asia/Kolkata")
+      .format("DD/MM/YYYY hh:mm:ss A");
+
+    const lastLogin = moment(user.lastLogin)
+      .tz("Asia/Kolkata")
+      .format("DD/MM/YYYY hh:mm:ss A");
+
 
    res.status(200).json({
   token,
@@ -75,7 +105,9 @@ router.post('/login', async (req, res) => {
     name: user.name,
     email: user.email,
      role: user.role,   
-    
+     registeredAt,
+        updatedAt,
+        lastLogin,
     // agar profile image ka path save karte ho
   },
 });
