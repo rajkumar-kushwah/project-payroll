@@ -4,8 +4,11 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User.js';
 import Blacklist from "../models/Blacklist.js";
-import verifyToken from '../middleware/authMiddleware.js';
-import { sendOtpEmail } from '../utils/sendEmail.js';
+import verifyToken,{authMiddleware} from '../middleware/authMiddleware.js';
+import { sendVerificationEmail,sendLoginEmail ,sendLogoutEmail,sendDeleteEmail } from '../utils/sendEmail.js';
+
+
+
 import moment from 'moment-timezone';
 
 const router = express.Router();
@@ -14,95 +17,175 @@ const router = express.Router();
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 const hashData = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
+// Email validators
+// const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
+const strictEmailRule = (email) => /^[A-Za-z]+[0-9]+@[A-Za-z0-9]+\.[A-Za-z]{2,}$/.test(email);
 
-// ======================= PUBLIC ROUTES =======================
+// Generate random token
+const generateToken = () => crypto.randomBytes(20).toString("hex");
 
-//  Register
-// Register route
-router.post('/register', async (req, res) => {
-  const { name, email, password } = req.body;
-
+// ===== REGISTER =====
+router.post("/register", async (req, res) => {
   try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Email already registered' });
+    const { name, email, password, phone } = req.body;
+    if (!name || !email || !password || !phone) return res.status(400).json({ message: "All fields required" });
+
+    // if (!strictEmailRule(email)) return res.status(400).json({ message: "Invalid email format" });
+   if (!strictEmailRule(email)) {
+  return res.status(400).json({ message: "Email must be like name123@example.com" });
+}
+    
+ // Phone validation - add **yaha**
+    const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
+    if (!phoneRegex.test(phone)) {
+      return res.status(400).json({ message: "Invalid phone number format" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ name, email, password: hashedPassword });
-    await newUser.save();
 
-    // Token generate karo
-    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    if (await User.findOne({ email: email.toLowerCase(), isDeleted: false })) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
 
- // Dates in IST
-    const registeredAt = moment(newUser.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-    const updatedAt = moment(newUser.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+    if (await User.findOne({ phone: formattedPhone })) {
+      return res.status(400).json({ message: "Phone already registered" });
+    }
 
-    // Profile info hata diya
-    res.json({
-      message: "User registered successfully",
-      token,        
-      user: {
-        _id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role || "User",  // optional
-        registeredAt,
-        updatedAt
-      }
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const token = generateToken();
+    const expiry = Date.now() + 10 * 60 * 1000; // 10 min
+
+    const newUser = new User({
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      phone: formattedPhone,
+      emailVerificationToken: token,
+      emailVerificationExpiry: new Date(expiry),
+      emailVerified: false,
+      phoneVerified: false,
+      createdByIP: req.ip,
+      isDeleted: false
     });
 
+    await newUser.save();
+
+    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || req.connection?.remoteAddress || 'Unknown';
+
+    // Send verification email
+    await sendVerificationEmail(
+      newUser.name,
+      newUser.email,
+      token,
+      ip,
+      req.headers['user-agent']
+    );
+
+    res.status(201).json({ message: "Registered successfully. Check email to verify." });
   } catch (err) {
-    console.error("Register error:", err);
-    res.status(500).json({ message: 'Server error' });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
 
+// ===== VERIFY EMAIL =====
+router.get("/verify-email", async (req, res) => {
+  try {
+    const { email, token } = req.query;
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.emailVerified) return res.status(400).json({ message: "Email already verified" });
+    if (user.emailVerificationToken !== token || Date.now() > new Date(user.emailVerificationExpiry)) {
+      return res.status(400).json({ message: "Invalid or expired token" });
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpiry = undefined;
+    await user.save();
+    console.log("User verified successfully:", user);
+
+    res.json({ message: "Email verified successfully. You can now login." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ===== RESEND VERIFICATION EMAIL =====
+router.post('/resend-verification', async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email: email.toLowerCase() });
+
+  if (!user) return res.status(404).json({ message: 'User not found' });
+  if (user.emailVerified) return res.status(400).json({ message: 'User already verified' });
+
+  const token = crypto.randomBytes(20).toString('hex'); // naya token
+  user.emailVerificationToken = token;
+  user.emailVerificationExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min expiry
+  await user.save();
+
+
+  const verificationLink = `${process.env.REACT_APP_FRONTEND_URL}/verify-email?token=${token}&email=${email}`;
+  await sendEmail(email, 'Verify Your Email', `Click here to verify: ${verificationLink}`);
+
+  res.status(200).json({ message: 'Verification email resent successfully!' });
+});
 
 
 // Login
+// Login (email must be verified)
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ message: 'Account not registered' });
 
-    // Update lastLogin field
-    user.lastLogin = new Date();
-await user.save();
-
+    // Email verification check
+    if (!user.emailVerified) return res.status(400).json({ message: 'Email not verified. Check your inbox.' });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid password' });
+    if (!isMatch) return res.status(400).json({ message: 'Incorrect password' });
+    
+        // Calculate IP
+    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || req.connection?.remoteAddress || 'Unknown';
 
+    // Send login email
+    await sendLoginEmail(
+      user.name,
+       user.email,
+       ip,
+       req.headers['user-agent']
+      );
+
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+
+    // Generate JWT
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
 
-      // IST formatted dates
     const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
     const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-    const lastLoginIST= moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const lastLoginIST = moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
 
-    console.log("Registered At (IST):", registeredAt);
-console.log("Updated At (IST):", updatedAt);
-console.log("Last Login (IST):", lastLoginIST);
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        registeredAt,
+        updatedAt,
+        lastLogin: lastLoginIST,
+      },
+    });
 
-   res.status(200).json({
-  token,
-  user: {
-    id: user._id,
-    name: user.name,
-    email: user.email,
-     role: user.role, 
-    registeredAt,
-    updatedAt,
-    lastLogin:lastLoginIST,
-    
-    // agar profile image ka path save karte ho
-  },
-});
 
   } catch (err) {
     console.error("Login error:", err);
@@ -110,20 +193,37 @@ console.log("Last Login (IST):", lastLoginIST);
   }
 });
 
+
+// ===== VERIFY LOGIN OTP =====
+
+
+
 //  Logout (secure)
 router.post('/logout', async (req, res) => {
-   try {
-      const token = req.headers["authorization"]?.split(" ")[1];
-      if (!token) return res.status(401).json({ message: 'No token provided' });
+  try {
+    const token = req.headers["authorization"]?.split(" ")[1];
+    if (!token) return res.status(401).json({ message: 'No token provided' });
 
-         // token blacklist में डाल दो
-         await Blacklist.create({ token });
+    // Verify token to get user id
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-         res.json({ message: 'Logged out successfully'});
-   } catch (err) {
-      console.error("Logout error:", err);
-      res.status(500).json({ message: 'Server error' });
-   }
+
+    // token blacklist me dal do
+    await Blacklist.create({ token });
+
+    // IP capture
+    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || req.connection?.remoteAddress || 'Unknown';
+
+    // Send logout email
+    await sendLogoutEmail(user.name, user.email, ip, req.headers['user-agent']);
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (err) {
+    console.error("Logout error:", err);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 
@@ -169,7 +269,7 @@ router.post("/verify-otp", async (req, res) => {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    // ✅ OTP verified → issue reset token
+    //  OTP verified → issue reset token
     const resetToken = jwt.sign(
       { id: user._id, email: user.email },
       process.env.JWT_SECRET,
@@ -194,7 +294,7 @@ router.post("/reset-password", async (req, res) => {
   const { email, newPassword, resetToken } = req.body;
 
   try {
-    // ✅ Verify resetToken
+    //  Verify resetToken
     const decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
     if (!decoded || decoded.email !== email) {
       return res.status(400).json({ message: "Invalid or expired reset token" });
@@ -223,6 +323,38 @@ router.get('/profile', verifyToken, async (req, res) => {
   } catch (err) {
     console.error("Profile error:", err);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+//===================== DELETE USER ======================
+
+// DELETE account
+router.delete("/delete-account", authMiddleware, async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    // IP capture
+    const ip = req.headers['x-forwarded-for']?.split(',').shift()
+            || req.socket?.remoteAddress
+            || req.connection?.remoteAddress
+            || 'Unknown';
+
+    // Send delete confirmation email (errors logged but don't block)
+    try {
+      await sendDeleteEmail(user.name, user.email, ip, req.headers['user-agent']);
+    } catch(err) {
+      console.error("Delete Email Error:", err.message);
+    }
+
+    // Delete user
+    await User.findByIdAndDelete(user._id);
+
+    return res.json({ message: "Account deleted successfully" });
+  } catch (err) {
+    console.error("Delete Account Error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 });
 

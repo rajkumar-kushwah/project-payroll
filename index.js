@@ -18,12 +18,19 @@ const allowedOrigins = [
   "https://frontend-payroll-six.vercel.app"
 ];
 
-// Only allow requests from your frontend
+
 app.use(cors({
-  origin:  allowedOrigins, 
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true); // Postman ya server-to-server request ke liye
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = "The CORS policy for this site does not allow access from the specified Origin.";
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
+  credentials: true, // cookies ya auth headers allow karne ke liye
 }));
 
 app.get("/", (req, res) => {
