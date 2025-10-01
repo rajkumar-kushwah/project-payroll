@@ -128,7 +128,7 @@ router.post('/resend-verification', async (req, res) => {
   await user.save();
 
 
-  const verificationLink = `${process.env.REACT_APP_FRONTEND_URL}/verify-email?token=${token}&email=${email}`;
+  const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${token}&email=${email}`;
   await sendEmail(email, 'Verify Your Email', `Click here to verify: ${verificationLink}`);
 
   res.status(200).json({ message: 'Verification email resent successfully!' });

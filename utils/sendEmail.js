@@ -77,7 +77,7 @@ const transporter = nodemailer.createTransport({
 
 export const sendVerificationEmail = async (name, email, token, ip, userAgent) => {
   try {
-    const link = `${process.env.REACT_APP_FRONTEND_URL}/verify-email?token=${token}&email=${email}`;
+    const link = `${process.env.FRONTEND_URL}/verify-email?token=${token}&email=${email}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; text-align: center; background-color: #f9f9f9;">
