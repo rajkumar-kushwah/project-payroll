@@ -25,35 +25,98 @@ const strictEmailRule = (email) => /^[A-Za-z]+[0-9]+@[A-Za-z0-9]+\.[A-Za-z]{2,}$
 const generateToken = () => crypto.randomBytes(20).toString("hex");
 
 // ===== REGISTER =====
+// router.post("/register", async (req, res) => {
+//   try {
+//     const { name, email, password, phone } = req.body;
+//     if (!name || !email || !password || !phone) return res.status(400).json({ message: "All fields required" });
+
+//     // if (!strictEmailRule(email)) return res.status(400).json({ message: "Invalid email format" });
+//    if (!strictEmailRule(email)) {
+//   return res.status(400).json({ message: "Email must be like name123@example.com" });
+// }
+    
+//  // Phone validation - add **yaha**
+//     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
+//     if (!phoneRegex.test(phone)) {
+//       return res.status(400).json({ message: "Invalid phone number format" });
+//     }
+
+
+//     if (await User.findOne({ email: email.toLowerCase(), isDeleted: false })) {
+//       return res.status(400).json({ message: "Email already registered" });
+//     }
+
+//     const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+//     if (await User.findOne({ phone: formattedPhone })) {
+//       return res.status(400).json({ message: "Phone already registered" });
+//     }
+
+//     const hashedPassword = await bcrypt.hash(password, 12);
+//     const token = generateToken();
+//     const expiry = Date.now() + 10 * 60 * 1000; // 10 min
+
+//     const newUser = new User({
+//       name,
+//       email: email.toLowerCase(),
+//       password: hashedPassword,
+//       phone: formattedPhone,
+//       emailVerificationToken: token,
+//       emailVerificationExpiry: new Date(expiry),
+//       emailVerified: false,
+//       phoneVerified: false,
+//       createdByIP: req.ip,
+//       isDeleted: false
+//     });
+
+//     await newUser.save();
+
+//     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || req.connection?.remoteAddress || 'Unknown';
+
+//     // Send verification email
+//     await sendVerificationEmail(
+//       newUser.name,
+//       newUser.email,
+//       token,
+//       ip,
+//       req.headers['user-agent']
+//     )
+//        .then(() => console.log(`Verification email sent to ${newUser.email}`))
+//       .catch(err => console.error("Email sending failed:", err));
+
+//     res.status(201).json({ message: "Registered successfully. Check email to verify." });
+//   } catch (err) {
+//     console.error("Register router error",err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+
+// ===== REGISTER =====
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
-    if (!name || !email || !password || !phone) return res.status(400).json({ message: "All fields required" });
+    if (!name || !email || !password || !phone) 
+      return res.status(400).json({ message: "All fields required" });
 
-    // if (!strictEmailRule(email)) return res.status(400).json({ message: "Invalid email format" });
-   if (!strictEmailRule(email)) {
-  return res.status(400).json({ message: "Email must be like name123@example.com" });
-}
-    
- // Phone validation - add **yaha**
+    if (!strictEmailRule(email)) 
+      return res.status(400).json({ message: "Email must be like name123@example.com" });
+
     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
-    if (!phoneRegex.test(phone)) {
+    if (!phoneRegex.test(phone)) 
       return res.status(400).json({ message: "Invalid phone number format" });
-    }
 
-
+    // Check if email or phone already exists
+    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
     if (await User.findOne({ email: email.toLowerCase(), isDeleted: false })) {
       return res.status(400).json({ message: "Email already registered" });
     }
-
-    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
     if (await User.findOne({ phone: formattedPhone })) {
       return res.status(400).json({ message: "Phone already registered" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
     const token = generateToken();
-    const expiry = Date.now() + 10 * 60 * 1000; // 10 min
+    const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
 
     const newUser = new User({
       name,
@@ -69,21 +132,24 @@ router.post("/register", async (req, res) => {
     });
 
     await newUser.save();
+    console.log("User registered successfully:", newUser.email);
 
-    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || req.connection?.remoteAddress || 'Unknown';
+    // IP capture
+    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
 
-    // Send verification email
-    await sendVerificationEmail(
-      newUser.name,
-      newUser.email,
-      token,
-      ip,
-      req.headers['user-agent']
-    );
+    // Try sending verification email
+    try {
+      await sendVerificationEmail(newUser.name, newUser.email, token, ip, req.headers['user-agent']);
+      console.log(`Verification email sent to ${newUser.email}`);
+    } catch(err) {
+      console.error("Email sending failed:", err.message);
+      // Do NOT throw, so registration still succeeds
+    }
 
     res.status(201).json({ message: "Registered successfully. Check email to verify." });
+
   } catch (err) {
-    console.error(err);
+    console.error("Register route error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
