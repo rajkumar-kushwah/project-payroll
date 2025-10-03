@@ -137,16 +137,19 @@ router.post("/register", async (req, res) => {
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
 
     // Send info/welcome email
-    try {
-      await sendVerificationEmail(
-        newUser.name,
-        newUser.email,
-        ip,
-        req.headers['user-agent'],
-        newUser._id.toString() // userId for audit link
-      );
+   try {
+  await sendVerificationEmail(
+    newUser.name,
+    newUser.email,
+    ip,
+    req.headers['user-agent'],
+    newUser._id.toString()
+  );
     } catch (err) {
       console.error("Email sending failed:", err.message);
+        // Delete user if email fails
+  await User.findByIdAndDelete(newUser._id);
+  return res.status(500).json({ message: "Registration failed: Email could not be sent." });
     }
 
     res.status(201).json({ message: "Registered successfully. Email auto-verified. You can now login." });
