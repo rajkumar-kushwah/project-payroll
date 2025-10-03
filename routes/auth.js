@@ -93,23 +93,25 @@ const generateToken = () => crypto.randomBytes(20).toString("hex");
 
 // ===== REGISTER =====
 
+
 router.post("/register", async (req, res) => {
+  let newUser;
   try {
     const { name, email, password, phone } = req.body;
 
     if (!name || !email || !password || !phone)
       return res.status(400).json({ message: "All fields required" });
 
-    // Strict email validation
-    if (!strictEmailRule(email))
-      return res.status(400).json({ message: "Email must be like name123@example.com" });
+    // Email & phone validation
+    const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+    if (!emailRegex.test(email))
+      return res.status(400).json({ message: "Invalid email format" });
 
-    // Phone validation
     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
     if (!phoneRegex.test(phone))
       return res.status(400).json({ message: "Invalid phone number format" });
 
-    // Check if email or phone already exists
+    // Already exists check
     if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
       return res.status(400).json({ message: "Email already registered" });
 
@@ -117,48 +119,45 @@ router.post("/register", async (req, res) => {
     if (await User.findOne({ phone: formattedPhone }))
       return res.status(400).json({ message: "Phone already registered" });
 
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // ===== Auto-verified user =====
-    const newUser = new User({
+    // Create user
+    newUser = new User({
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone: formattedPhone,
-      emailVerified: true,   // ✅ auto verified
-      autoVerified: true,    // optional flag
+      emailVerified: true,
+      autoVerified: true,
       phoneVerified: false,
       createdByIP: req.ip,
-      isDeleted: false
+      isDeleted: false,
     });
 
     await newUser.save();
 
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
 
-    // Send info/welcome email
-   try {
-  await sendVerificationEmail(
-    newUser.name,
-    newUser.email,
-    ip,
-    req.headers['user-agent'],
-    newUser._id.toString()
-  );
-    } catch (err) {
-      console.error("Email sending failed:", err.message);
-        // Delete user if email fails
-  await User.findByIdAndDelete(newUser._id);
-  return res.status(500).json({ message: "Registration failed: Email could not be sent." });
-    }
+    // Send mandatory email
+    await sendVerificationEmail(
+      newUser.name,
+      newUser.email,
+      ip,
+      req.headers['user-agent'],
+      newUser._id.toString()
+    );
 
     res.status(201).json({ message: "Registered successfully. Email auto-verified. You can now login." });
 
   } catch (err) {
-    console.error("Register route error:", err.message);
-    res.status(500).json({ message: "Server error" });
+    console.error("Registration/email failed:", err.message);
+    // Rollback user if email fails
+    if (newUser?._id) await User.findByIdAndDelete(newUser._id);
+    res.status(500).json({ message: "Registration failed: Email could not be sent." });
   }
 });
+
 
 
 
