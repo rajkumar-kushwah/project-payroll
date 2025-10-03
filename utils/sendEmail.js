@@ -225,35 +225,29 @@
 
 
 // utils/sendEmail.js
-import nodemailer from 'nodemailer';
+import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT || 587,
-  secure: false, // true if 465
+  port: Number(process.env.EMAIL_PORT),
+  secure: process.env.EMAIL_PORT == 465,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  tls: {
-    rejectUnauthorized: false, // ignore self-signed cert in dev
-  },
+  tls: { rejectUnauthorized: false },
 });
 
-// ===== Send Verification Email =====
-// ===== Send Info / Welcome Email (Auto-Verify) =====
-
-// ===== Send Info / Welcome Email (Auto-Verify) =====
 export const sendVerificationEmail = async (name, email, ip, userAgent, userId) => {
   try {
-    const auditLink = `${process.env.FRONTEND_URL}/admin/user-details?id=${userId}`;
     const loginLink = `${process.env.FRONTEND_URL}/login`;
+    const auditLink = `${process.env.FRONTEND_URL}/admin/user-details?id=${userId}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
         <h2>Hi ${name},</h2>
-        <p>Welcome to NabuTech! Your account has been created and your email is verified successfully.</p>
-        <p>You can now login directly by clicking the button below:</p>
+        <p>Welcome to NabuTech! Your account has been created and email auto-verified.</p>
+        <p>You can login directly:</p>
         <a href="${loginLink}" style="display:inline-block; padding:12px 25px; background:#4CAF50; color:#fff; border-radius:5px; text-decoration:none;">Go to Login</a>
         <hr/>
         <p><strong>Registration Details:</strong></p>
@@ -263,25 +257,27 @@ export const sendVerificationEmail = async (name, email, ip, userAgent, userId) 
           <li>IP Address: ${ip}</li>
           <li>Device/Browser: ${userAgent}</li>
           <li>Registered At: ${new Date().toLocaleString()}</li>
-          <li style="margin-top:10px; font-weight:bold; color:#555; font-size:14px; text-align:left; display:inline-block; width:100%;">Audit Link: <a href="${auditLink}">View Registration Info</a></li>
+          <li style="margin-top:10px; font-weight:bold; color:#555; font-size:14px; text-align:left; width:100%;">Audit Link: <a href="${auditLink}">View Registration Info</a></li>
         </ul>
       </div>
     `;
 
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Welcome to NabuTech - Email Verified Successfully",
+      subject: "Welcome to NabuTech - Email Verified",
       html: htmlContent,
     });
 
-    console.log(`Welcome/info email sent to ${email}`);
+    console.log("Welcome/info email sent:", info.response);
     return true;
+
   } catch (err) {
     console.error("sendVerificationEmail error:", err.message);
     throw err;
   }
 };
+
 
 
 // ===== Send Login Email =====
