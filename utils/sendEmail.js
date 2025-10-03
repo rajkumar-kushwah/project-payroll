@@ -278,18 +278,15 @@
 //   }
 // };
 
-import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: Number(process.env.EMAIL_PORT),
-  secure: Number(process.env.EMAIL_PORT) === 465, // true only for port 465
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // Gmail App Password
-  },
-  tls: { rejectUnauthorized: false },
-});
+// utils/sendEmail.js
+import sgMail from "@sendgrid/mail";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+// Set SendGrid API Key
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 export const sendVerificationEmail = async (name, email, ip, userAgent, userId) => {
   try {
@@ -315,21 +312,22 @@ export const sendVerificationEmail = async (name, email, ip, userAgent, userId) 
       </div>
     `;
 
-    const info = await transporter.sendMail({
-      from: `"NabuTech" <${process.env.EMAIL_USER}>`,
+    const msg = {
       to: email,
+      from: process.env.SENDGRID_FROM_EMAIL, // verified sender
       subject: "Welcome to NabuTech - Email Verified",
       html: htmlContent,
-    });
+    };
 
-    console.log("Welcome/info email sent:", info.response);
+    const info = await sgMail.send(msg);
+    console.log("Welcome/info email sent successfully:", info);
     return true;
-
   } catch (err) {
     console.error("sendVerificationEmail error:", err.message);
     throw err;
   }
 };
+
 
 
 
