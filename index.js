@@ -37,6 +37,8 @@ app.get("/", (req, res) => {
   res.send("Backend is live and running!");
 });
 
+app.use(express.urlencoded({ extended: true }));
+
 // Ping route (UptimeRobot isko call karega)
 app.get("/ping", (req, res) => {
   res.send("pong");
