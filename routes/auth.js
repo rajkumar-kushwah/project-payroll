@@ -92,67 +92,65 @@ const generateToken = () => crypto.randomBytes(20).toString("hex");
 
 
 // ===== REGISTER =====
+
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
-    if (!name || !email || !password || !phone) 
+
+    if (!name || !email || !password || !phone)
       return res.status(400).json({ message: "All fields required" });
 
-    if (!strictEmailRule(email)) 
+    // Strict email validation
+    if (!strictEmailRule(email))
       return res.status(400).json({ message: "Email must be like name123@example.com" });
 
+    // Phone validation
     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
-    if (!phoneRegex.test(phone)) 
+    if (!phoneRegex.test(phone))
       return res.status(400).json({ message: "Invalid phone number format" });
 
     // Check if email or phone already exists
-    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
-    if (await User.findOne({ email: email.toLowerCase(), isDeleted: false })) {
+    if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
       return res.status(400).json({ message: "Email already registered" });
-    }
-    if (await User.findOne({ phone: formattedPhone })) {
+
+    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+    if (await User.findOne({ phone: formattedPhone }))
       return res.status(400).json({ message: "Phone already registered" });
-    }
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    const token = generateToken();
-    const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
 
+    // ===== Auto-verified user =====
     const newUser = new User({
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone: formattedPhone,
-      emailVerificationToken: token,
-      emailVerificationExpiry: new Date(expiry),
-      emailVerified: false,
+      emailVerified: true,   // ✅ auto verified
+      autoVerified: true,    // optional flag for tracking
       phoneVerified: false,
       createdByIP: req.ip,
       isDeleted: false
     });
 
     await newUser.save();
-    console.log("User registered successfully:", newUser.email);
 
-    // IP capture
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
 
-    // Try sending verification email
+    // Send info/welcome email
     try {
-      await sendVerificationEmail(newUser.name, newUser.email, token, ip, req.headers['user-agent']);
-      console.log(`Verification email sent to ${newUser.email}`);
-    } catch(err) {
+      await sendVerificationEmail(newUser.name, newUser.email, ip, req.headers['user-agent']);
+    } catch (err) {
       console.error("Email sending failed:", err.message);
-      // Do NOT throw, so registration still succeeds
     }
 
-    res.status(201).json({ message: "Registered successfully. Check email to verify." });
+    res.status(201).json({ message: "Registered successfully. Email auto-verified. You can now login." });
 
   } catch (err) {
     console.error("Register route error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 // ===== VERIFY EMAIL =====

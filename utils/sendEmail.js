@@ -241,22 +241,29 @@ const transporter = nodemailer.createTransport({
 });
 
 // ===== Send Verification Email =====
-export const sendVerificationEmail = async (name, email, token, ip, userAgent) => {
+// ===== Send Info / Welcome Email (Auto-Verify) =====
+export const sendVerificationEmail = async (name, email, ip, userAgent, userId) => {
   try {
-    const link = `${process.env.FRONTEND_URL}/verify-email?token=${token}&email=${email}`;
+    // Optional admin/audit link to check registration
+    const auditLink = `${process.env.FRONTEND_URL}/admin/user-details?id=${userId}`;
+
+    const loginLink = `${process.env.FRONTEND_URL}/login`;
+
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
         <h2>Hi ${name},</h2>
-        <p>Welcome to NabuTech! Please verify your email by clicking the button below:</p>
-        <a href="${link}" style="display:inline-block; padding:12px 25px; background:#4CAF50; color:#fff; border-radius:5px; text-decoration:none;">Verify Email</a>
-        <p>This link expires in 10 minutes.</p>
+        <p>Welcome to NabuTech! Your account has been created and your email is verified successfully.</p>
+        <p>You can now login directly by clicking the button below:</p>
+        <a href="${loginLink}" style="display:inline-block; padding:12px 25px; background:#4CAF50; color:#fff; border-radius:5px; text-decoration:none;">Go to Login</a>
         <hr/>
-        <p>Registration Details:</p>
+        <p><strong>Registration Details:</strong></p>
         <ul style="text-align:left; display:inline-block;">
           <li>Name: ${name}</li>
+          <li>Email: ${email}</li>
           <li>IP Address: ${ip}</li>
           <li>Device/Browser: ${userAgent}</li>
           <li>Registered At: ${new Date().toLocaleString()}</li>
+          <li style="margin-top:10px; font-weight:bold; color:#555; font-size:14px; text-align:left; display:inline-block; width:100%; ">Audit Link: <a href="${auditLink}">View Registration Info</a></li>
         </ul>
       </div>
     `;
@@ -264,93 +271,134 @@ export const sendVerificationEmail = async (name, email, token, ip, userAgent) =
     await transporter.sendMail({
       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Verify Your Email",
+      subject: "Welcome to NabuTech - Email Verified Successfully",
       html: htmlContent,
     });
 
-    console.log(`Verification email sent to ${email}`);
+    console.log(`Welcome/info email sent to ${email}`);
     return true;
 
   } catch (err) {
-    console.error("sendVerificationEmail error:", err.message);
-    throw err; // optional, handle in register route
+    console.error("sendWelcomeEmail error:", err.message);
+    throw err;
   }
 };
+
 
 // ===== Send Login Email =====
+// ===== Send Login Notification Email =====
 export const sendLoginEmail = async (name, email, ip, userAgent) => {
   try {
-    const html = `
-      <div>
-        <h3>Hello ${name},</h3>
-        <p>Your account was just logged in.</p>
-        <ul>
-          <li>IP: ${ip}</li>
-          <li>Device/Browser: ${userAgent}</li>
-          <li>Time: ${new Date().toLocaleString()}</li>
+    const loginTime = new Date().toLocaleString();
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
+        <h2>Hello ${name},</h2>
+        <p>Your NabuTech account was just logged in successfully.</p>
+        <p>If this was you, no action is needed. If not, please secure your account immediately.</p>
+        <hr/>
+        <p><strong>Login Details:</strong></p>
+        <ul style="text-align:left; display:inline-block;">
+          <li><strong>IP Address:</strong> ${ip}</li>
+          <li><strong>Device/Browser:</strong> ${userAgent}</li>
+          <li><strong>Login Time:</strong> ${loginTime}</li>
         </ul>
+        <p style="margin-top:15px;">Stay safe, <br/> - NabuTech Team</p>
       </div>
     `;
+
     await transporter.sendMail({
       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Login Notification",
-      html,
+      subject: " Login Notification",
+      html: htmlContent,
     });
+
+    console.log(`Login notification email sent to ${email}`);
+    return true;
+
   } catch (err) {
     console.error("sendLoginEmail error:", err.message);
+    throw err; // optional, handle in login route
   }
 };
+
 
 // ===== Send Logout Email =====
+// ===== Send Logout Notification Email =====
 export const sendLogoutEmail = async (name, email, ip, userAgent) => {
   try {
-    const html = `
-      <div>
-        <h3>Hello ${name},</h3>
-        <p>Your account was just logged out.</p>
-        <ul>
-          <li>IP: ${ip}</li>
-          <li>Device/Browser: ${userAgent}</li>
-          <li>Time: ${new Date().toLocaleString()}</li>
+    const logoutTime = new Date().toLocaleString();
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
+        <h2>Hello ${name},</h2>
+        <p>Your NabuTech account was just logged out successfully.</p>
+        <p>If this wasn’t you, please secure your account immediately.</p>
+        <hr/>
+        <p><strong>Logout Details:</strong></p>
+        <ul style="text-align:left; display:inline-block;">
+          <li><strong>IP Address:</strong> ${ip}</li>
+          <li><strong>Device/Browser:</strong> ${userAgent}</li>
+          <li><strong>Logout Time:</strong> ${logoutTime}</li>
         </ul>
+        <p style="margin-top:15px;">Stay safe, <br/> - NabuTech Team</p>
       </div>
     `;
+
     await transporter.sendMail({
       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Logout Notification",
-      html,
+      subject: "🔔 Logout Notification",
+      html: htmlContent,
     });
+
+    console.log(`Logout notification email sent to ${email}`);
+    return true;
+
   } catch (err) {
     console.error("sendLogoutEmail error:", err.message);
+    throw err;
   }
 };
 
-// ===== Send Account Delete Email =====
+// ===== Send Account Delete Notification Email =====
 export const sendDeleteEmail = async (name, email, ip, userAgent) => {
   try {
-    const html = `
-      <div>
-        <h3>Hello ${name},</h3>
-        <p>Your account has been deleted.</p>
-        <ul>
-          <li>IP: ${ip}</li>
-          <li>Device/Browser: ${userAgent}</li>
-          <li>Time: ${new Date().toLocaleString()}</li>
+    const deleteTime = new Date().toLocaleString();
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
+        <h2>Hello ${name},</h2>
+        <p>Your NabuTech account has been <strong>deleted</strong>.</p>
+        <p>If you did not request this, please contact support immediately.</p>
+        <hr/>
+        <p><strong>Account Details:</strong></p>
+        <ul style="text-align:left; display:inline-block;">
+          <li><strong>IP Address:</strong> ${ip}</li>
+          <li><strong>Device/Browser:</strong> ${userAgent}</li>
+          <li><strong>Time:</strong> ${deleteTime}</li>
         </ul>
+        <p style="margin-top:15px;">Stay safe, <br/> - NabuTech Team</p>
       </div>
     `;
+
     await transporter.sendMail({
       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Account Deleted",
-      html,
+      subject: "⚠️ Account Deleted Notification",
+      html: htmlContent,
     });
+
+    console.log(`Account delete notification email sent to ${email}`);
+    return true;
+
   } catch (err) {
     console.error("sendDeleteEmail error:", err.message);
+    throw err;
   }
 };
+
 
 // ===== Optional: Send OTP Email =====
 export const sendOtpEmail = async (email, otp) => {
