@@ -15,23 +15,22 @@ app.use(express.json());
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://frontend-payroll-six.vercel.app"
+  "https://frontend-payroll-six.vercel.app",
+  "https://www.frontend-payroll-six.vercel.app"
 ];
-
 
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin) return callback(null, true); // Postman ya server-to-server request ke liye
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = "The CORS policy for this site does not allow access from the specified Origin.";
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
+    console.log("Frontend Origin:", origin); // debug
+    if (!origin) return callback(null, true); // Postman
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("CORS origin not allowed"), false);
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true, // cookies ya auth headers allow karne ke liye
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"],
+  credentials: true
 }));
+
 
 app.get("/", (req, res) => {
   res.send("Backend is live and running!");
