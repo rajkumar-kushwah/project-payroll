@@ -126,7 +126,7 @@ router.post("/register", async (req, res) => {
       password: hashedPassword,
       phone: formattedPhone,
       emailVerified: true,   // ✅ auto verified
-      autoVerified: true,    // optional flag for tracking
+      autoVerified: true,    // optional flag
       phoneVerified: false,
       createdByIP: req.ip,
       isDeleted: false
@@ -138,7 +138,13 @@ router.post("/register", async (req, res) => {
 
     // Send info/welcome email
     try {
-      await sendVerificationEmail(newUser.name, newUser.email, ip, req.headers['user-agent']);
+      await sendVerificationEmail(
+        newUser.name,
+        newUser.email,
+        ip,
+        req.headers['user-agent'],
+        newUser._id.toString() // userId for audit link
+      );
     } catch (err) {
       console.error("Email sending failed:", err.message);
     }

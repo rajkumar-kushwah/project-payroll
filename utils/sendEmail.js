@@ -242,11 +242,11 @@ const transporter = nodemailer.createTransport({
 
 // ===== Send Verification Email =====
 // ===== Send Info / Welcome Email (Auto-Verify) =====
+
+// ===== Send Info / Welcome Email (Auto-Verify) =====
 export const sendVerificationEmail = async (name, email, ip, userAgent, userId) => {
   try {
-    // Optional admin/audit link to check registration
     const auditLink = `${process.env.FRONTEND_URL}/admin/user-details?id=${userId}`;
-
     const loginLink = `${process.env.FRONTEND_URL}/login`;
 
     const htmlContent = `
@@ -263,7 +263,7 @@ export const sendVerificationEmail = async (name, email, ip, userAgent, userId) 
           <li>IP Address: ${ip}</li>
           <li>Device/Browser: ${userAgent}</li>
           <li>Registered At: ${new Date().toLocaleString()}</li>
-          <li style="margin-top:10px; font-weight:bold; color:#555; font-size:14px; text-align:left; display:inline-block; width:100%; ">Audit Link: <a href="${auditLink}">View Registration Info</a></li>
+          <li style="margin-top:10px; font-weight:bold; color:#555; font-size:14px; text-align:left; display:inline-block; width:100%;">Audit Link: <a href="${auditLink}">View Registration Info</a></li>
         </ul>
       </div>
     `;
@@ -277,9 +277,8 @@ export const sendVerificationEmail = async (name, email, ip, userAgent, userId) 
 
     console.log(`Welcome/info email sent to ${email}`);
     return true;
-
   } catch (err) {
-    console.error("sendWelcomeEmail error:", err.message);
+    console.error("sendVerificationEmail error:", err.message);
     throw err;
   }
 };
