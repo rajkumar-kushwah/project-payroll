@@ -280,53 +280,103 @@
 
 
 // utils/sendEmail.js
-import sgMail from "@sendgrid/mail";
+// import sgMail from "@sendgrid/mail";
+// import dotenv from "dotenv";
+
+// dotenv.config();
+
+// // Set SendGrid API Key
+// sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+// export const sendVerificationEmail = async (name, email, ip, userAgent, userId) => {
+//   try {
+//     const loginLink = `${process.env.FRONTEND_URL}/login`;
+//     const auditLink = `${process.env.FRONTEND_URL}/admin/user-details?id=${userId}`;
+
+//     const htmlContent = `
+//       <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
+//         <h2>Hi ${name},</h2>
+//         <p>Welcome to NabuTech! Your account has been created and email auto-verified.</p>
+//         <p>You can login directly:</p>
+//         <a href="${loginLink}" style="display:inline-block; padding:12px 25px; background:#4CAF50; color:#fff; border-radius:5px; text-decoration:none;">Go to Login</a>
+//         <hr/>
+//         <p><strong>Registration Details:</strong></p>
+//         <ul style="text-align:left; display:inline-block;">
+//           <li>Name: ${name}</li>
+//           <li>Email: ${email}</li>
+//           <li>IP Address: ${ip}</li>
+//           <li>Device/Browser: ${userAgent}</li>
+//           <li>Registered At: ${new Date().toLocaleString()}</li>
+//           <li style="margin-top:10px; font-weight:bold; color:#555; font-size:14px; text-align:left; width:100%;">Audit Link: <a href="${auditLink}">View Registration Info</a></li>
+//         </ul>
+//       </div>
+//     `;
+
+//     const msg = {
+//       to: email,
+//       from: process.env.SENDGRID_FROM_EMAIL, // verified sender
+//       subject: "Welcome to NabuTech - Email Verified",
+//       html: htmlContent,
+//     };
+
+//     const info = await sgMail.send(msg);
+//     console.log("Welcome/info email sent successfully:", info);
+    
+//     return true;
+//   } catch (err) {
+//    console.error("sendVerificationEmail error:", err.response?.body || err.message);
+//     throw new Error(err.response?.body?.errors?.map(e => e.message).join(", ") || err.message);
+//   }
+// };
+
+import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-// Set SendGrid API Key
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-export const sendVerificationEmail = async (name, email, ip, userAgent, userId) => {
+export const sendVerificationEmail = async (to, userId, ip, userAgent) => {
   try {
-    const loginLink = `${process.env.FRONTEND_URL}/login`;
-    const auditLink = `${process.env.FRONTEND_URL}/admin/user-details?id=${userId}`;
+    const frontendBaseUrl = process.env.FRONTEND_URL;
 
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
-        <h2>Hi ${name},</h2>
-        <p>Welcome to NabuTech! Your account has been created and email auto-verified.</p>
-        <p>You can login directly:</p>
-        <a href="${loginLink}" style="display:inline-block; padding:12px 25px; background:#4CAF50; color:#fff; border-radius:5px; text-decoration:none;">Go to Login</a>
-        <hr/>
-        <p><strong>Registration Details:</strong></p>
-        <ul style="text-align:left; display:inline-block;">
-          <li>Name: ${name}</li>
-          <li>Email: ${email}</li>
-          <li>IP Address: ${ip}</li>
-          <li>Device/Browser: ${userAgent}</li>
-          <li>Registered At: ${new Date().toLocaleString()}</li>
-          <li style="margin-top:10px; font-weight:bold; color:#555; font-size:14px; text-align:left; width:100%;">Audit Link: <a href="${auditLink}">View Registration Info</a></li>
-        </ul>
-      </div>
-    `;
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,       // aapka verified Gmail
+        pass: process.env.EMAIL_APP_PASS,   // Gmail App Password
+      },
+    });
 
-    const msg = {
-      to: email,
-      from: process.env.SENDGRID_FROM_EMAIL, // verified sender
-      subject: "Welcome to NabuTech - Email Verified",
-      html: htmlContent,
+    const mailOptions = {
+      from: `"NabuTech Team" <${process.env.EMAIL_USER}>`,
+      to,
+      subject: "Welcome to NabuTech - Registration Successful",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
+          <h2>Hi ${to.split("@")[0]},</h2>
+          <p>Welcome to <strong>NabuTech</strong>! Your account has been successfully created and verified.</p>
+          <p>You can login using the button below:</p>
+          <a href="${frontendBaseUrl}/login" style="display:inline-block; padding:12px 25px; background:#4CAF50; color:#fff; border-radius:5px; text-decoration:none;">Go to Login</a>
+          <hr/>
+          <p><strong>Registration Details:</strong></p>
+          <ul style="text-align:left; display:inline-block;">
+            <li>Email: ${to}</li>
+            <li>IP Address: ${ip}</li>
+            <li>Device/Browser: ${userAgent}</li>
+            <li>Registered At: ${new Date().toLocaleString('en-IN')}</li>
+          </ul>
+        </div>
+      `,
     };
 
-    const info = await sgMail.send(msg);
-    console.log("Welcome/info email sent successfully:", info);
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Email sent successfully:", info.response);
     return true;
   } catch (err) {
     console.error("sendVerificationEmail error:", err.message);
     throw err;
   }
 };
+
 
 
 
