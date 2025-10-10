@@ -60,87 +60,70 @@
 
 
 //
-import nodemailer from "nodemailer";
+// import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || "smtp.gmail.com",
-  port: process.env.EMAIL_PORT || 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false, // ignore self-signed cert in dev
-  },
-});
+// const transporter = nodemailer.createTransport({
+//   host: process.env.EMAIL_HOST || "smtp.gmail.com",
+//   port: process.env.EMAIL_PORT || 587,
+//   secure: false,
+//   auth: {
+//     user: process.env.EMAIL_USER,
+//     pass: process.env.EMAIL_PASS,
+//   },
+//   tls: {
+//     rejectUnauthorized: false, // ignore self-signed cert in dev
+//   },
+// });
 
-export const sendVerificationEmail = async (name, email, token, ip, userAgent) => {
-  try {
-    const link = `${process.env.FRONTEND_URL}/verify-email?token=${token}&email=${email}`;
+// export const sendVerificationEmail = async (name, email, token, ip, userAgent) => {
+//   try {
+//     const link = `${process.env.FRONTEND_URL}/verify-email?token=${token}&email=${email}`;
 
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; text-align: center; background-color: #f9f9f9;">
-        <h2 style="color: #333; font-size: 20px; margin-bottom:10px; font-family: 'Times New Roman', Times, serif; font-weight: bold; text-align:left;">Hi ${name}!</h2>
-        <h2 style="color: #333;">Welcome to NabuTech!</h2>
-        <p style="font-size: 16px; color: #555;">Click the button below to verify your email address.</p>
-        <a href="${link}" style="
-          display: inline-block;
-          padding: 12px 25px;
-          margin: 20px 0;
-          font-size: 16px;
-          color: #fff;
-          background-color: #4CAF50;
-          text-decoration: none;
-          border-radius: 5px;
-        ">Verify Email</a>
-        <p style="font-size: 14px; color: #888;">This link will expire in 10 minutes.</p>
-        <hr/>
-        <p style="font-size: 14px; color: #555;">Registration Details:</p>
-        <ul style="text-align: left; display: inline-block;">
-          <li>Name: ${name}</li>
-          <li>IP Address: ${ip}</li>
-          <li>Device/Browser: ${userAgent}</li>
-          <li>Registered At: ${new Date().toLocaleString()}</li>
-        </ul>
-      </div>
-    `;
+//     const htmlContent = `
+//       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9;">
+//         <h2 style="color: #333; font-weight: bold; text-align:left;">Hi ${name}!</h2>
+//         <h3 style="color: #333;">Welcome to NabuTech!</h3>
+//         <p style="font-size: 16px; color: #555;">Click the button below to verify your email address.</p>
+//         <a href="${link}" style="
+//           display: inline-block;
+//           padding: 12px 25px;
+//           margin: 20px 0;
+//           font-size: 16px;
+//           color: #fff;
+//           background-color: #4CAF50;
+//           text-decoration: none;
+//           border-radius: 5px;
+//         ">Verify Email</a>
+//         <p style="font-size: 14px; color: #888;">This link will expire in 10 minutes.</p>
+//         <hr/>
+//         <p style="font-size: 14px; color: #555;">Registration Details:</p>
+//         <ul style="text-align: left; display: inline-block;">
+//           <li><strong>Name:</strong> ${name}</li>
+//           <li><strong>Email:</strong> ${email}</li>
+//           <li><strong>IP Address:</strong> ${ip}</li>
+//           <li><strong>Device/Browser:</strong> ${userAgent}</li>
+//           <li><strong>Registered At:</strong> ${new Date().toLocaleString()}</li>
+//         </ul>
+//       </div>
+//     `;
 
-    // 1. Send email to the user
-    await transporter.sendMail({
-      from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Verify Your Email",
-      html: htmlContent,
-    });
+//     // User ke liye email bhejna
+//     await transporter.sendMail({
+//       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
+//       to: email,
+//       subject: "Verify Your Email",
+//       html: htmlContent,
+//     });
 
-    console.log(`Verification email sent to ${email}`);
+//     console.log(`Verification email sent to ${email}`);
+//     return true;
 
-    //  2. Send a copy/notification to the admin (you)
-    await transporter.sendMail({
-      from: `"NabuTech Notifications" <${process.env.EMAIL_USER}>`,
-      to: "rajkumark3262@gmail.com", // your email here
-      subject: `New User Registered - ${name}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; background: #fff; padding: 20px;">
-          <h2>New Registration Alert </h2>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>IP:</strong> ${ip}</p>
-          <p><strong>Device:</strong> ${userAgent}</p>
-          <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-        </div>
-      `,
-    });
-
-    console.log(`Admin notified about new registration.`);
-
-    return true;
-  } catch (err) {
-    console.error("Email sending failed:", err);
-    throw err;
-  }
-};
+//   } catch (err) {
+//     // Agar email fail ho jaye, sirf warning dikhaye
+//     console.warn("Email sending failed:", err.message);
+//     return false;
+//   }
+// };
 
 
 
@@ -352,6 +335,60 @@ export const sendVerificationEmail = async (name, email, token, ip, userAgent) =
 // };
 
 
+
+
+import nodemailer from "nodemailer";
+
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: Number(process.env.EMAIL_PORT),
+  secure: Number(process.env.EMAIL_PORT) === 465,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: { rejectUnauthorized: false },
+});
+
+transporter.verify((err, success) => {
+  if (err) console.error("Transporter Error:", err);
+  else console.log("Email transporter is ready");
+});
+
+export const sendInfoEmail = async (name, email, ip, userAgent) => {
+  try {
+    const loginLink = `${process.env.BACKEND_URL}/login`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; background-color:#f9f9f9;">
+        <h2>Hi ${name},</h2>
+        <p>Welcome to NabuTech! Your account has been created and email auto-verified.</p>
+        <a href="${loginLink}" style="display:inline-block; padding:12px 25px; background:#4CAF50; color:#fff; border-radius:5px; text-decoration:none;">Go to Login</a>
+        <hr/>
+        <p><strong>Registration Details:</strong></p>
+        <ul style="text-align:left; display:inline-block;">
+          <li>Name: ${name}</li>
+          <li>Email: ${email}</li>
+          <li>IP Address: ${ip}</li>
+          <li>Device/Browser: ${userAgent}</li>
+          <li>Registered At: ${new Date().toLocaleString()}</li>
+        </ul>
+      </div>
+    `;
+
+    const info = await transporter.sendMail({
+      from: `"NabuTech" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Welcome to NabuTech - Email Verified",
+      html: htmlContent,
+    });
+
+    console.log("Info email sent to:", email, info.response);
+  } catch (err) {
+    console.error("sendInfoEmail error:", err.message);
+    throw err;
+  }
+};
 
 
 
