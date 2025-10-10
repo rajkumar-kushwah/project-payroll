@@ -37,7 +37,6 @@ router.post("/register", async (req, res) => {
     if (!phoneRegex.test(phone))
       return res.status(400).json({ message: "Invalid phone number format" });
 
-    // Check duplicates
     if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
       return res.status(400).json({ message: "Email already registered" });
 
@@ -45,36 +44,30 @@ router.post("/register", async (req, res) => {
     if (await User.findOne({ phone: formattedPhone }))
       return res.status(400).json({ message: "Phone already registered" });
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Generate token
     const token = generateToken();
-    const expiry = Date.now() + 10 * 60 * 1000; // 10 min
 
-    // Auto-verified user with token stored
     const newUser = new User({
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone: formattedPhone,
-      emailVerified: true,       // AUTO verify
+      emailVerified: true, // AUTO verify
       emailVerificationToken: token,
-      emailVerificationExpiry: new Date(expiry),
+      emailVerificationExpiry: new Date(Date.now() + 10 * 60 * 1000),
       phoneVerified: false,
       createdByIP: req.ip,
-      isDeleted: false
+      isDeleted: false,
     });
 
     await newUser.save();
 
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
 
-    // Send info email including token (optional for audit)
     try {
-      await sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], token);
-    } catch (emailErr) {
-      console.error("Email failed but registration successful:", emailErr.message);
+      await sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent']);
+    } catch (err) {
+      console.error("Email failed but registration successful:", err.message);
     }
 
     res.status(201).json({
@@ -87,7 +80,6 @@ router.post("/register", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 
 router.get("/verify-email", async (req, res) => {
   try {
@@ -116,7 +108,6 @@ router.get("/verify-email", async (req, res) => {
 
 
 
-// Login
 // Login (email must be verified)
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
