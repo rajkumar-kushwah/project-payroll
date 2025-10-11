@@ -27,6 +27,7 @@ const generateToken = () => crypto.randomBytes(20).toString("hex");
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
+
     if (!name || !email || !password || !phone)
       return res.status(400).json({ message: "All fields required" });
 
@@ -45,9 +46,6 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "Phone already registered" });
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    // const token = generateToken();
-
-    // Create user
     const token = crypto.randomBytes(32).toString("hex");
 
     const newUser = new User({
@@ -55,9 +53,9 @@ router.post("/register", async (req, res) => {
       email: email.toLowerCase(),
       password: hashedPassword,
       phone: formattedPhone,
-      emailVerified: false,
-      emailVerificationToken: token,
-      emailVerificationExpiry: new Date(Date.now() + 10 * 60 * 1000),
+      emailVerified: true, // auto-verify email
+      emailVerificationToken: undefined,
+      emailVerificationExpiry: undefined,
       phoneVerified: false,
       createdByIP: req.ip,
       isDeleted: false,
@@ -65,16 +63,12 @@ router.post("/register", async (req, res) => {
 
     await newUser.save();
 
-    // auto verify email
-    newUser.emailVerified = true;
-    newUser.emailVerificationToken = undefined;
-    newUser.emailVerificationExpiry = undefined;
-    await newUser.save();
-
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
 
     try {
-      await sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent']);
+      console.log("Sending info email to:", newUser.email);
+      await sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id);
+      console.log("Info email sent successfully!");
     } catch (err) {
       console.error("Email failed but registration successful:", err.message);
     }
@@ -84,11 +78,13 @@ router.post("/register", async (req, res) => {
       userId: newUser._id,
       token
     });
+
   } catch (err) {
     console.error("Register router error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 // router.get("/verify-email", async (req, res) => {
 //   try {
@@ -173,6 +169,8 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+
 
 
 // ===== VERIFY LOGIN OTP =====
