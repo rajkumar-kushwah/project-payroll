@@ -3,19 +3,19 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: Number(process.env.EMAIL_PORT),
-  secure: Number(process.env.EMAIL_PORT) === 465, // 465 = SSL
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: Number(process.env.SMTP_PORT) === 465, // 465 = SSL
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
   tls: { rejectUnauthorized: false },
 });
 
 transporter.verify((err, success) => {
   if (err) console.error("Transporter Error:", err);
-  else console.log("Email transporter is ready ");
+  else console.log("Email transporter is ready brevo ");
 });
 
 export const sendInfoEmail = async (name, email, ip, userAgent, userId) => {
@@ -76,7 +76,7 @@ export const sendInfoEmail = async (name, email, ip, userAgent, userId) => {
   `;
 
   await transporter.sendMail({
-    from: `"NabuTech" <${process.env.EMAIL_USER}>`,
+    from: `"NabuTech" <${process.env.SMTP_USER}>`,
     to: email,
     subject: "Welcome to NabuTech - Your Email is Verified ",
     html: htmlContent,
