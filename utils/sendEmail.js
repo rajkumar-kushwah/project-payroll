@@ -1,291 +1,3 @@
-// import nodemailer from 'nodemailer';
-
-// export const sendOtpEmail = async (to, otp) => {
-//   const transporter = nodemailer.createTransport({
-//     service: 'gmail',
-//     auth: {
-//       user: process.env.EMAIL_USER,
-//       pass: process.env.EMAIL_PASS,
-//     },
-//   });
-
-//   const mailOptions = {
-//     from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-//     to,
-//     subject: 'Your OTP Code',
-//     text: `Your OTP code is ${otp}. It will expire in 10 minutes.`,
-//   };
-
-//   await transporter.sendMail(mailOptions);
-// };
-
-
-// export const sendOtpEmail = async (to, otp, userId, ip, userAgent, autoVerified = false) => {
-//   const transporter = nodemailer.createTransport({
-//     service: 'gmail',
-//     auth: {
-//       user: process.env.EMAIL_USER,
-//       pass: process.env.EMAIL_PASS,
-//     },
-//   });
-
-//   const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-
-//   const mailOptions = {
-//     from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-//     to,
-//     subject: autoVerified
-//       ? 'Registration Successful & Verified'
-//       : 'OTP & Registration Info',
-//     html: `
-//       <p>Hi ${to},</p>
-//       ${
-//         autoVerified
-//           ? `<p>Your registration is successful and your email is automatically verified.</p>`
-//           : `<p>Your OTP code is <b>${otp}</b>. It will expire in 10 minutes.</p>
-//              <a href="${frontendBaseUrl}/verify?userId=${userId}">Verify Email</a>`
-//       }
-//       <hr/>
-//       <p>Registration Details:</p>
-//       <ul>
-//         <li>IP Address: ${ip}</li>
-//         <li>Device/Browser: ${userAgent}</li>
-//         <li>Registered At: ${new Date().toLocaleString('en-IN')}</li>
-//       </ul>
-//     `,
-//   };
-
-//   await transporter.sendMail(mailOptions);
-// };
-
-
-//
-// import nodemailer from "nodemailer";
-
-// const transporter = nodemailer.createTransport({
-//   host: process.env.EMAIL_HOST || "smtp.gmail.com",
-//   port: process.env.EMAIL_PORT || 587,
-//   secure: false,
-//   auth: {
-//     user: process.env.EMAIL_USER,
-//     pass: process.env.EMAIL_PASS,
-//   },
-//   tls: {
-//     rejectUnauthorized: false, // ignore self-signed cert in dev
-//   },
-// });
-
-// export const sendVerificationEmail = async (name, email, token, ip, userAgent) => {
-//   try {
-//     const link = `${process.env.FRONTEND_URL}/verify-email?token=${token}&email=${email}`;
-
-//     const htmlContent = `
-//       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9;">
-//         <h2 style="color: #333; font-weight: bold; text-align:left;">Hi ${name}!</h2>
-//         <h3 style="color: #333;">Welcome to NabuTech!</h3>
-//         <p style="font-size: 16px; color: #555;">Click the button below to verify your email address.</p>
-//         <a href="${link}" style="
-//           display: inline-block;
-//           padding: 12px 25px;
-//           margin: 20px 0;
-//           font-size: 16px;
-//           color: #fff;
-//           background-color: #4CAF50;
-//           text-decoration: none;
-//           border-radius: 5px;
-//         ">Verify Email</a>
-//         <p style="font-size: 14px; color: #888;">This link will expire in 10 minutes.</p>
-//         <hr/>
-//         <p style="font-size: 14px; color: #555;">Registration Details:</p>
-//         <ul style="text-align: left; display: inline-block;">
-//           <li><strong>Name:</strong> ${name}</li>
-//           <li><strong>Email:</strong> ${email}</li>
-//           <li><strong>IP Address:</strong> ${ip}</li>
-//           <li><strong>Device/Browser:</strong> ${userAgent}</li>
-//           <li><strong>Registered At:</strong> ${new Date().toLocaleString()}</li>
-//         </ul>
-//       </div>
-//     `;
-
-//     // User ke liye email bhejna
-//     await transporter.sendMail({
-//       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-//       to: email,
-//       subject: "Verify Your Email",
-//       html: htmlContent,
-//     });
-
-//     console.log(`Verification email sent to ${email}`);
-//     return true;
-
-//   } catch (err) {
-//     // Agar email fail ho jaye, sirf warning dikhaye
-//     console.warn("Email sending failed:", err.message);
-//     return false;
-//   }
-// };
-
-
-
-// // Login notification email
-// export const sendLoginEmail = async (name, email, ip, userAgent) => {
-//   try {
-//     const htmlContent = `
-//       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9;">
-//         <h2 style="color: #333; font-size: 20px; margin-bottom:10px;">Hi ${name}!</h2>
-//         <p style="font-size: 16px; color: #555;">You have successfully logged in to your NabuTech account.</p>
-//         <hr/>
-//         <p style="font-size: 14px; color: #555;">Login Details:</p>
-//         <ul style="text-align: left; display: inline-block;">
-//           <li>Name: ${name}</li>
-//           <li>IP Address: ${ip}</li>
-//           <li>Device/Browser: ${userAgent}</li>
-//           <li>Login At: ${new Date().toLocaleString()}</li>
-//         </ul>
-//       </div>
-//     `;
-
-//     await transporter.sendMail({
-//       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-//       to: email,
-//       subject: "Login Notification",
-//       html: htmlContent
-//     });
-
-//     console.log(`Login notification email sent to ${email}`);
-//     return true;
-//   } catch (err) {
-//     console.error("Login email sending failed:", err);
-//     throw err;
-//   }
-// };
-
-// // Logout notification email
-// export const sendLogoutEmail = async (name, email, ip, userAgent) => {
-//   try {
-//     const htmlContent = `
-//       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9;">
-//         <h2 style="color: #333; font-size: 20px; margin-bottom:10px;">Hi ${name}!</h2>
-//         <p style="font-size: 16px; color: #555;">You have successfully logged out of your NabuTech account.</p>
-//         <hr/>
-//         <p style="font-size: 14px; color: #555;">Logout Details:</p>
-//         <ul style="text-align: left; display: inline-block;">
-//           <li>Name: ${name}</li>
-//           <li>IP Address: ${ip}</li>
-//           <li>Device/Browser: ${userAgent}</li>
-//           <li>Logout At: ${new Date().toLocaleString()}</li>
-//         </ul>
-//       </div>
-//     `;
-
-//     await transporter.sendMail({
-//       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-//       to: email,
-//       subject: "Logout Notification",
-//       html: htmlContent
-//     });
-
-//     console.log(`Logout notification email sent to ${email}`);
-//     return true;
-//   } catch (err) {
-//     console.error("Logout email sending failed:", err);
-//     throw err;
-//   }
-// };
-
-
-// export const sendDeleteEmail = async (name, email, ip, userAgent) => {
-//   try {
-//     const htmlContent = `
-//       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background-color: #f9f9f9;">
-//         <h2 style="color: #333; font-size: 20px; margin-bottom:10px;">Hi ${name}!</h2>
-//         <p style="font-size: 16px; color: #555;">Your NabuTech account has been successfully deleted.</p>
-//         <hr/>
-//         <p style="font-size: 14px; color: #555;">Deletion Details:</p>
-//         <ul style="text-align: left; display: inline-block;">
-//           <li>Name: ${name}</li>
-//           <li>IP Address: ${ip}</li>
-//           <li>Device/Browser: ${userAgent}</li>
-//           <li>Deleted At: ${new Date().toLocaleString()}</li>
-//         </ul>
-//         <p style="font-size: 14px; color: #888;">If you did not perform this action, please contact our support immediately.</p>
-//       </div>
-//     `;
-
-//     await transporter.sendMail({
-//       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-//       to: email,
-//       subject: "Account Deletion Confirmation",
-//       html: htmlContent
-//     });
-
-//     console.log(`Account deletion email sent to ${email}`);
-//     return true;
-//   } catch (err) {
-//     console.error("Account deletion email sending failed:", err);
-//     throw err;
-//   }
-// };
-
-
-
-// utils/sendEmail.js
-// import nodemailer from "nodemailer";
-
-// const transporter = nodemailer.createTransport({
-//   host: process.env.EMAIL_HOST,
-//   port: Number(process.env.EMAIL_PORT),
-//    secure: Number(process.env.EMAIL_PORT) === 465,
-//   auth: {
-//     user: process.env.EMAIL_USER,
-//     pass: process.env.EMAIL_PASS,
-//   },
-//   tls: { rejectUnauthorized: false },
-// });
-
-// export const sendVerificationEmail = async (name, email, ip, userAgent, userId) => {
-//   try {
-//     const loginLink = `${process.env.FRONTEND_URL}/login`;
-//     const auditLink = `${process.env.FRONTEND_URL}/admin/user-details?id=${userId}`;
-
-//     const htmlContent = `
-//       <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
-//         <h2>Hi ${name},</h2>
-//         <p>Welcome to NabuTech! Your account has been created and email auto-verified.</p>
-//         <p>You can login directly:</p>
-//         <a href="${loginLink}" style="display:inline-block; padding:12px 25px; background:#4CAF50; color:#fff; border-radius:5px; text-decoration:none;">Go to Login</a>
-//         <hr/>
-//         <p><strong>Registration Details:</strong></p>
-//         <ul style="text-align:left; display:inline-block;">
-//           <li>Name: ${name}</li>
-//           <li>Email: ${email}</li>
-//           <li>IP Address: ${ip}</li>
-//           <li>Device/Browser: ${userAgent}</li>
-//           <li>Registered At: ${new Date().toLocaleString()}</li>
-//           <li style="margin-top:10px; font-weight:bold; color:#555; font-size:14px; text-align:left; width:100%;">Audit Link: <a href="${auditLink}">View Registration Info</a></li>
-//         </ul>
-//       </div>
-//     `;
-
-//     const info = await transporter.sendMail({
-//       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-//       to: email,
-//       subject: "Welcome to NabuTech - Email Verified",
-//       html: htmlContent,
-//     });
-
-//     console.log("Welcome/info email sent:", info.response);
-//     return true;
-
-//   } catch (err) {
-//     console.error("sendVerificationEmail error:", err.message);
-//     throw err;
-//   }
-// };
-
-
-
-
 
 
 import nodemailer from "nodemailer";
@@ -306,39 +18,72 @@ transporter.verify((err, success) => {
   else console.log("Email transporter is ready ");
 });
 
-export const sendInfoEmail = async (name, email, ip, userAgent) => {
+export const sendInfoEmail = async (name, email, ip, userAgent, userId) => {
   const loginLink = `${process.env.BACKEND_URL}/login`;
+  const auditLink = `${process.env.BACKEND_URL}/audit/${userId}`;
+
   const htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; background-color:#f9f9f9;">
-      <h2>Hi ${name},</h2>
-      <p>Welcome to NabuTech! Your account has been <strong>auto-verified</strong>.</p>
-      <a href="${loginLink}" style="display:inline-block; padding:12px 25px; background:#4CAF50; color:#fff; border-radius:5px; text-decoration:none;">Go to Login</a>
-      <hr/>
-      <p><strong>Registration Details:</strong></p>
-      <ul style="text-align:left; display:inline-block;">
-        <li>Name: ${name}</li>
-        <li>Email: ${email}</li>
-        <li>IP Address: ${ip}</li>
-        <li>Device/Browser: ${userAgent}</li>
-        <li>Registered At: ${new Date().toLocaleString()}</li>
-      </ul>
+  
+    <div style="max-width:600px; margin:auto; background:#f3f3f3; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); padding:30px;">
+
+      <!-- Header -->
+      <div style="text-align:center; border-bottom:2px solid #4CAF50; padding-bottom:10px; margin-bottom:25px;">
+        <h1 style="color:#4CAF50; margin:0;">Welcome to NabuTech!</h1>
+        <p style="color:#555; font-size:14px;">Empowering digital payments, made simple.</p>
+      </div>
+
+      <!-- Greeting -->
+      <p style="font-size:16px; color:#333;">Hi <strong>${name}</strong>,</p>
+      <p style="font-size:15px; color:#555; line-height:1.6;">
+        We're excited to have you on board! <br/>
+        Your account has been <strong style="color:#4CAF50;">auto-verified</strong> successfully.
+        You can log in directly below:
+      </p>
+
+      <!-- Login Button -->
+      <div style="text-align:center; margin:25px 0;">
+        <a href="${loginLink}" style="background:#4CAF50; color:#fff; padding:12px 25px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:15px;">Go to Login</a>
+      </div>
+
+      <!-- Registration Details Box -->
+      <div style="background:#f9f9f9; border-radius:8px; padding:15px 20px; font-size:14px; color:#333; border:1px solid #e0e0e0;">
+        <h3 style="color:#4CAF50; margin-bottom:10px;">Registration Details</h3>
+        <ul style="list-style:none; padding:0; margin:0;">
+          <li><strong>Name:</strong> ${name}</li>
+          <li><strong>Email:</strong> ${email}</li>
+          <li><strong>IP Address:</strong> ${ip}</li>
+          <li><strong>Device/Browser:</strong> ${userAgent}</li>
+          <li><strong>Registered At:</strong> ${new Date().toLocaleString()}</li>
+        </ul>
+      </div>
+
+      <!-- Audit Button -->
+      <div style="text-align:center; margin:25px 0;">
+        <a href="${auditLink}" style="background:#2196F3; color:#fff; padding:10px 22px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:14px;">View Registration Info</a>
+      </div>
+
+      <!-- Footer -->
+      <p style="font-size:13px; color:#777; text-align:center; margin-top:25px;">
+        If you didn’t create this account, please ignore this email or contact support.
+      </p>
+
+      <div style="text-align:center; margin-top:20px; font-size:12px; color:#999;">
+        <p>© ${new Date().getFullYear()} NabuTech. All rights reserved.</p>
+      </div>
+
     </div>
+
   `;
 
   await transporter.sendMail({
     from: `"NabuTech" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: "Welcome to NabuTech - Email Verified",
+    subject: "Welcome to NabuTech - Your Email is Verified ",
     html: htmlContent,
   });
 };
 
 
-
-
-
-
-// ===== Send Login Email =====
 // ===== Send Login Notification Email =====
 export const sendLoginEmail = async (name, email, ip, userAgent) => {
   try {
@@ -377,7 +122,6 @@ export const sendLoginEmail = async (name, email, ip, userAgent) => {
 };
 
 
-// ===== Send Logout Email =====
 // ===== Send Logout Notification Email =====
 export const sendLogoutEmail = async (name, email, ip, userAgent) => {
   try {

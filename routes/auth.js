@@ -45,14 +45,17 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "Phone already registered" });
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    const token = generateToken();
+    // const token = generateToken();
+
+    // Create user
+    const token = crypto.randomBytes(32).toString("hex");
 
     const newUser = new User({
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone: formattedPhone,
-      emailVerified: true, // AUTO verify
+      emailVerified: false,
       emailVerificationToken: token,
       emailVerificationExpiry: new Date(Date.now() + 10 * 60 * 1000),
       phoneVerified: false,
@@ -60,6 +63,12 @@ router.post("/register", async (req, res) => {
       isDeleted: false,
     });
 
+    await newUser.save();
+
+    // auto verify email
+    newUser.emailVerified = true;
+    newUser.emailVerificationToken = undefined;
+    newUser.emailVerificationExpiry = undefined;
     await newUser.save();
 
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
@@ -81,29 +90,29 @@ router.post("/register", async (req, res) => {
   }
 });
 
-router.get("/verify-email", async (req, res) => {
-  try {
-    const { email, token } = req.query;
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) return res.status(404).json({ message: "User not found" });
+// router.get("/verify-email", async (req, res) => {
+//   try {
+//     const { email, token } = req.query;
+//     const user = await User.findOne({ email: email.toLowerCase() });
+//     if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (user.emailVerified) return res.status(400).json({ message: "Email already verified" });
-    if (user.emailVerificationToken !== token || Date.now() > new Date(user.emailVerificationExpiry)) {
-      return res.status(400).json({ message: "Invalid or expired token" });
-    }
+//     if (user.emailVerified) return res.status(400).json({ message: "Email already verified" });
+//     if (user.emailVerificationToken !== token || Date.now() > new Date(user.emailVerificationExpiry)) {
+//       return res.status(400).json({ message: "Invalid or expired token" });
+//     }
 
-    user.emailVerified = true;
-    user.emailVerificationToken = undefined;
-    user.emailVerificationExpiry = undefined;
-    await user.save();
-    console.log("User verified successfully:", user);
+//     user.emailVerified = true;
+//     user.emailVerificationToken = undefined;
+//     user.emailVerificationExpiry = undefined;
+//     await user.save();
+//     console.log("User verified successfully:", user);
 
-    res.json({ message: "Email verified successfully. You can now login." });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+//     res.json({ message: "Email verified successfully. You can now login." });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
 
 
 
