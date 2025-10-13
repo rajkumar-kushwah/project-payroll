@@ -7,15 +7,15 @@ const transporter = nodemailer.createTransport({
   port: Number(process.env.SMTP_PORT),
   secure: Number(process.env.SMTP_PORT) === 465, // 465 = SSL
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
   tls: { rejectUnauthorized: false },
 });
 
 transporter.verify((err, success) => {
   if (err) console.error("Transporter Error:", err);
-  else console.log("Email transporter is ready brevo ");
+  else console.log("Email transporter is ready  ");
 });
 
 export const sendInfoEmail = async (name, email, ip, userAgent, userId) => {
@@ -76,7 +76,7 @@ export const sendInfoEmail = async (name, email, ip, userAgent, userId) => {
   `;
 
   await transporter.sendMail({
-    from: `"NabuTech" <${process.env.SMTP_USER}>`,
+    from: `"NabuTech" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: "Welcome to NabuTech - Your Email is Verified ",
     html: htmlContent,

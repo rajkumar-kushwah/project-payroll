@@ -114,41 +114,74 @@ router.post("/register", async (req, res) => {
 
 
 // Login (email must be verified)
-router.post('/login', async (req, res) => {
+
+router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required." });
+    }
+
     const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) return res.status(404).json({ message: 'Account not registered' });
+    if (!user) {
+      return res.status(404).json({ message: "Account not registered." });
+    }
 
-    // Email verification check
-    if (!user.emailVerified) return res.status(400).json({ message: 'Email not verified. Check your inbox.' });
+    //  Email verification check
+    if (!user.emailVerified) {
+      return res.status(400).json({ message: "Email not verified. Please check your inbox." });
+    }
 
+    //  Password check
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Incorrect password' });
-    
-        // Calculate IP
-    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || req.connection?.remoteAddress || 'Unknown';
+    if (!isMatch) {
+      return res.status(400).json({ message: "Incorrect password." });
+    }
 
-    // Send login email
-    await sendLoginEmail(
-      user.name,
-       user.email,
-       ip,
-       req.headers['user-agent']
-      );
+    // Capture IP safely
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",").shift() ||
+      req.socket?.remoteAddress ||
+      req.connection?.remoteAddress ||
+      "Unknown";
 
-    // Update last login
+    //  Send login notification email (fail-safe)
+    try {
+      await sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"]);
+    } catch (emailErr) {
+      console.error("Login email sending failed:", emailErr.message);
+      // Don't block login if email fails
+    }
+
+    //  Update last login time
     user.lastLogin = new Date();
     await user.save();
 
-    // Generate JWT
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    //  Generate token (check env)
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET missing in .env");
+      return res.status(500).json({ message: "Server configuration error." });
+    }
 
-    const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-    const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-    const lastLoginIST = moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
 
+    //  Format timestamps
+    const registeredAt = moment(user.createdAt)
+      .tz("Asia/Kolkata")
+      .format("DD/MM/YYYY hh:mm:ss A");
+    const updatedAt = moment(user.updatedAt)
+      .tz("Asia/Kolkata")
+      .format("DD/MM/YYYY hh:mm:ss A");
+    const lastLoginIST = user.lastLogin
+      ? moment(user.lastLogin)
+          .tz("Asia/Kolkata")
+          .format("DD/MM/YYYY hh:mm:ss A")
+      : null;
+
+    //  Send response
     res.status(200).json({
       message: "Login successful",
       token,
@@ -162,11 +195,9 @@ router.post('/login', async (req, res) => {
         lastLogin: lastLoginIST,
       },
     });
-
-
   } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Login error:", err.message, err.stack);
+    res.status(500).json({ message: "Server error. Please try again later." });
   }
 });
 
