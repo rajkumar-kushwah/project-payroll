@@ -390,21 +390,20 @@ router.put("/profile", authMiddleware, upload.single("avatar"), async (req, res)
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const { name, phone, bio, gender, dateofBirth, address } = req.body;
-    user.name = name || user.name;
-    user.phone = phone || user.phone;
-    user.bio = bio || user.bio;
-    user.gender = gender || user.gender;
-    user.dateofBirth = dateofBirth || user.dateofBirth;
+
+    if (name) user.name = name;
+    if (phone) user.phone = phone;
+    if (bio) user.bio = bio;
+    if (gender) user.gender = gender;
+    if (dateofBirth) user.dateofBirth = new Date(dateofBirth);
     if (address) user.address = JSON.parse(address);
 
-    if (req.file && req.file.path) {
-      user.avatar = req.file.path; // Cloudinary se direct URL milega
-    }
+    if (req.file && req.file.path) user.avatar = req.file.path;
 
     await user.save();
     res.json({ message: "Profile updated successfully", user });
   } catch (err) {
-    console.log(err);
+    console.error("Update profile error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

@@ -5,14 +5,7 @@ import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import employeeRoutes from "./routes/employees.js";
 import salaryRoutes from "./routes/salary.js";
-import path from "path";
-import fs from "fs";
 
-
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
 
 
 dotenv.config();
@@ -55,7 +48,6 @@ app.get("/ping", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/salary", salaryRoutes);
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
