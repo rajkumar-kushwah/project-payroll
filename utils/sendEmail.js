@@ -3,7 +3,7 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
   port: Number(process.env.SMTP_PORT),
   secure: Number(process.env.SMTP_PORT) === 465, // 465 = SSL
   auth: {
@@ -198,6 +198,28 @@ export const sendDeleteEmail = async (name, email, ip, userAgent) => {
 
 
 // ===== Optional: Send OTP Email =====
+// export const sendOtpEmail = async (email, otp) => {
+//   try {
+//     const html = `
+//       <div>
+//         <h3>Your OTP is: <strong>${otp}</strong></h3>
+//         <p>This OTP expires in 10 minutes.</p>
+//       </div>
+//     `;
+//     await transporter.sendMail({
+//       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
+//       to: email,
+//       subject: "Your OTP",
+//       html,
+//     });
+//   } catch (err) {
+//     console.error("sendOtpEmail error:", err.message);
+//   }
+// };
+
+
+
+
 export const sendOtpEmail = async (email, otp) => {
   try {
     const html = `
@@ -206,13 +228,17 @@ export const sendOtpEmail = async (email, otp) => {
         <p>This OTP expires in 10 minutes.</p>
       </div>
     `;
+
     await transporter.sendMail({
       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: "Your OTP",
       html,
     });
+
+    console.log(`OTP sent to ${email}`);
   } catch (err) {
     console.error("sendOtpEmail error:", err.message);
+    throw err;
   }
 };

@@ -6,7 +6,7 @@ import User from '../models/User.js';
 import Blacklist from "../models/Blacklist.js";
 import verifyToken,{authMiddleware} from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
-import fs from 'fs';
+import { sendOtpEmail } from '../utils/sendEmail.js';
 import {sendInfoEmail ,sendLoginEmail ,sendLogoutEmail,sendDeleteEmail } from '../utils/sendEmail.js';
 
 import moment from "moment-timezone";
