@@ -5,9 +5,12 @@ import crypto from 'crypto';
 import User from '../models/User.js';
 import Blacklist from "../models/Blacklist.js";
 import verifyToken,{authMiddleware} from '../middleware/authMiddleware.js';
+import upload from '../middleware/upload.js';
+import fs from 'fs';
 import {sendInfoEmail ,sendLoginEmail ,sendLogoutEmail,sendDeleteEmail } from '../utils/sendEmail.js';
 
 import moment from "moment-timezone";
+
 
 
 const router = express.Router();
@@ -336,6 +339,75 @@ router.get('/profile', verifyToken, async (req, res) => {
   }
 });
 
+
+
+//  Update Profile with avatar
+
+// router.put("/profile", verifyToken, uploads.single("avatar"), async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const { name, email, phone, bio, gender, dateofBirth, address } = req.body;
+
+//     // Parse address if sent as string
+//     let addressData = {};
+//     try {
+//       addressData = typeof address === "string" ? JSON.parse(address) : address;
+//     } catch (err) {
+//       addressData = {};
+//     }
+
+//     const updateData = {
+//       name,
+//       email,
+//       phone,
+//       bio,
+//       gender,
+//       dateofBirth,
+//       address: addressData,
+//       updatedAt: Date.now(),
+//     };
+
+//     // Add avatar URL if file uploaded
+//     if (req.file) {
+//       updateData.avatar = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+//     }
+
+//     const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true });
+
+//     if (!updatedUser) return res.status(404).json({ message: "User not found" });
+
+//     res.json({ message: "Profile updated successfully", user: updatedUser });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+
+router.put("/profile", authMiddleware, upload.single("avatar"), async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const { name, phone, bio, gender, dateofBirth, address } = req.body;
+    user.name = name || user.name;
+    user.phone = phone || user.phone;
+    user.bio = bio || user.bio;
+    user.gender = gender || user.gender;
+    user.dateofBirth = dateofBirth || user.dateofBirth;
+    if (address) user.address = JSON.parse(address);
+
+    if (req.file && req.file.path) {
+      user.avatar = req.file.path; // Cloudinary se direct URL milega
+    }
+
+    await user.save();
+    res.json({ message: "Profile updated successfully", user });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 //===================== DELETE USER ======================
 

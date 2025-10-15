@@ -1,12 +1,31 @@
 import mongoose from "mongoose";
 
+
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
-  phone: { type: String },
+  phone: { type: String, default: "" },
 
-  role: { type: String, enum: ["Administrator", "HR", "Employee"], default: "Employee" },
+
+  // profile 
+  avatar: {type: String, default: ""},
+  bio: {type: String, default: ""},
+  gender: {type: String, enum: ["male", "female", "other"], default: "other"},
+  dateofBirth: {type: Date, default: Date.new},
+
+  address: {
+    Stream: {type: String, default: ""},
+    city: {type: String, default: ""},
+    state: {type: String, default: ""},
+    country: {type: String, default: ""},
+    pinCode: {type: String, default: ""},
+  },
+
+
+  // Permissions and roles 
+  role: { type: String, enum: ["user", "admin"], default: "user" },
+  createdAt: { type: Date, default: Date.now },
 
   // Email verification
   emailVerified: { type: Boolean, default: false },
