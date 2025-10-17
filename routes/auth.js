@@ -28,6 +28,68 @@ const strictEmailRule = (email) => /^[A-Za-z]+[0-9]+@[A-Za-z0-9]+\.[A-Za-z]{2,}$
 const generateToken = () => crypto.randomBytes(20).toString("hex");
 
 // ===== REGISTER =====
+// router.post("/register", async (req, res) => {
+//   try {
+//     const { name, email, password, phone } = req.body;
+
+//     if (!name || !email || !password || !phone)
+//       return res.status(400).json({ message: "All fields required" });
+
+//     if (!strictEmailRule(email))
+//       return res.status(400).json({ message: "Email must be like name123@example.com" });
+
+//     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
+//     if (!phoneRegex.test(phone))
+//       return res.status(400).json({ message: "Invalid phone number format" });
+
+//     if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
+//       return res.status(400).json({ message: "Email already registered" });
+
+//     const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+//     if (await User.findOne({ phone: formattedPhone }))
+//       return res.status(400).json({ message: "Phone already registered" });
+
+//     const hashedPassword = await bcrypt.hash(password, 12);
+//     const token = crypto.randomBytes(32).toString("hex");
+
+//     const newUser = new User({
+//       name,
+//       email: email.toLowerCase(),
+//       password: hashedPassword,
+//       phone: formattedPhone,
+//       emailVerified: true, // auto-verify email
+//       emailVerificationToken: undefined,
+//       emailVerificationExpiry: undefined,
+//       phoneVerified: false,
+//       createdByIP: req.ip,
+//       isDeleted: false,
+//     });
+
+//     await newUser.save();
+
+//     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
+
+//     try {
+//       console.log("Sending info email to:", newUser.email);
+//       await sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id);
+//       console.log("Info email sent successfully!");
+//     } catch (err) {
+//       console.error("Email failed but registration successful:", err.message);
+//     }
+
+//     res.status(201).json({
+//       message: "Registered successfully. Email auto-verified.",
+//       userId: newUser._id,
+//       token
+//     });
+
+//   } catch (err) {
+//     console.error("Register router error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
@@ -58,8 +120,6 @@ router.post("/register", async (req, res) => {
       password: hashedPassword,
       phone: formattedPhone,
       emailVerified: true, // auto-verify email
-      emailVerificationToken: undefined,
-      emailVerificationExpiry: undefined,
       phoneVerified: false,
       createdByIP: req.ip,
       isDeleted: false,
@@ -67,16 +127,13 @@ router.post("/register", async (req, res) => {
 
     await newUser.save();
 
+    // Fire-and-forget email
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
+    sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id)
+      .then(() => console.log("Info email sent successfully!"))
+      .catch(err => console.error("Email failed:", err.message));
 
-    try {
-      console.log("Sending info email to:", newUser.email);
-      await sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id);
-      console.log("Info email sent successfully!");
-    } catch (err) {
-      console.error("Email failed but registration successful:", err.message);
-    }
-
+    // Immediate response to client
     res.status(201).json({
       message: "Registered successfully. Email auto-verified.",
       userId: newUser._id,
@@ -88,6 +145,9 @@ router.post("/register", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+
+
 
 // router.post("/register", async (req, res) => {
 //   try {
@@ -233,6 +293,93 @@ router.post("/register", async (req, res) => {
 
 // Login (email must be verified)
 
+// router.post("/login", async (req, res) => {
+//   const { email, password } = req.body;
+
+//   try {
+//     if (!email || !password) {
+//       return res.status(400).json({ message: "Email and password are required." });
+//     }
+
+//     const user = await User.findOne({ email: email.toLowerCase() });
+//     if (!user) {
+//       return res.status(404).json({ message: "Account not registered." });
+//     }
+
+//     //  Email verification check
+//     if (!user.emailVerified) {
+//       return res.status(400).json({ message: "Email not verified. Please check your inbox." });
+//     }
+
+//     //  Password check
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) {
+//       return res.status(400).json({ message: "Incorrect password." });
+//     }
+
+//     // Capture IP safely
+//     const ip =
+//       req.headers["x-forwarded-for"]?.split(",").shift() ||
+//       req.socket?.remoteAddress ||
+//       req.connection?.remoteAddress ||
+//       "Unknown";
+
+//     //  Send login notification email (fail-safe)
+//     try {
+//       await sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"]);
+//     } catch (emailErr) {
+//       console.error("Login email sending failed:", emailErr.message);
+//       // Don't block login if email fails
+//     }
+
+//     //  Update last login time
+//     user.lastLogin = new Date();
+//     await user.save();
+
+//     //  Generate token (check env)
+//     if (!process.env.JWT_SECRET) {
+//       console.error("JWT_SECRET missing in .env");
+//       return res.status(500).json({ message: "Server configuration error." });
+//     }
+
+//     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+//       expiresIn: "1d",
+//     });
+
+//     //  Format timestamps
+//     const registeredAt = moment(user.createdAt)
+//       .tz("Asia/Kolkata")
+//       .format("DD/MM/YYYY hh:mm:ss A");
+//     const updatedAt = moment(user.updatedAt)
+//       .tz("Asia/Kolkata")
+//       .format("DD/MM/YYYY hh:mm:ss A");
+//     const lastLoginIST = user.lastLogin
+//       ? moment(user.lastLogin)
+//           .tz("Asia/Kolkata")
+//           .format("DD/MM/YYYY hh:mm:ss A")
+//       : null;
+
+//     //  Send response
+//     res.status(200).json({
+//       message: "Login successful",
+//       token,
+//       user: {
+//         id: user._id,
+//         name: user.name,
+//         email: user.email,
+//         role: user.role,
+//         registeredAt,
+//         updatedAt,
+//         lastLogin: lastLoginIST,
+//       },
+//     });
+//   } catch (err) {
+//     console.error("Login error:", err.message, err.stack);
+//     res.status(500).json({ message: "Server error. Please try again later." });
+//   }
+// });
+
+
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -246,12 +393,10 @@ router.post("/login", async (req, res) => {
       return res.status(404).json({ message: "Account not registered." });
     }
 
-    //  Email verification check
     if (!user.emailVerified) {
       return res.status(400).json({ message: "Email not verified. Please check your inbox." });
     }
 
-    //  Password check
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Incorrect password." });
@@ -264,19 +409,15 @@ router.post("/login", async (req, res) => {
       req.connection?.remoteAddress ||
       "Unknown";
 
-    //  Send login notification email (fail-safe)
-    try {
-      await sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"]);
-    } catch (emailErr) {
-      console.error("Login email sending failed:", emailErr.message);
-      // Don't block login if email fails
-    }
+    // Fire-and-forget login email
+    sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
+      .then(() => console.log("Login email sent successfully!"))
+      .catch((emailErr) => console.error("Login email failed:", emailErr.message));
 
-    //  Update last login time
+    // Update last login time
     user.lastLogin = new Date();
     await user.save();
 
-    //  Generate token (check env)
     if (!process.env.JWT_SECRET) {
       console.error("JWT_SECRET missing in .env");
       return res.status(500).json({ message: "Server configuration error." });
@@ -286,7 +427,6 @@ router.post("/login", async (req, res) => {
       expiresIn: "1d",
     });
 
-    //  Format timestamps
     const registeredAt = moment(user.createdAt)
       .tz("Asia/Kolkata")
       .format("DD/MM/YYYY hh:mm:ss A");
@@ -299,7 +439,7 @@ router.post("/login", async (req, res) => {
           .format("DD/MM/YYYY hh:mm:ss A")
       : null;
 
-    //  Send response
+    // Send immediate response
     res.status(200).json({
       message: "Login successful",
       token,
@@ -318,7 +458,6 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ message: "Server error. Please try again later." });
   }
 });
-
 
 
 
