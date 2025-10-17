@@ -24,7 +24,8 @@ const userSchema = new mongoose.Schema({
 
 
   // Permissions and roles 
-  role: { type: String, enum: ["user", "admin"], default: "user" },
+    role: { type: String, trim: true, lowercase: true, default: "user",},
+    roleUpdated: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 
   // Email verification
