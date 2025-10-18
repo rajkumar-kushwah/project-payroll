@@ -686,26 +686,67 @@ router.delete("/delete-account", authMiddleware, async (req, res) => {
     if (!user) return res.status(401).json({ message: "Unauthorized" });
 
     // IP capture
-    const ip = req.headers['x-forwarded-for']?.split(',').shift()
-            || req.socket?.remoteAddress
-            || req.connection?.remoteAddress
-            || 'Unknown';
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",").shift() ||
+      req.socket?.remoteAddress ||
+      req.connection?.remoteAddress ||
+      "Unknown";
 
-    // Send delete confirmation email (errors logged but don't block)
+    const userAgent = req.headers["user-agent"] || "Unknown Device";
+
+    // Delete user first
+    const deletedUser = await User.findByIdAndDelete(user._id);
+    if (!deletedUser) {
+      return res.status(404).json({ message: "User not found or already deleted" });
+    }
+
+    // Email send after deletion (non-blocking)
     try {
-      await sendDeleteEmail(user.name, user.email, ip, req.headers['user-agent']);
-    } catch(err) {
+      await sendDeleteEmail(deletedUser.name, deletedUser.email, ip, userAgent);
+    } catch (err) {
       console.error("Delete Email Error:", err.message);
     }
 
-    // Delete user
-    await User.findByIdAndDelete(user._id);
-
-    return res.json({ message: "Account deleted successfully" });
+    return res.json({ message: "Account deleted successfully and confirmation email sent" });
   } catch (err) {
     console.error("Delete Account Error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 });
+
+router.put("/update-password", authMiddleware, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const userId = req.user._id;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: "Both old and new passwords are required" });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Verify old password
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Old password is incorrect" });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password
+    user.password = hashedPassword;
+    await user.save();
+
+    return res.json({ message: "Password updated successfully" });
+  } catch (err) {
+    console.error("Password Update Error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 export default router;
