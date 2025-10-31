@@ -84,8 +84,6 @@
 // };
 
 import { Resend } from "resend";
-import dotenv from "dotenv";
-dotenv.config();
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -132,15 +130,15 @@ export const sendInfoEmail = async (name, email, ip, userAgent, userId) => {
 
   try {
     const data = await resend.emails.send({
-      from: "NabuTech <onboarding@resend.dev>", //  No domain setup needed
+      from: "NabuTech <onboarding@resend.dev>",
       to: email,
       subject: "Welcome to NabuTech - Your Email is Verified",
       html: htmlContent,
     });
 
-    console.log(" Email sent successfully:", data);
+    console.log("✅ Email sent successfully:", data);
   } catch (error) {
-    console.error(" Failed to send email:", error);
+    console.error("❌ Failed to send email:", error);
   }
 };
 
