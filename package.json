@@ -25,6 +25,7 @@
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^7.0.9",
     "react-toastify": "^11.0.5",
+    "resend": "^6.3.0",
     "scrypto": "^1.0.3",
     "twilio": "^5.9.0"
   },
