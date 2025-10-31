@@ -138,10 +138,53 @@ export const sendInfoEmail = async (name, email, ip, userAgent, userId) => {
 
     console.log("✅ Email sent successfully:", data);
   } catch (error) {
-    console.error("❌ Failed to send email:", error);
+    console.error(" Failed to send email:", error);
   }
 };
 
+
+export const sendLoginEmail = async (name, email, ip, userAgent) => {
+  try {
+    const loginTime = new Date().toLocaleString();
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
+        <h2 style="color:#4CAF50;">Hello ${name},</h2>
+        <p style="color:#333;">Your <strong>NabuTech</strong> account was just logged in successfully.</p>
+        <p style="color:#555;">If this was you, no action is needed.<br/>If not, please secure your account immediately.</p>
+        <hr style="margin:20px 0;"/>
+        <div style="text-align:left; display:inline-block; background:#fff; padding:15px 25px; border-radius:8px; border:1px solid #eee;">
+          <p><strong>Login Details:</strong></p>
+          <ul style="padding-left:15px; color:#444;">
+            <li><strong>IP Address:</strong> ${ip}</li>
+            <li><strong>Device/Browser:</strong> ${userAgent}</li>
+            <li><strong>Login Time:</strong> ${loginTime}</li>
+          </ul>
+        </div>
+        <p style="margin-top:25px; font-size:14px; color:#666;">
+          Stay safe, <br/><strong>- NabuTech Security Team</strong>
+        </p>
+        <div style="margin-top:20px; font-size:12px; color:#999;">
+          <p>© ${new Date().getFullYear()} NabuTech. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+
+    const data = await resend.emails.send({
+      from: "NabuTech <onboarding@resend.dev>",
+      to: email,
+      subject: " Login Notification - NabuTech",
+      html: htmlContent,
+    });
+
+    console.log(` Login notification email sent to ${email}`, data);
+    return true;
+
+  } catch (err) {
+    console.error(" sendLoginEmail error:", err.message);
+    return false;
+  }
+};
 
 
 

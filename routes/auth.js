@@ -7,7 +7,7 @@ import Blacklist from "../models/Blacklist.js";
 import verifyToken,{authMiddleware} from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 import { sendOtpEmail } from '../utils/sendEmail.js';
-import {sendInfoEmail  } from '../utils/sendEmail.js';
+import {sendInfoEmail,sendLoginEmail  } from '../utils/sendEmail.js';
 
 // ,sendLoginEmail ,sendLogoutEmail,sendDeleteEmail
 
