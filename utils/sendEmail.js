@@ -136,7 +136,7 @@ export const sendInfoEmail = async (name, email, ip, userAgent, userId) => {
       html: htmlContent,
     });
 
-    console.log("✅ Email sent successfully:", data);
+    console.log(" Email sent successfully:", data);
   } catch (error) {
     console.error(" Failed to send email:", error);
   }
@@ -227,78 +227,78 @@ export const sendLoginEmail = async (name, email, ip, userAgent) => {
 
 
 // ===== Send Logout Notification Email =====
-// export const sendLogoutEmail = async (name, email, ip, userAgent) => {
-//   try {
-//     const logoutTime = new Date().toLocaleString();
+export const sendLogoutEmail = async (name, email, ip, userAgent) => {
+  try {
+    const logoutTime = new Date().toLocaleString();
 
-//     const htmlContent = `
-//       <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
-//         <h2>Hello ${name},</h2>
-//         <p>Your NabuTech account was just logged out successfully.</p>
-//         <p>If this wasn’t you, please secure your account immediately.</p>
-//         <hr/>
-//         <p><strong>Logout Details:</strong></p>
-//         <ul style="text-align:left; display:inline-block;">
-//           <li><strong>IP Address:</strong> ${ip}</li>
-//           <li><strong>Device/Browser:</strong> ${userAgent}</li>
-//           <li><strong>Logout Time:</strong> ${logoutTime}</li>
-//         </ul>
-//         <p style="margin-top:15px;">Stay safe, <br/> - NabuTech Team</p>
-//       </div>
-//     `;
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
+        <h2>Hello ${name},</h2>
+        <p>Your NabuTech account was just logged out successfully.</p>
+        <p>If this wasn’t you, please secure your account immediately.</p>
+        <hr/>
+        <p><strong>Logout Details:</strong></p>
+        <ul style="text-align:left; display:inline-block;">
+          <li><strong>IP Address:</strong> ${ip}</li>
+          <li><strong>Device/Browser:</strong> ${userAgent}</li>
+          <li><strong>Logout Time:</strong> ${logoutTime}</li>
+        </ul>
+        <p style="margin-top:15px;">Stay safe, <br/> - NabuTech Team</p>
+      </div>
+    `;
 
-//     await transporter.sendMail({
-//       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-//       to: email,
-//       subject: "🔔 Logout Notification",
-//       html: htmlContent,
-//     });
+    await transporter.sendMail({
+      from: "NabuTech <onboarding@resend.dev>",
+      to: email,
+      subject: " Logout Notification",
+      html: htmlContent,
+    });
 
-//     console.log(`Logout notification email sent to ${email}`);
-//     return true;
+    console.log(`Logout notification email sent to ${email}`);
+    return true;
 
-//   } catch (err) {
-//     console.error("sendLogoutEmail error:", err.message);
-//     throw err;
-//   }
-// };
+  } catch (err) {
+    console.error("sendLogoutEmail error:", err.message);
+    throw err;
+  }
+};
 
 // ===== Send Account Delete Notification Email =====
-// export const sendDeleteEmail = async (name, email, ip, userAgent) => {
-//   try {
-//     const deleteTime = new Date().toLocaleString();
+export const sendDeleteEmail = async (name, email, ip, userAgent) => {
+  try {
+    const deleteTime = new Date().toLocaleString();
 
-//     const htmlContent = `
-//       <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
-//         <h2>Hello ${name},</h2>
-//         <p>Your NabuTech account has been <strong>deleted</strong>.</p>
-//         <p>If you did not request this, please contact support immediately.</p>
-//         <hr/>
-//         <p><strong>Account Details:</strong></p>
-//         <ul style="text-align:left; display:inline-block;">
-//           <li><strong>IP Address:</strong> ${ip}</li>
-//           <li><strong>Device/Browser:</strong> ${userAgent}</li>
-//           <li><strong>Time:</strong> ${deleteTime}</li>
-//         </ul>
-//         <p style="margin-top:15px;">Stay safe, <br/> - NabuTech Team</p>
-//       </div>
-//     `;
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #ddd; border-radius:10px; text-align:center; background-color:#f9f9f9;">
+        <h2>Hello ${name},</h2>
+        <p>Your NabuTech account has been <strong>deleted</strong>.</p>
+        <p>If you did not request this, please contact support immediately.</p>
+        <hr/>
+        <p><strong>Account Details:</strong></p>
+        <ul style="text-align:left; display:inline-block;">
+          <li><strong>IP Address:</strong> ${ip}</li>
+          <li><strong>Device/Browser:</strong> ${userAgent}</li>
+          <li><strong>Time:</strong> ${deleteTime}</li>
+        </ul>
+        <p style="margin-top:15px;">Stay safe, <br/> - NabuTech Team</p>
+      </div>
+    `;
 
-//     await transporter.sendMail({
-//       from: `"NabuTech" <${process.env.EMAIL_USER}>`,
-//       to: email,
-//       subject: "⚠️ Account Deleted Notification",
-//       html: htmlContent,
-//     });
+    await transporter.sendMail({
+      from: "NabuTech <onboarding@resend.dev>",
+      to: email,
+      subject: "⚠️ Account Deleted Notification",
+      html: htmlContent,
+    });
 
-//     console.log(`Account delete notification email sent to ${email}`);
-//     return true;
+    console.log(`Account delete notification email sent to ${email}`);
+    return true;
 
-//   } catch (err) {
-//     console.error("sendDeleteEmail error:", err.message);
-//     throw err;
-//   }
-// };
+  } catch (err) {
+    console.error("sendDeleteEmail error:", err.message);
+    throw err;
+  }
+};
 
 
 // ===== Optional: Send OTP Email =====
