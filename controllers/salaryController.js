@@ -1,6 +1,7 @@
+// controllers/salaryController.js
 import Salary from "../models/Salary.js";
 
-// Add Salary
+// ➕ Add Salary
 export const addSalary = async (req, res) => {
   try {
     const salary = new Salary(req.body);
@@ -11,7 +12,7 @@ export const addSalary = async (req, res) => {
   }
 };
 
-// Get Salary by Employee
+// 🔍 Get Salary by Employee
 export const getSalaryByEmployee = async (req, res) => {
   try {
     const salaries = await Salary.find({ employeeId: req.params.employeeId });
@@ -21,7 +22,7 @@ export const getSalaryByEmployee = async (req, res) => {
   }
 };
 
-// Update/Edit Salary
+//  Update Salary
 export const updateSalary = async (req, res) => {
   try {
     const salary = await Salary.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -31,7 +32,7 @@ export const updateSalary = async (req, res) => {
   }
 };
 
-// Delete Salary
+// ❌ Delete Salary
 export const deleteSalary = async (req, res) => {
   try {
     await Salary.findByIdAndDelete(req.params.id);
@@ -41,20 +42,21 @@ export const deleteSalary = async (req, res) => {
   }
 };
 
-// Mark Salary as Paid
+// 💸 Pay Salary
 export const paySalary = async (req, res) => {
   try {
-    const salary = await Salary.findByIdAndUpdate(req.params.id, {
-      status: "Paid",
-      paidOn: new Date(),
-    }, { new: true });
+    const salary = await Salary.findByIdAndUpdate(
+      req.params.id,
+      { status: "Paid", paidOn: new Date() },
+      { new: true }
+    );
     res.json({ message: "Salary marked as Paid", salary });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// Get Salary by ID
+// 🔎 Get Salary by ID
 export const getSalaryById = async (req, res) => {
   try {
     const salary = await Salary.findById(req.params.id);
@@ -64,15 +66,3 @@ export const getSalaryById = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-// salaryRoutes.js
-// router.get("/single/:id", async (req, res) => {
-//   try {
-//     const salary = await Salary.findById(req.params.id);
-//     if (!salary) return res.status(404).json({ error: "Salary not found" });
-//     res.json(salary);
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
