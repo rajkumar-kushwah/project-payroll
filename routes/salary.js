@@ -1,6 +1,6 @@
 import express from "express";
 import {
-  getAllSalaries,
+  getSalariesByEmployee,
   getSalaryById,
   addSalary,
   markSalaryPaid,
@@ -16,7 +16,7 @@ const router = express.Router();
 router.use(protect);
 
 // 1. Get all salary records
-router.get("/", getAllSalaries);
+router.get("/employee/:employeeId", getSalariesByEmployee);
 
 //  2. Filter salary by month or status
 router.get("/filter", filterSalaries);
