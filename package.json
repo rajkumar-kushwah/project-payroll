@@ -27,7 +27,8 @@
     "react-toastify": "^11.0.5",
     "resend": "^6.3.0",
     "scrypto": "^1.0.3",
-    "twilio": "^5.9.0"
+    "twilio": "^5.9.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

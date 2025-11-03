@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User.js';
 import Blacklist from "../models/Blacklist.js";
-import authMiddleware from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 import { sendOtpEmail } from '../utils/sendEmail.js';
 import {sendInfoEmail,sendLoginEmail  } from '../utils/sendEmail.js';
@@ -584,7 +584,7 @@ router.post("/reset-password", async (req, res) => {
 // ======================= PROTECTED ROUTES =======================
 
 //  Example: Get Profile
-router.get('/profile', authMiddleware, async (req, res) => {
+router.get('/profile', protect , async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
     res.json(user);
@@ -639,7 +639,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
 // });
 
 
-router.put("/profile", authMiddleware, upload.single("avatar"), async (req, res) => {
+router.put("/profile", protect , upload.single("avatar"), async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -681,7 +681,7 @@ router.put("/profile", authMiddleware, upload.single("avatar"), async (req, res)
 //===================== DELETE USER ======================
 
 // DELETE account
-router.delete("/delete-account", authMiddleware, async (req, res) => {
+router.delete("/delete-account", protect , async (req, res) => {
   try {
     const user = req.user;
     if (!user) return res.status(401).json({ message: "Unauthorized" });
@@ -715,7 +715,7 @@ router.delete("/delete-account", authMiddleware, async (req, res) => {
   }
 });
 
-router.put("/update-password", authMiddleware, async (req, res) => {
+router.put("/update-password", protect , async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
     const userId = req.user._id;

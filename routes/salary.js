@@ -1,14 +1,40 @@
 import express from "express";
-import { addSalary, getSalaryByEmployee, updateSalary, deleteSalary, paySalary, getSalaryById } from "../controllers/salaryController.js";
+import {
+  getAllSalaries,
+  getSalaryById,
+  addSalary,
+  markSalaryPaid,
+  deleteSalary,
+  filterSalaries,
+  updateSalary 
+} from "../controllers/salaryController.js";
+import { protect } from "../middleware/authMiddleware.js"; //  ensure user is logged in
 
 const router = express.Router();
 
-router.post("/", addSalary);                // Add salary
-router.get("/:employeeId", getSalaryByEmployee);  // Get salary by employee
-router.put("/:id", updateSalary);          // Edit salary
-router.delete("/:id", deleteSalary);       // Delete salary
-router.put("/pay/:id", paySalary);         // Mark salary as Paid
-router.get("/single/:id", getSalaryById); // Get single salary
+//  All routes are protected (only logged-in user access)
+router.use(protect);
+
+// 1. Get all salary records
+router.get("/", getAllSalaries);
+
+//  2. Filter salary by month or status
+router.get("/filter", filterSalaries);
+
+//  3. Get single salary record
+router.get("/:id", getSalaryById);
+
+//  4. Add new salary (if needed manually)
+router.post("/", addSalary);
+
+//  5. Mark salary as paid
+router.patch("/:id/pay", markSalaryPaid);
+
+//  6. Delete salary
+router.delete("/:id", deleteSalary);
+
+// 7. Update full salary record (replace)
+router.put("/:id", updateSalary);
 
 
 export default router;

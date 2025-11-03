@@ -1,60 +1,83 @@
 import mongoose from "mongoose";
 import Employee from "../models/Employee.js";
 import Salary from "../models/Salary.js";
+import { v4 as uuidv4 } from "uuid"; // for unique salaryId
 
-//  Get all employees (only those created by logged-in user)
+// 1️⃣ Get all employees of logged-in user
 export const getEmployees = async (req, res) => {
   try {
     const employees = await Employee.find({ createdBy: req.user._id }).sort({ createdAt: -1 });
     res.json(employees);
   } catch (err) {
-    console.error(err);
+    console.error("Error in getEmployees:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-//  Get employee by ID (only if created by logged-in user)
+// 2️⃣ Get single employee by ID
 export const getEmployeeById = async (req, res) => {
   try {
     const emp = await Employee.findOne({ _id: req.params.id, createdBy: req.user._id });
     if (!emp) return res.status(404).json({ message: "Employee not found" });
     res.json(emp);
   } catch (err) {
-    console.error(err);
+    console.error("Error in getEmployeeById:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-//  Add new employee (store createdBy)
+// 3️ Add new employee → auto-create salary
 export const addEmployee = async (req, res) => {
   try {
+    const {
+      name,
+      email,
+      phone,
+      department,
+      designation,
+      salary,
+    } = req.body;
+
+    //  Step 1: Create employee with unique employeeId
     const emp = await Employee.create({
-      ...req.body,
-      createdBy: req.user._id, // logged-in user
+      employeeId: "EMP-" + uuidv4().slice(0, 8), //  auto employee ID
+      name,
+      email,
+      phone,
+      department,
+      designation,
+      salary,
+      createdBy: req.user._id,
     });
 
-    // Auto-create salary record
-    const salary = await Salary.create({
-      EmployeeId: emp._id,
-      month: new Date().toISOString().slice(0, 7),
-      baseSalary: emp.salary || 0,
-      bonus: 0,
+    //  Step 2: Auto-create salary record for that employee
+    const salaryRecord = await Salary.create({
+      salaryId: uuidv4(),
+      employeeId: emp._id, //  link salary to employee
+      month: new Date().toISOString().slice(0, 7), // YYYY-MM
+      basic: emp.salary || 0,
+      hra: 0,
+      allowances: 0,
       deductions: 0,
       leaves: 0,
-      netPay: emp.salary || 0,
+      totalWorkingDays: 30,
+      netSalary: emp.salary || 0,
+      createdBy: req.user._id,
+      status: "unpaid",
     });
 
+    //  Step 3: Send response
     res.status(201).json({
-      message: "Employee added successfully",
-      data: { emp, salary },
+      message: "Employee and salary created successfully",
+      data: { emp, salaryRecord },
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Error in addEmployee:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-//  Update employee (only if created by logged-in user)
+// 4️ Update employee
 export const updateEmployee = async (req, res) => {
   try {
     const emp = await Employee.findOneAndUpdate(
@@ -62,57 +85,54 @@ export const updateEmployee = async (req, res) => {
       req.body,
       { new: true }
     );
-
     if (!emp) return res.status(404).json({ message: "Employee not found or unauthorized" });
-    res.json(emp);
+
+    res.json({ message: "Employee updated successfully", data: emp });
   } catch (err) {
-    console.error(err);
+    console.error("Error in updateEmployee:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-//  Delete employee (only if created by logged-in user)
+// 5️ Delete employee and related salary records
 export const deleteEmployee = async (req, res) => {
   try {
     const emp = await Employee.findOneAndDelete({
       _id: req.params.id,
       createdBy: req.user._id,
     });
-
     if (!emp) return res.status(404).json({ message: "Employee not found or unauthorized" });
 
-    res.json({ message: "Employee deleted successfully" });
+    await Salary.deleteMany({ employeeId: emp._id });
+
+    res.json({ message: "Employee and related salary records deleted successfully" });
   } catch (err) {
-    console.error(err);
+    console.error("Error in deleteEmployee:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-//  Search employees (only from logged-in user's data)
+// 6️ Search employees
 export const searchEmployees = async (req, res) => {
   try {
     const { search } = req.query;
     let query = { createdBy: req.user._id };
 
     if (search) {
-      const searchRegex = { $regex: search, $options: "i" };
+      const regex = { $regex: search, $options: "i" };
       query.$or = [
-        { name: searchRegex },
-        { email: searchRegex },
-        { department: searchRegex },
-        { jobrole: searchRegex },
-        { status: searchRegex },
+        { name: regex },
+        { email: regex },
+        { department: regex },
+        { jobRole: regex },
+        { status: regex },
       ];
-
       if (mongoose.isValidObjectId(search)) {
         query.$or.push({ _id: new mongoose.Types.ObjectId(search) });
       }
     }
 
-    const employees = await Employee.find(query)
-      .sort({ createdAt: -1 })
-      .limit(10);
-
+    const employees = await Employee.find(query).sort({ createdAt: -1 }).limit(10);
     res.json(employees);
   } catch (err) {
     console.error("Error in searchEmployees:", err);
