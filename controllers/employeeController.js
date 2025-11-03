@@ -1,9 +1,11 @@
+import mongoose from "mongoose";
 import Employee from "../models/Employee.js";
+import Salary from "../models/Salary.js";
 
-// Get all employees
+//  Get all employees (only those created by logged-in user)
 export const getEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find();
+    const employees = await Employee.find({ createdBy: req.user._id }).sort({ createdAt: -1 });
     res.json(employees);
   } catch (err) {
     console.error(err);
@@ -11,10 +13,10 @@ export const getEmployees = async (req, res) => {
   }
 };
 
-// Get employee by ID
+//  Get employee by ID (only if created by logged-in user)
 export const getEmployeeById = async (req, res) => {
   try {
-    const emp = await Employee.findById(req.params.id);
+    const emp = await Employee.findOne({ _id: req.params.id, createdBy: req.user._id });
     if (!emp) return res.status(404).json({ message: "Employee not found" });
     res.json(emp);
   } catch (err) {
@@ -23,15 +25,18 @@ export const getEmployeeById = async (req, res) => {
   }
 };
 
-// Add new employee
+//  Add new employee (store createdBy)
 export const addEmployee = async (req, res) => {
   try {
-    const emp = await Employee.create(req.body);
-    
-     // 2️ Automatically create initial salary record
-    await Salary.create({
+    const emp = await Employee.create({
+      ...req.body,
+      createdBy: req.user._id, // logged-in user
+    });
+
+    // Auto-create salary record
+    const salary = await Salary.create({
       EmployeeId: emp._id,
-      month: new Date().toISOString().slice(0, 7), // Current month in yyyy-mm
+      month: new Date().toISOString().slice(0, 7),
       baseSalary: emp.salary || 0,
       bonus: 0,
       deductions: 0,
@@ -41,7 +46,7 @@ export const addEmployee = async (req, res) => {
 
     res.status(201).json({
       message: "Employee added successfully",
-      data: emp,
+      data: { emp, salary },
     });
   } catch (err) {
     console.error(err);
@@ -49,11 +54,16 @@ export const addEmployee = async (req, res) => {
   }
 };
 
-// Update employee
+//  Update employee (only if created by logged-in user)
 export const updateEmployee = async (req, res) => {
   try {
-    const emp = await Employee.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    const emp = await Employee.findOneAndUpdate(
+      { _id: req.params.id, createdBy: req.user._id },
+      req.body,
+      { new: true }
+    );
+
+    if (!emp) return res.status(404).json({ message: "Employee not found or unauthorized" });
     res.json(emp);
   } catch (err) {
     console.error(err);
@@ -61,11 +71,16 @@ export const updateEmployee = async (req, res) => {
   }
 };
 
-// Delete employee
+//  Delete employee (only if created by logged-in user)
 export const deleteEmployee = async (req, res) => {
   try {
-    const emp = await Employee.findByIdAndDelete(req.params.id);
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    const emp = await Employee.findOneAndDelete({
+      _id: req.params.id,
+      createdBy: req.user._id,
+    });
+
+    if (!emp) return res.status(404).json({ message: "Employee not found or unauthorized" });
+
     res.json({ message: "Employee deleted successfully" });
   } catch (err) {
     console.error(err);
@@ -73,35 +88,25 @@ export const deleteEmployee = async (req, res) => {
   }
 };
 
-
-
-//  Search Employees API
+//  Search employees (only from logged-in user's data)
 export const searchEmployees = async (req, res) => {
   try {
     const { search } = req.query;
-    let query = {};
+    let query = { createdBy: req.user._id };
 
     if (search) {
       const searchRegex = { $regex: search, $options: "i" };
+      query.$or = [
+        { name: searchRegex },
+        { email: searchRegex },
+        { department: searchRegex },
+        { jobrole: searchRegex },
+        { status: searchRegex },
+      ];
 
-      query = {
-        $or: [
-          { name: searchRegex },
-          { email: searchRegex },
-          { position: searchRegex },
-          { department: searchRegex },
-          { address: searchRegex },
-          { phone: searchRegex },
-          { salary: searchRegex },
-          { joiningDate: searchRegex },
-          { role: searchRegex },
-          { status: searchRegex },
-          // _id is ObjectId, so handle safely
-          ...(mongoose.isValidObjectId(search)
-            ? [{ _id: new mongoose.Types.ObjectId(search) }]
-            : []),
-        ],
-      };
+      if (mongoose.isValidObjectId(search)) {
+        query.$or.push({ _id: new mongoose.Types.ObjectId(search) });
+      }
     }
 
     const employees = await Employee.find(query)
@@ -110,7 +115,7 @@ export const searchEmployees = async (req, res) => {
 
     res.json(employees);
   } catch (err) {
-    console.error(" Error in searchEmployees:", err);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Error in searchEmployees:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

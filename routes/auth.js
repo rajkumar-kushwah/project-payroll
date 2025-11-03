@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User.js';
 import Blacklist from "../models/Blacklist.js";
-import verifyToken,{authMiddleware} from '../middleware/authMiddleware.js';
+import authMiddleware from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 import { sendOtpEmail } from '../utils/sendEmail.js';
 import {sendInfoEmail,sendLoginEmail  } from '../utils/sendEmail.js';
@@ -584,7 +584,7 @@ router.post("/reset-password", async (req, res) => {
 // ======================= PROTECTED ROUTES =======================
 
 //  Example: Get Profile
-router.get('/profile', verifyToken, async (req, res) => {
+router.get('/profile', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
     res.json(user);

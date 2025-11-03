@@ -8,6 +8,7 @@ const employeeSchema = new mongoose.Schema(
     department: { type: String, required: true },
     joinDate: { type: Date, default: Date.now },
     salary: { type: Number, default: 0, min: 0 },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     status: {
       type: String,
       enum: ["active", "inactive", "terminated"],
