@@ -7,7 +7,7 @@ const router = express.Router();
 router.use(protect);
 router.get("/", getEmployees);
 router.get("/:id", getEmployeeById);
-router.post("/add", addEmployee);
+router.post("/", addEmployee);
 router.put("/:id", updateEmployee);
 router.delete("/:id", deleteEmployee);
 router.get("/search", searchEmployees);
