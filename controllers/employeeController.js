@@ -3,7 +3,7 @@ import Employee from "../models/Employee.js";
 import Salary from "../models/Salary.js";
 import { v4 as uuidv4 } from "uuid"; // for unique salaryId
 
-// 1️⃣ Get all employees of logged-in user
+// 1️ Get all employees of logged-in user
 export const getEmployees = async (req, res) => {
   try {
     const employees = await Employee.find({ createdBy: req.user._id }).sort({ createdAt: -1 });
@@ -14,7 +14,7 @@ export const getEmployees = async (req, res) => {
   }
 };
 
-// 2️⃣ Get single employee by ID
+// 2️ Get single employee by ID
 export const getEmployeeById = async (req, res) => {
   try {
     const emp = await Employee.findOne({ _id: req.params.id, createdBy: req.user._id });
@@ -33,9 +33,13 @@ export const addEmployee = async (req, res) => {
       name,
       email,
       phone,
+      jobRole,
+      joinDate,
       department,
       designation,
       salary,
+      status, 
+      notes,
     } = req.body;
 
     //  Step 1: Create employee with unique employeeId
@@ -44,9 +48,13 @@ export const addEmployee = async (req, res) => {
       name,
       email,
       phone,
+       jobRole,
       department,
       designation,
       salary,
+      joinDate,
+      status,
+      notes,
       createdBy: req.user._id,
     });
 
