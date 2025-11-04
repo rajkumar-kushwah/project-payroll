@@ -596,49 +596,6 @@ router.get('/profile', protect , async (req, res) => {
 
 
 
-//  Update Profile with avatar
-
-// router.put("/profile", verifyToken, uploads.single("avatar"), async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-//     const { name, email, phone, bio, gender, dateofBirth, address } = req.body;
-
-//     // Parse address if sent as string
-//     let addressData = {};
-//     try {
-//       addressData = typeof address === "string" ? JSON.parse(address) : address;
-//     } catch (err) {
-//       addressData = {};
-//     }
-
-//     const updateData = {
-//       name,
-//       email,
-//       phone,
-//       bio,
-//       gender,
-//       dateofBirth,
-//       address: addressData,
-//       updatedAt: Date.now(),
-//     };
-
-//     // Add avatar URL if file uploaded
-//     if (req.file) {
-//       updateData.avatar = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-//     }
-
-//     const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true });
-
-//     if (!updatedUser) return res.status(404).json({ message: "User not found" });
-
-//     res.json({ message: "Profile updated successfully", user: updatedUser });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
-
-
 router.put("/profile", protect , upload.single("avatar"), async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
