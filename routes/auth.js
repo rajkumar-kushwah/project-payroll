@@ -3,7 +3,6 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User.js';
-import Profile from '../models/Profile.js';
 import Blacklist from "../models/Blacklist.js";
 import { protect } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
@@ -33,74 +32,6 @@ const generateToken = () => crypto.randomBytes(20).toString("hex");
 
 
 
-// router.post("/register", async (req, res) => {
-//   try {
-//     const { name, email, password, phone, companyName, role } = req.body;
-
-//     if (!name || !email || !password || !phone || !companyName || !role)
-//       return res.status(400).json({ message: "All fields required" });
-
-//     if (!strictEmailRule(email))
-//       return res.status(400).json({ message: "Email must be like name123@example.com" });
-
-//     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
-//     if (!phoneRegex.test(phone))
-//       return res.status(400).json({ message: "Invalid phone number format" });
-
-//     if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
-//       return res.status(400).json({ message: "Email already registered" });
-
-//     const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
-//     if (await User.findOne({ phone: formattedPhone }))
-//       return res.status(400).json({ message: "Phone already registered" });
-
-//     const hashedPassword = await bcrypt.hash(password, 12);
-//     const token = crypto.randomBytes(32).toString("hex");
-
-//     const newUser = new User({
-//       name,
-//       email: email.toLowerCase(),
-//       password: hashedPassword,
-//       phone: formattedPhone,
-//       companyName,
-//       role:role.toLowerCase(),
-//       emailVerified: true, // auto-verify email
-//       phoneVerified: false,
-//       createdByIP: req.ip,
-//       isDeleted: false,
-//     });
-
-//     await newUser.save();
-
-//     // Fire-and-forget email
-//     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
-//     sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id)
-//       .then(() => console.log("Info email sent successfully!"))
-//       .catch(err => console.error("Email failed:", err.message));
-
-
-//       // Auto verify after 1 sec
-//       setTimeout(async () => {
-//         newUser.emailVerified = true,
-//         newUser.status = "active",
-//         await newUser.save();
-//        console.log(` ${newUser.email} auto-verified and activated`);
-//       }, 1000);
-
-//     // Immediate response to client
-//     res.status(201).json({
-//       message: "Registered successfully. Account Activated...",
-//       userId: newUser._id,
-//       token
-//     });
-
-//   } catch (err) {
-//     console.error("Register router error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
-
-
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password, phone, companyName, role } = req.body;
@@ -125,15 +56,14 @@ router.post("/register", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
     const token = crypto.randomBytes(32).toString("hex");
 
-    // 1️ Create new user
     const newUser = new User({
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone: formattedPhone,
       companyName,
-      role: role.toLowerCase(),
-      emailVerified: true, // auto-verify
+      role:role.toLowerCase(),
+      emailVerified: true, // auto-verify email
       phoneVerified: false,
       createdByIP: req.ip,
       isDeleted: false,
@@ -141,43 +71,122 @@ router.post("/register", async (req, res) => {
 
     await newUser.save();
 
-    // 2️ Create linked profile document
-    const newProfile = new Profile({
-      userId: newUser._id,
-      companyName,
-      role: role.toLowerCase(),
-    });
-    await newProfile.save();
-
-    // 3️ Fire-and-forget email
-    const ip =
-      req.headers["x-forwarded-for"]?.split(",").shift() ||
-      req.socket?.remoteAddress ||
-      "Unknown";
-    sendInfoEmail(newUser.name, newUser.email, ip, req.headers["user-agent"], newUser._id)
+    // Fire-and-forget email
+    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
+    sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id)
       .then(() => console.log("Info email sent successfully!"))
-      .catch((err) => console.error("Email failed:", err.message));
+      .catch(err => console.error("Email failed:", err.message));
 
-    // 4 Auto verify after 1 second
-    setTimeout(async () => {
-      newUser.emailVerified = true;
-      newUser.status = "active";
-      await newUser.save();
-      console.log(`${newUser.email} auto-verified and activated`);
-    }, 1000);
 
-    // 5 Respond immediately
+      // Auto verify after 1 sec
+      setTimeout(async () => {
+        newUser.emailVerified = true,
+        newUser.status = "active",
+        await newUser.save();
+       console.log(` ${newUser.email} auto-verified and activated`);
+      }, 1000);
+
+    // Immediate response to client
     res.status(201).json({
       message: "Registered successfully. Account Activated...",
       userId: newUser._id,
-      profileId: newProfile._id,
-      token,
+      token
     });
+
   } catch (err) {
     console.error("Register router error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
+
+
+// router.post("/register", async (req, res) => {
+//   try {
+//     const { name, email, password, phone, companyName, role } = req.body;
+
+//     if (!name || !email || !password || !phone || !companyName || !role)
+//       return res.status(400).json({ message: "All fields required" });
+
+//     if (!strictEmailRule(email))
+//       return res.status(400).json({ message: "Email must be like name123@example.com" });
+
+//     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
+//     if (!phoneRegex.test(phone))
+//       return res.status(400).json({ message: "Invalid phone number format" });
+
+//     if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
+//       return res.status(400).json({ message: "Email already registered" });
+
+//     const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+//     if (await User.findOne({ phone: formattedPhone }))
+//       return res.status(400).json({ message: "Phone already registered" });
+
+//     const hashedPassword = await bcrypt.hash(password, 12);
+//     const token = crypto.randomBytes(32).toString("hex");
+
+//     // 1️ Create new user
+//     const newUser = new User({
+//       name,
+//       email: email.toLowerCase(),
+//       password: hashedPassword,
+//       phone: formattedPhone,
+//       companyName,
+//       role: role.toLowerCase(),
+//       emailVerified: true, // auto-verify
+//       phoneVerified: false,
+//       createdByIP: req.ip,
+//       isDeleted: false,
+//     });
+
+//     await newUser.save();
+
+//     // 2️ Create linked profile document
+//     const newProfile = new Profile({
+//       userId: newUser._id,
+//       companyName,
+//       role: role.toLowerCase(),
+//       address: { Stream: "", city: "", state: "", country: "", pinCode: "" },
+//       designation: "",
+//       department: "",
+//       bio: "",
+//       gender: "other",
+//       dateOfBirth: "",
+//       isDeleted: false,
+//       createdByIP: req.ip,
+//       updatedByIP: req.ip,
+      
+//     });
+//     await newProfile.save();
+
+//     // 3️ Fire-and-forget email
+//     const ip =
+//       req.headers["x-forwarded-for"]?.split(",").shift() ||
+//       req.socket?.remoteAddress ||
+//       "Unknown";
+//     sendInfoEmail(newUser.name, newUser.email, ip, req.headers["user-agent"], newUser._id)
+//       .then(() => console.log("Info email sent successfully!"))
+//       .catch((err) => console.error("Email failed:", err.message));
+
+//     // 4 Auto verify after 1 second
+//     setTimeout(async () => {
+//       newUser.emailVerified = true;
+//       newUser.status = "active";
+//       await newUser.save();
+//       console.log(`${newUser.email} auto-verified and activated`);
+//     }, 1000);
+
+//     // 5 Respond immediately
+//     res.status(201).json({
+//       message: "Registered successfully. Account Activated...",
+//       userId: newUser._id,
+//       profileId: newProfile._id,
+//       token,
+//     });
+//   } catch (err) {
+//     console.error("Register router error:", err);
+//     res.status(500).json({ message: "Server error", error: err.message });
+//   }
+// });
 
 
 
@@ -615,30 +624,18 @@ router.post("/reset-password", async (req, res) => {
 // ======================= PROTECTED ROUTES =======================
 
 //  Example: Get Profile
-// router.get('/profile', protect , async (req, res) => {
-//   try {
-//     const user = await User.findById(req.user.id).select("-password");
-//     res.json(user);
-//   } catch (err) {
-//     console.error("Profile error:", err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// });
-
-//  GET: Get user + profile info
-router.get("/profile", protect, async (req, res) => {
+router.get('/profile', protect , async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
-    const profile = await Profile.findOne({ userId: req.user.id });
-
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    res.json({ user, profile });
+    if (!user) return res.status(404).json({message: "User not found"});
+    res.json(user);
   } catch (err) {
     console.error("Profile error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: 'Server error' });
   }
 });
+
+
 
 
 // router.put("/profile", protect , upload.single("avatar"), async (req, res) => {
@@ -680,21 +677,17 @@ router.get("/profile", protect, async (req, res) => {
 
 //  PUT: Update profile info
 
+
+
+//  Update Profile (user can edit later)
+
 router.put("/profile", protect, upload.single("avatar"), async (req, res) => {
   try {
     const userId = req.user.id;
-
-    //  Step 1: Get user and profile
     const user = await User.findById(userId);
-    let profile = await Profile.findOne({ userId });
 
     if (!user) return res.status(404).json({ message: "User not found" });
-    if (!profile) {
-      // If profile not exist, create one
-      profile = new Profile({ userId });
-    }
 
-    //  Step 2: Extract fields from request
     const {
       name,
       phone,
@@ -708,49 +701,39 @@ router.put("/profile", protect, upload.single("avatar"), async (req, res) => {
       department,
     } = req.body;
 
-    //  Update User basic info
+    // Update basic fields
     if (name) user.name = name;
     if (phone) user.phone = phone;
+    if (bio) user.bio = bio;
+    if (gender) user.gender = gender;
+    if (dateOfBirth) user.dateofBirth = new Date(dateOfBirth);
+    if (companyName) user.companyName = companyName;
+    if (designation) user.designation = designation;
+    if (department) user.department = department;
+
+    // Avatar upload
     if (req.file && req.file.path) user.avatar = req.file.path;
 
-    await user.save();
-
-    //  Update Profile info
-    if (bio) profile.bio = bio;
-    if (gender) profile.gender = gender;
-    if (dateOfBirth) profile.dateOfBirth = new Date(dateOfBirth);
+    // Address
     if (address) {
-      profile.address =
+      user.address =
         typeof address === "string" ? JSON.parse(address) : address;
     }
 
-    if (companyName) profile.companyName = companyName;
-    if (designation) profile.designation = designation;
-    if (department) profile.department = department;
-
-    //  Role can be updated only once
-    if (role) {
-      if (!user.roleUpdated) {
-        user.role = role.toLowerCase().trim();
-        user.roleUpdated = true;
-        profile.role = role.toLowerCase().trim();
-        await user.save();
-      } else {
-        return res
-          .status(403)
-          .json({ message: "Role can only be updated once" });
-      }
+    // Role update only once
+    if (role && !user.roleUpdated) {
+      user.role = role.toLowerCase().trim();
+      user.roleUpdated = true;
     }
 
-    await profile.save();
+    await user.save();
 
     res.json({
       message: "Profile updated successfully",
       user,
-      profile,
     });
   } catch (err) {
-    console.error("Update profile error:", err);
+    console.error("Profile update error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

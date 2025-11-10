@@ -5,21 +5,35 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
-  phone: { type: String, required: false, default: "" },
-  companyName: {type: String, default: ""},
-  status: {type: String, enum: ["active", "inactive", "pending"], default: "pending"},
+  phone: { type: String, default: "" },
+  companyName: { type: String, default: "" },
+  status: { type: String, enum: ["active", "inactive", "pending"], default: "pending" },
+
+
+    // profile 
+  avatar: {type: String, default: ""},
+  bio: {type: String, default: ""},
+  gender: {type: String, enum: ["male", "female", "other"], default: "other"},
+  dateofBirth: {type: Date, default: Date.new},
+
+  address: {
+    Stream: {type: String, default: ""},
+    city: {type: String, default: ""},
+    state: {type: String, default: ""},
+    country: {type: String, default: ""},
+    pinCode: {type: String, default: ""},
+  },
 
 
   // Permissions and roles 
-   role: {
+    role: {
   type: String,
-  enum: ["ceo", "hr", "admin", "employee", "user"],
+  enum: ["CEO", "HR","hr", "ceo", "admin", "employee", "user"],
   trim: true,
   lowercase: true,
   required: true,
   default: "user"
 },
-
     roleUpdated: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 
