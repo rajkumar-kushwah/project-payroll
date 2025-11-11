@@ -100,151 +100,63 @@ router.post("/register", async (req, res) => {
 });
 
 
-// router.post("/login", async (req, res) => {
-//   const { email, password, captchaToken } = req.body;
-
-//   if (!email || !password || !captchaToken) {
-//     return res.status(400).json({ message: "Email, password and captcha are required." });
-//   }
-
-//   try {
-//     // Verify reCAPTCHA
-//     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-// const { data: captchaData } = await axios.post(verifyUrl, null, {
-//   headers: { "Content-Type": "application/x-www-form-urlencoded" },
-// });
-//     if (!captchaData.success) {
-//       console.error("Captcha failed:", captchaData["error-codes"]);
-//       return res.status(400).json({ message: "reCAPTCHA verification failed." });
-//     }
-
-//     // Find user
-//     const user = await User.findOne({ email: email.toLowerCase() });
-//     if (!user) return res.status(404).json({ message: "Account not registered." });
-//     if (!user.emailVerified) return res.status(400).json({ message: "Email not verified. Please check your inbox." });
-
-//     // Check password
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
-
-//     // Capture IP
-//     const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
-
-//     // Fire-and-forget login email
-//     sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
-//       .then(() => console.log("Login email sent!"))
-//       .catch(err => console.error("Login email failed:", err.message));
-
-//     // Update last login
-//     user.lastLogin = new Date();
-//     await user.save();
-
-//     // Generate JWT
-//     if (!process.env.JWT_SECRET) {
-//       console.error("JWT_SECRET missing in .env");
-//       return res.status(500).json({ message: "Server configuration error." });
-//     }
-
-//     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-//       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
-//     });
-
-//     // Format timestamps
-//     const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-//     const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-//     const lastLoginIST = user.lastLogin
-//       ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
-//       : null;
-
-//     // Send response
-//     res.status(200).json({
-//       message: "Login successful",
-//       token,
-//       user: {
-//         id: user._id,
-//         name: user.name,
-//         email: user.email,
-//         role: user.role,
-//         companyName: user.companyName,
-//         avatar: user.avatar,
-//         registeredAt,
-//         updatedAt,
-//         lastLogin: lastLoginIST,
-//       },
-//     });
-//   } catch (err) {
-//     console.error("Login error:", err.message, err.stack);
-//     res.status(500).json({ message: "Server error. Please try again later." });
-//   }
-// });
-
-
 router.post("/login", async (req, res) => {
   const { email, password, captchaToken } = req.body;
 
+  if (!email || !password || !captchaToken) {
+    return res.status(400).json({ message: "Email, password and captcha are required." });
+  }
+
   try {
-    // 1️ Basic validation
-    if (!email || !password || !captchaToken) {
-      return res.status(400).json({ message: "Email, password and captcha are required." });
-    }
-
-    // 2️ Verify reCAPTCHA
-    const params = new URLSearchParams();
-    params.append("secret", process.env.RECAPTCHA_SECRET_KEY);
-    params.append("response", captchaToken);
-
-    const { data: captchaRes } = await axios.post(
-      "https://www.google.com/recaptcha/api/siteverify",
-      params
-    );
-
-    if (!captchaRes.success) {
+    // Verify reCAPTCHA
+    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
+const { data: captchaData } = await axios.post(verifyUrl, null, {
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+});
+    if (!captchaData.success) {
+      console.error("Captcha failed:", captchaData["error-codes"]);
       return res.status(400).json({ message: "reCAPTCHA verification failed." });
     }
 
-    // 3️ Find user
+    // Find user
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ message: "Account not registered." });
-    if (!user.emailVerified)
-      return res.status(400).json({ message: "Email not verified. Please check your inbox." });
+    if (!user.emailVerified) return res.status(400).json({ message: "Email not verified. Please check your inbox." });
 
-    // 4️ Verify password
+    // Check password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
 
-    // 5 Capture IP safely
-    const ip =
-      req.headers["x-forwarded-for"]?.split(",").shift() ||
-      req.socket?.remoteAddress ||
-      req.connection?.remoteAddress ||
-      "Unknown";
+    // Capture IP
+    const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
 
-    // Optional: send login email (fire-and-forget)
-    sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"]).catch((err) =>
-      console.error("Login email failed:", err.message)
-    );
+    // Fire-and-forget login email
+    sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
+      .then(() => console.log("Login email sent!"))
+      .catch(err => console.error("Login email failed:", err.message));
 
-    // 6️ Update last login
+    // Update last login
     user.lastLogin = new Date();
     await user.save();
 
-    // 7️ Generate JWT
+    // Generate JWT
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET missing in .env");
+      return res.status(500).json({ message: "Server configuration error." });
+    }
+
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
     });
 
-    // 8️Format timestamps in IST
-    const registeredAt = moment(user.createdAt)
-      .tz("Asia/Kolkata")
-      .format("DD/MM/YYYY hh:mm:ss A");
-    const updatedAt = moment(user.updatedAt)
-      .tz("Asia/Kolkata")
-      .format("DD/MM/YYYY hh:mm:ss A");
+    // Format timestamps
+    const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
     const lastLoginIST = user.lastLogin
       ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
       : null;
 
-    // 9️ Send response
+    // Send response
     res.status(200).json({
       message: "Login successful",
       token,
@@ -255,7 +167,6 @@ router.post("/login", async (req, res) => {
         role: user.role,
         companyName: user.companyName,
         avatar: user.avatar,
-        profileComplete: user.profileComplete,
         registeredAt,
         updatedAt,
         lastLogin: lastLoginIST,
@@ -266,6 +177,95 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ message: "Server error. Please try again later." });
   }
 });
+
+
+// router.post("/login", async (req, res) => {
+//   const { email, password, captchaToken } = req.body;
+
+//   try {
+//     // 1️ Basic validation
+//     if (!email || !password || !captchaToken) {
+//       return res.status(400).json({ message: "Email, password and captcha are required." });
+//     }
+
+//     // 2️ Verify reCAPTCHA
+//     const params = new URLSearchParams();
+//     params.append("secret", process.env.RECAPTCHA_SECRET_KEY);
+//     params.append("response", captchaToken);
+
+//     const { data: captchaRes } = await axios.post(
+//       "https://www.google.com/recaptcha/api/siteverify",
+//       params
+//     );
+
+//     if (!captchaRes.success) {
+//       return res.status(400).json({ message: "reCAPTCHA verification failed." });
+//     }
+
+//     // 3️ Find user
+//     const user = await User.findOne({ email: email.toLowerCase() });
+//     if (!user) return res.status(404).json({ message: "Account not registered." });
+//     if (!user.emailVerified)
+//       return res.status(400).json({ message: "Email not verified. Please check your inbox." });
+
+//     // 4️ Verify password
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
+
+//     // 5 Capture IP safely
+//     const ip =
+//       req.headers["x-forwarded-for"]?.split(",").shift() ||
+//       req.socket?.remoteAddress ||
+//       req.connection?.remoteAddress ||
+//       "Unknown";
+
+//     // Optional: send login email (fire-and-forget)
+//     sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"]).catch((err) =>
+//       console.error("Login email failed:", err.message)
+//     );
+
+//     // 6️ Update last login
+//     user.lastLogin = new Date();
+//     await user.save();
+
+//     // 7️ Generate JWT
+//     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+//       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+//     });
+
+//     // 8️Format timestamps in IST
+//     const registeredAt = moment(user.createdAt)
+//       .tz("Asia/Kolkata")
+//       .format("DD/MM/YYYY hh:mm:ss A");
+//     const updatedAt = moment(user.updatedAt)
+//       .tz("Asia/Kolkata")
+//       .format("DD/MM/YYYY hh:mm:ss A");
+//     const lastLoginIST = user.lastLogin
+//       ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
+//       : null;
+
+//     // 9️ Send response
+//     res.status(200).json({
+//       message: "Login successful",
+//       token,
+//       user: {
+//         id: user._id,
+//         name: user.name,
+//         email: user.email,
+//         role: user.role,
+//         companyName: user.companyName,
+//         avatar: user.avatar,
+//         profileComplete: user.profileComplete,
+//         registeredAt,
+//         updatedAt,
+//         lastLogin: lastLoginIST,
+//       },
+//     });
+//   } catch (err) {
+//     console.error("Login error:", err.message, err.stack);
+//     res.status(500).json({ message: "Server error. Please try again later." });
+//   }
+// });
 
 
 
