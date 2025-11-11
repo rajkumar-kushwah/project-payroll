@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema({
   avatar: {type: String, default: ""},
   bio: {type: String, default: ""},
   gender: {type: String, enum: ["male", "female", "other"], default: "other"},
-  dateofBirth: {type: Date, default: Date.new},
+ dateOfBirth: {type: Date, default: Date.new},
 
   address: {
     Stream: {type: String, default: ""},
