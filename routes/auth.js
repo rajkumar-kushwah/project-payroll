@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
+import crypto, { verify } from 'crypto';
 import User from '../models/User.js';
 import Blacklist from "../models/Blacklist.js";
 import { protect } from '../middleware/authMiddleware.js';
@@ -10,8 +10,8 @@ import { sendOtpEmail } from '../utils/sendEmail.js';
 import {sendInfoEmail,sendLoginEmail  } from '../utils/sendEmail.js';
 
 // ,sendLoginEmail ,sendLogoutEmail,sendDeleteEmail
-
 import moment from "moment-timezone";
+import axios from 'axios';
 
 
 
@@ -96,6 +96,83 @@ router.post("/register", async (req, res) => {
   } catch (err) {
     console.error("Register router error:", err);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+router.post("/login", async (req, res) => {
+  const { email, password, captchaToken } = req.body;
+
+  if (!email || !password || !captchaToken) {
+    return res.status(400).json({ message: "Email, password and captcha are required." });
+  }
+
+  try {
+    // Verify reCAPTCHA
+    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
+    const { data: captchaData } = await axios.post(verifyUrl);
+    if (!captchaData.success) {
+      console.error("Captcha failed:", captchaData["error-codes"]);
+      return res.status(400).json({ message: "reCAPTCHA verification failed." });
+    }
+
+    // Find user
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: "Account not registered." });
+    if (!user.emailVerified) return res.status(400).json({ message: "Email not verified. Please check your inbox." });
+
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
+
+    // Capture IP
+    const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
+
+    // Fire-and-forget login email
+    sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
+      .then(() => console.log("Login email sent!"))
+      .catch(err => console.error("Login email failed:", err.message));
+
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+
+    // Generate JWT
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET missing in .env");
+      return res.status(500).json({ message: "Server configuration error." });
+    }
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+    });
+
+    // Format timestamps
+    const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const lastLoginIST = user.lastLogin
+      ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
+      : null;
+
+    // Send response
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        companyName: user.companyName,
+        avatar: user.avatar,
+        registeredAt,
+        updatedAt,
+        lastLogin: lastLoginIST,
+      },
+    });
+  } catch (err) {
+    console.error("Login error:", err.message, err.stack);
+    res.status(500).json({ message: "Server error. Please try again later." });
   }
 });
 
@@ -421,84 +498,94 @@ router.post("/register", async (req, res) => {
 // });
 
 
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+// router.post("/login", async (req, res) => {
+//   const { email, password, captchaToken } = req.body;
 
-  try {
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required." });
-    }
+//   try {
+//     if (!email || !password || !captchaToken) {
+//       return res.status(400).json({ message: "Email, password captcha are required." });
+//     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
-      return res.status(404).json({ message: "Account not registered." });
-    }
+//     // verify reCAPTCHA WITH GOOGLE
+//     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
+//     const {data: captchaData} = await axios.post(verifyUrl);
 
-    if (!user.emailVerified) {
-      return res.status(400).json({ message: "Email not verified. Please check your inbox." });
-    }
+//     if (!captchaData.success) {
+//       return res.status(400).json({ message: "reCAPTCHA verify faild."})
+//     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Incorrect password." });
-    }
+//     const user = await User.findOne({ email: email.toLowerCase() });
+//     if (!user) {
+//       return res.status(404).json({ message: "Account not registered." });
+//     }
 
-    // Capture IP safely
-    const ip =
-      req.headers["x-forwarded-for"]?.split(",").shift() ||
-      req.socket?.remoteAddress ||
-      req.connection?.remoteAddress ||
-      "Unknown";
+//     if (!user.emailVerified) {
+//       return res.status(400).json({ message: "Email not verified. Please check your inbox." });
+//     }
 
-    // Fire-and-forget login email
-    sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
-      .then(() => console.log("Login email sent successfully!"))
-      .catch((emailErr) => console.error("Login email failed:", emailErr.message));
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) {
+//       return res.status(400).json({ message: "Incorrect password." });
+//     }
 
-    // Update last login time
-    user.lastLogin = new Date();
-    await user.save();
+//     // Capture IP safely
+//     const ip =
+//       req.headers["x-forwarded-for"]?.split(",").shift() ||
+//       req.socket?.remoteAddress ||
+//       req.connection?.remoteAddress ||
+//       "Unknown";
 
-    if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET missing in .env");
-      return res.status(500).json({ message: "Server configuration error." });
-    }
+//     // Fire-and-forget login email
+//     sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
+//       .then(() => console.log("Login email sent successfully!"))
+//       .catch((emailErr) => console.error("Login email failed:", emailErr.message));
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "1d",
-    });
+//     // Update last login time
+//     user.lastLogin = new Date();
+//     await user.save();
 
-    const registeredAt = moment(user.createdAt)
-      .tz("Asia/Kolkata")
-      .format("DD/MM/YYYY hh:mm:ss A");
-    const updatedAt = moment(user.updatedAt)
-      .tz("Asia/Kolkata")
-      .format("DD/MM/YYYY hh:mm:ss A");
-    const lastLoginIST = user.lastLogin
-      ? moment(user.lastLogin)
-          .tz("Asia/Kolkata")
-          .format("DD/MM/YYYY hh:mm:ss A")
-      : null;
+//     if (!process.env.JWT_SECRET) {
+//       console.error("JWT_SECRET missing in .env");
+//       return res.status(500).json({ message: "Server configuration error." });
+//     }
 
-    // Send immediate response
-    res.status(200).json({
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        registeredAt,
-        updatedAt,
-        lastLogin: lastLoginIST,
-      },
-    });
-  } catch (err) {
-    console.error("Login error:", err.message, err.stack);
-    res.status(500).json({ message: "Server error. Please try again later." });
-  }
-});
+//     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+//       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+//     });
+
+//     const registeredAt = moment(user.createdAt)
+//       .tz("Asia/Kolkata")
+//       .format("DD/MM/YYYY hh:mm:ss A");
+//     const updatedAt = moment(user.updatedAt)
+//       .tz("Asia/Kolkata")
+//       .format("DD/MM/YYYY hh:mm:ss A");
+//     const lastLoginIST = user.lastLogin
+//       ? moment(user.lastLogin)
+//           .tz("Asia/Kolkata")
+//           .format("DD/MM/YYYY hh:mm:ss A")
+//       : null;
+
+//     // Send immediate response
+//     res.status(200).json({
+//       message: "Login successful",
+//       token,
+//       user: {
+//         id: user._id,
+//         name: user.name,
+//         email: user.email,
+//         role: user.role,
+//         companyName: user.companyName,
+//         avatar: user.avatar,
+//         registeredAt,
+//         updatedAt,
+//         lastLogin: lastLoginIST,
+//       },
+//     });
+//   } catch (err) {
+//     console.error("Login error:", err.message, err.stack);
+//     res.status(500).json({ message: "Server error. Please try again later." });
+//   }
+// });
 
 
 
