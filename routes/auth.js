@@ -110,7 +110,9 @@ router.post("/login", async (req, res) => {
   try {
     // Verify reCAPTCHA
     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-    const { data: captchaData } = await axios.post(verifyUrl);
+const { data: captchaData } = await axios.post(verifyUrl, null, {
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+});
     if (!captchaData.success) {
       console.error("Captcha failed:", captchaData["error-codes"]);
       return res.status(400).json({ message: "reCAPTCHA verification failed." });
