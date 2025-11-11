@@ -103,43 +103,46 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   const { email, password, captchaToken } = req.body;
 
-  if (!email || !password || !captchaToken) {
-    return res.status(400).json({ message: "Email, password and captcha are required." });
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email and password are required." });
   }
 
   try {
-    // Verify reCAPTCHA
+    // 1️⃣ Check user email first
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) return res.status(404).json({ message: "Account not registered." });
+
+    if (!user.emailVerified)
+      return res.status(400).json({ message: "Email not verified. Please check your inbox." });
+
+    // 2️⃣ Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
+
+    // 3️⃣ Now check reCAPTCHA
+    if (!captchaToken)
+      return res.status(400).json({ message: "Please complete the reCAPTCHA." });
+
     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-const { data: captchaData } = await axios.post(verifyUrl, null, {
-  headers: { "Content-Type": "application/x-www-form-urlencoded" },
-});
+    const { data: captchaData } = await axios.post(verifyUrl, null, {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+
     if (!captchaData.success) {
       console.error("Captcha failed:", captchaData["error-codes"]);
       return res.status(400).json({ message: "reCAPTCHA verification failed." });
     }
 
-    // Find user
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) return res.status(404).json({ message: "Account not registered." });
-    if (!user.emailVerified) return res.status(400).json({ message: "Email not verified. Please check your inbox." });
-
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
-
-    // Capture IP
+    // 4️⃣ IP, last login, send email, JWT
     const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
 
-    // Fire-and-forget login email
     sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
       .then(() => console.log("Login email sent!"))
       .catch(err => console.error("Login email failed:", err.message));
 
-    // Update last login
     user.lastLogin = new Date();
     await user.save();
 
-    // Generate JWT
     if (!process.env.JWT_SECRET) {
       console.error("JWT_SECRET missing in .env");
       return res.status(500).json({ message: "Server configuration error." });
@@ -149,14 +152,12 @@ const { data: captchaData } = await axios.post(verifyUrl, null, {
       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
     });
 
-    // Format timestamps
     const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
     const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
     const lastLoginIST = user.lastLogin
       ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
       : null;
 
-    // Send response
     res.status(200).json({
       message: "Login successful",
       token,
@@ -177,6 +178,7 @@ const { data: captchaData } = await axios.post(verifyUrl, null, {
     res.status(500).json({ message: "Server error. Please try again later." });
   }
 });
+
 
 
 // router.post("/login", async (req, res) => {
