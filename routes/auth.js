@@ -14,6 +14,7 @@ import moment from "moment-timezone";
 import axios from 'axios';
 import Employee from '../models/Employee.js';
 import Salary from '../models/Salary.js';
+import e from 'express';
 
 
 
@@ -939,13 +940,17 @@ router.delete("/delete-account", protect , async (req, res) => {
       req.socket?.remoteAddress ||
       req.connection?.remoteAddress ||
       "Unknown";
-
-    // User agent capture
-    await Employee .findByIdAndDelete(user._id);
-    await Salary .deleteMany({ employeeId: user._id });
-
-
+    // User Agent
     const userAgent = req.headers["user-agent"] || "Unknown Device";
+
+    // find all employee and this users
+    const employees = await Employee.find({createdBy: user._id});
+      // delete all employee salaries
+    for (const emp of employees) {
+      await Salary.deleteMany({employeeId: emp._id});
+    }
+      // delete all employees created by user
+    await Employee.deleteMany({createdBy: user._id});
 
     // Delete user first
     const deletedUser = await User.findByIdAndDelete(user._id);
