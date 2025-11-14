@@ -925,10 +925,11 @@ router.put("/profile", protect, upload.single("avatar"), async (req, res) => {
 //===================== DELETE USER ======================
 
 // DELETE account
-router.delete("/delete-account", protect , async (req, res) => {
+router.delete("/delete-account", protect, async (req, res) => {
   try {
     const user = req.user;
-    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    if (!user)
+      return res.status(401).json({ message: "Unauthorized" });
 
     // IP capture
     const ip =
@@ -939,25 +940,38 @@ router.delete("/delete-account", protect , async (req, res) => {
 
     const userAgent = req.headers["user-agent"] || "Unknown Device";
 
-    // Delete user first
+    // ============================
+    //  DELETE ALL RELATED DATA
+    // ============================
+
+    await Employee.deleteMany({ createdBy: user._id });
+    await Attendance.deleteMany({ userId: user._id });
+    await Salary.deleteMany({ userId: user._id });
+    await Leave.deleteMany({ userId: user._id });  // optional if exist
+
+    // Delete user
     const deletedUser = await User.findByIdAndDelete(user._id);
     if (!deletedUser) {
       return res.status(404).json({ message: "User not found or already deleted" });
     }
 
-    // Email send after deletion (non-blocking)
+    // Send email after delete (non-blocking)
     try {
       await sendDeleteEmail(deletedUser.name, deletedUser.email, ip, userAgent);
     } catch (err) {
       console.error("Delete Email Error:", err.message);
     }
 
-    return res.json({ message: "Account deleted successfully and confirmation email sent" });
+    return res.json({
+      message: "Account & all related data deleted successfully",
+    });
+
   } catch (err) {
     console.error("Delete Account Error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 });
+
 
 router.put("/update-password", protect , async (req, res) => {
   try {
