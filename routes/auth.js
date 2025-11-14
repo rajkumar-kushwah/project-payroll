@@ -14,8 +14,6 @@ import moment from "moment-timezone";
 import axios from 'axios';
 import Employee from '../models/Employee.js';
 import Salary from '../models/Salary.js';
-import e from 'express';
-
 
 
 
@@ -1005,6 +1003,8 @@ router.put("/update-password", protect , async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
+
+
 
 
 export default router;
