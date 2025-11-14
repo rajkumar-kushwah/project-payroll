@@ -168,7 +168,7 @@ export const deleteEmployee = async (req, res) => {
 export const searchEmployees = async (req, res) => {
   try {
     const { search } = req.query;
-    let query = { createdBy: req.user._id };
+    const query = {};
 
     if (search) {
       const regex = { $regex: search, $options: "i" };
@@ -176,19 +176,25 @@ export const searchEmployees = async (req, res) => {
       query.$or = [
         { name: regex },
         { email: regex },
+        { phone: regex },
         { department: regex },
         { jobRole: regex },
         { status: regex },
+        { employeeCode: regex }, // employeeCode search
       ];
 
+      // user Mongo ObjectId
       if (mongoose.isValidObjectId(search)) {
         query.$or.push({ _id: new mongoose.Types.ObjectId(search) });
       }
     }
 
-    const employees = await Employee.find(query)
-      .sort({ createdAt: -1 })
-      .limit(10);
+    // Optional:  normal user filter 
+    if (req.user.role !== "admin") {
+      query.createdBy = req.user._id;
+    }
+
+    const employees = await Employee.find(query).sort({ createdAt: -1 });
 
     res.json(employees);
   } catch (err) {
