@@ -8,12 +8,12 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   phone: { type: String, default: "" },
   companyName: { type: String, default: "" },
-  status: { type: String, enum: ["active", "inactive", "pending"], default: "pending" },
+  status: { type: String, enum: ["Active", "Inactive", "Pending"], default: "Pending" },
 
   // Profile
   avatar: { type: String, default: "" },
   bio: { type: String, default: "" },
-  gender: { type: String, enum: ["male", "female", "other"], default: "other" },
+  gender: { type: String, enum: ["Male", "Female", "Other",], default: "Other" },
   dateOfBirth: { type: Date, default: null },
 
   address: {
@@ -27,11 +27,11 @@ const userSchema = new mongoose.Schema({
   // Permissions and roles
   role: {
     type: String,
-    enum: ["ceo", "hr", "admin", "employee", "user"],
+    enum: ["Owner", "HR", "CEO", "Admin", "Employee", "User"],
     lowercase: true,
     trim: true,
     required: true,
-    default: "user"
+    default: "",
   },
   roleUpdated: { type: Boolean, default: false },
 

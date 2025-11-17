@@ -35,3 +35,19 @@ export const protect = async (req, res, next) => {
     return res.status(403).json({ message: "Token invalid or expired" });
   }
 };
+
+export const adminProtect = (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: "Not logged in" });
+  if (req.user.role !== "admin" && req.user.role !== "owner") {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+};
+
+export const ownerProtect = (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: "Not logged in" });
+  if (req.user.role !== "owner") {
+    return res.status(403).json({ message: "Owner access required" });
+  }
+  next();
+};

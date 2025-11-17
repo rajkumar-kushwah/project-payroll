@@ -34,189 +34,47 @@ const generateToken = () => crypto.randomBytes(20).toString("hex");
 
 
 
-// router.post("/register", async (req, res) => {
-//   try {
-//     const { name, email, password, phone, companyName, role } = req.body;
-
-//     if (!name || !email || !password || !phone || !companyName || !role)
-//       return res.status(400).json({ message: "All fields required" });
-
-//     if (!strictEmailRule(email))
-//       return res.status(400).json({ message: "Email must be like name123@example.com" });
-
-//     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
-//     if (!phoneRegex.test(phone))
-//       return res.status(400).json({ message: "Invalid phone number format" });
-
-//     if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
-//       return res.status(400).json({ message: "Email already registered" });
-
-//     const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
-//     if (await User.findOne({ phone: formattedPhone }))
-//       return res.status(400).json({ message: "Phone already registered" });
-
-//     const hashedPassword = await bcrypt.hash(password, 12);
-//     const token = crypto.randomBytes(32).toString("hex");
-
-//     const newUser = new User({
-//       name,
-//       email: email.toLowerCase(),
-//       password: hashedPassword,
-//       phone: formattedPhone,
-//       companyName,
-//       role:role.toLowerCase(),
-//       emailVerified: true, // auto-verify email
-//       phoneVerified: false,
-//       createdByIP: req.ip,
-//       isDeleted: false,
-//     });
-
-//     await newUser.save();
-
-//     // Fire-and-forget email
-//     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
-//     sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id)
-//       .then(() => console.log("Info email sent successfully!"))
-//       .catch(err => console.error("Email failed:", err.message));
 
 
-//       // Auto verify after 1 sec
-//       setTimeout(async () => {
-//         newUser.emailVerified = true,
-//         newUser.status = "active",
-//         await newUser.save();
-//        console.log(` ${newUser.email} auto-verified and activated`);
-//       }, 1000);
-
-//     // Immediate response to client
-//     res.status(201).json({
-//       message: "Registered successfully. Account Activated...",
-//       userId: newUser._id,
-//       token
-//     });
-
-//   } catch (err) {
-//     console.error("Register router error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
-
-
-// router.post("/login", async (req, res) => {
-//   const { email, password, captchaToken } = req.body;
-
-//   if (!email || !password) {
-//     return res.status(400).json({ message: "Email and password are required." });
-//   }
-
-//   try {
-//     // 1️⃣ Check user email first
-//     const user = await User.findOne({ email: email.toLowerCase() });
-//     if (!user) return res.status(404).json({ message: "Account not registered." });
-
-//     if (!user.emailVerified)
-//       return res.status(400).json({ message: "Email not verified. Please check your inbox." });
-
-//     // 2️⃣ Check password
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
-
-//     // 3️ Now check reCAPTCHA
-//     if (!captchaToken)
-//       return res.status(400).json({ message: "Please complete the reCAPTCHA." });
-
-//     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-//     const { data: captchaData } = await axios.post(verifyUrl, null, {
-//       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-//     });
-
-//     if (!captchaData.success) {
-//       console.error("Captcha failed:", captchaData["error-codes"]);
-//       return res.status(400).json({ message: "reCAPTCHA verification failed." });
-//     }
-
-//     // 4️ IP, last login, send email, JWT
-//     const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
-
-//     sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
-//       .then(() => console.log("Login email sent!"))
-//       .catch(err => console.error("Login email failed:", err.message));
-
-//     user.lastLogin = new Date();
-//     await user.save();
-
-//     if (!process.env.JWT_SECRET) {
-//       console.error("JWT_SECRET missing in .env");
-//       return res.status(500).json({ message: "Server configuration error." });
-//     }
-
-//     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-//       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
-//     });
-
-//     const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-//     const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-//     const lastLoginIST = user.lastLogin
-//       ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
-//       : null;
-
-//     res.status(200).json({
-//       message: "Login successful",
-//       token,
-//       user: {
-//         id: user._id,
-//         name: user.name,
-//         email: user.email,
-//         role: user.role,
-//         companyName: user.companyName,
-//         avatar: user.avatar,
-//         registeredAt,
-//         updatedAt,
-//         lastLogin: lastLoginIST,
-//       },
-//     });
-//   } catch (err) {
-//     console.error("Login error:", err.message, err.stack);
-//     res.status(500).json({ message: "Server error. Please try again later." });
-//   }
-// });
-
-
-router.post("/register", async (req, res) => {
+// ===== REGISTER =====
+router.post('/register', async (req, res) => {
   try {
     const { name, email, password, phone, companyName } = req.body;
 
     // Validation
     if (!name || !email || !password || !phone || !companyName)
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ message: 'All fields are required' });
 
     if (!strictEmailRule(email))
-      return res.status(400).json({ message: "Email must be like name123@example.com" });
+      return res.status(400).json({ message: 'Email must be like name123@example.com' });
 
     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
     if (!phoneRegex.test(phone))
-      return res.status(400).json({ message: "Invalid phone number format" });
+      return res.status(400).json({ message: 'Invalid phone number format' });
 
     if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
-      return res.status(400).json({ message: "Email already registered" });
+      return res.status(400).json({ message: 'Email already registered' });
 
-    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+    const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`;
     if (await User.findOne({ phone: formattedPhone }))
-      return res.status(400).json({ message: "Phone already registered" });
+      return res.status(400).json({ message: 'Phone already registered' });
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
-    const token = generateToken();
 
-    // 1️ Create USER (default role)
+    // Check if any users exist to assign role
+    const totalUsers = await User.countDocuments({});
+    const role = totalUsers === 0 ? 'owner' : 'user'; // First user = Owner, others = User
+
+    // 1. Create USER
     const newUser = new User({
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone: formattedPhone,
       companyName,
-      role: "user",          // Default role
-      emailVerified: true,   // auto verify
+      role,
+      emailVerified: true,  // auto-verify for now
       phoneVerified: false,
       createdByIP: req.ip,
       isDeleted: false,
@@ -224,75 +82,129 @@ router.post("/register", async (req, res) => {
 
     await newUser.save();
 
-    // 2️ Create Company automatically
-    const newCompany = new Company({
-      name: companyName,
-      ownerId: newUser._id,
-      admins: [],
-      employees: [],
-      status: "active"
-    });
-    await newCompany.save();
+    // 2. Create Company if owner
+    let companyId = null;
+    if (role === 'owner') {
+      const newCompany = new Company({
+        name: companyName,
+        ownerId: newUser._id,
+        admins: [newUser._id],
+        employees: [],
+        status: '',
+      });
+      await newCompany.save();
 
-    // 3️ Link USER with companyId
-    newUser.companyId = newCompany._id;
-    await newUser.save();
+      // Link user to company
+      newUser.companyId = newCompany._id;
+      await newUser.save();
+      companyId = newCompany._id;
+    }
 
     // Fire-and-forget info email
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
     sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id)
-      .then(() => console.log("Info email sent successfully!"))
-      .catch(err => console.error("Email failed:", err.message));
-
-    // Optional: auto-verify after 1 sec
-    setTimeout(async () => {
-      newUser.emailVerified = true;
-      newUser.status = "active";
-      await newUser.save();
-      console.log(`${newUser.email} auto-verified and activated`);
-    }, 1000);
+      .then(() => console.log('Info email sent successfully!'))
+      .catch(err => console.error('Email failed:', err.message));
 
     res.status(201).json({
-      message: "Registered successfully. Account Activated!",
+      message: 'Registered successfully. Account Activated!',
       userId: newUser._id,
-      companyId: newCompany._id,
-      token
+      companyId,
+      role,
     });
 
   } catch (err) {
-    console.error("Register error:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error('Register error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
+
 // ===== LOGIN =====
-router.post("/login", async (req, res) => {
+// router.post("/login", async (req, res) => {
+//   try {
+//     const { email, password, captchaToken } = req.body;
+
+//     if (!email || !password || !captchaToken)
+//       return res.status(400).json({ message: "Email, password and captcha required." });
+
+//     // Check user
+//     const user = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
+//     if (!user) return res.status(404).json({ message: "Account not registered." });
+//     if (!user.emailVerified) return res.status(400).json({ message: "Email not verified." });
+
+//     // Check password
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
+
+//     // Verify reCAPTCHA
+//     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
+//     const { data: captchaData } = await axios.post(verifyUrl, null, {
+//       headers: { "Content-Type": "application/x-www-form-urlencoded" },
+//     });
+//     if (!captchaData.success) return res.status(400).json({ message: "reCAPTCHA failed." });
+
+//     // Send login email
+//     const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
+//     sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
+//       .then(() => console.log("Login email sent"))
+//       .catch(err => console.error(err.message));
+
+//     // Update last login
+//     user.lastLogin = new Date();
+//     await user.save();
+
+//     // Generate JWT
+//     const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "1d" });
+
+//     const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+//     const lastLoginIST = user.lastLogin ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A") : null;
+
+//     res.status(200).json({
+//       message: "Login successful",
+//       token: jwtToken,
+//       user: {
+//         id: user._id,
+//         name: user.name,
+//         email: user.email,
+//         role: user.role,
+//         companyName: user.companyName,
+//         companyId: user.companyId,
+//         registeredAt,
+//         lastLogin: lastLoginIST
+//       }
+//     });
+
+//   } catch (err) {
+//     console.error("Login error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+// ===== LOGIN =====
+router.post('/login', async (req, res) => {
   try {
     const { email, password, captchaToken } = req.body;
-
     if (!email || !password || !captchaToken)
-      return res.status(400).json({ message: "Email, password and captcha required." });
+      return res.status(400).json({ message: 'Email, password and captcha required.' });
 
-    // Check user
     const user = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
-    if (!user) return res.status(404).json({ message: "Account not registered." });
-    if (!user.emailVerified) return res.status(400).json({ message: "Email not verified." });
+    if (!user) return res.status(404).json({ message: 'Account not registered.' });
+    if (!user.emailVerified) return res.status(400).json({ message: 'Email not verified.' });
 
     // Check password
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
+    if (!isMatch) return res.status(400).json({ message: 'Incorrect password.' });
 
     // Verify reCAPTCHA
     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-    const { data: captchaData } = await axios.post(verifyUrl, null, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    });
-    if (!captchaData.success) return res.status(400).json({ message: "reCAPTCHA failed." });
+    const { data: captchaData } = await axios.post(verifyUrl, null, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+    if (!captchaData.success) return res.status(400).json({ message: 'reCAPTCHA failed.' });
 
     // Send login email
-    const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
-    sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
-      .then(() => console.log("Login email sent"))
+    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
+    sendLoginEmail(user.name, user.email, ip, req.headers['user-agent'])
+      .then(() => console.log('Login email sent'))
       .catch(err => console.error(err.message));
 
     // Update last login
@@ -300,13 +212,10 @@ router.post("/login", async (req, res) => {
     await user.save();
 
     // Generate JWT
-    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "1d" });
-
-    const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-    const lastLoginIST = user.lastLogin ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A") : null;
+    const jwtToken = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '1d' });
 
     res.status(200).json({
-      message: "Login successful",
+      message: 'Login successful',
       token: jwtToken,
       user: {
         id: user._id,
@@ -315,14 +224,14 @@ router.post("/login", async (req, res) => {
         role: user.role,
         companyName: user.companyName,
         companyId: user.companyId,
-        registeredAt,
-        lastLogin: lastLoginIST
+        registeredAt: moment(user.createdAt).tz('Asia/Kolkata').format('DD/MM/YYYY hh:mm:ss A'),
+        lastLogin: user.lastLogin ? moment(user.lastLogin).tz('Asia/Kolkata').format('DD/MM/YYYY hh:mm:ss A') : null,
       }
     });
 
   } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error('Login error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -596,41 +505,83 @@ router.put("/update-password", protect , async (req, res) => {
   }
 });
 
-// Admin delete by Owner
+
+// Owner can remove an admin
+// =======================
 router.delete("/admin/:adminId", protect, async (req, res) => {
   try {
-    const owner = req.user; // Must be USER (owner)
+    const owner = req.user; // Must be the company owner
     const { adminId } = req.params;
 
     const company = await Company.findById(owner.companyId);
     if (!company) return res.status(404).json({ message: "Company not found" });
 
-    // Check if admin belongs to same company
-    if (!company.admins.includes(adminId)) 
+    // Only owner can remove admins
+    if (company.ownerId.toString() !== owner._id.toString())
+      return res.status(403).json({ message: "Only owner can remove admins" });
+
+    // Admin exists?
+    if (!company.admins.includes(adminId))
       return res.status(400).json({ message: "Admin not found in your company" });
 
-    // Soft delete admin
     const admin = await User.findById(adminId);
     if (!admin) return res.status(404).json({ message: "Admin not found" });
 
+    // Soft delete admin
     admin.isDeleted = true;
     await admin.save();
 
-    // Remove admin from company admins array
+    // Remove from company admins array
     company.admins = company.admins.filter(a => a.toString() !== adminId);
     await company.save();
 
-    // Optional: send email
-    // sendAccessRevokedEmail(admin.email);
-
     res.json({ message: "Admin access revoked successfully" });
-
   } catch (err) {
     console.error("Delete Admin Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
+// ADD ADMIN API
+// Owner can promote a user to admin
+// =======================
+router.post("/admin/:userId", protect, async (req, res) => {
+  try {
+    const owner = req.user; // Must be the company owner
+    const { userId } = req.params;
+
+    const company = await Company.findById(owner.companyId);
+    if (!company) return res.status(404).json({ message: "Company not found" });
+
+    // Only owner can add admins
+    if (company.ownerId.toString() !== owner._id.toString())
+      return res.status(403).json({ message: "Only owner can add admins" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Check if user belongs to same company
+    if (user.companyId?.toString() !== company._id.toString())
+      return res.status(400).json({ message: "User does not belong to your company" });
+
+    // Already admin?
+    if (company.admins.includes(userId))
+      return res.status(400).json({ message: "User is already an admin" });
+
+    // Add to company admins
+    company.admins.push(userId);
+    await company.save();
+
+    // Update user role
+    user.role = "admin";
+    await user.save();
+
+    res.status(200).json({ message: "User promoted to admin successfully", userId: user._id });
+  } catch (err) {
+    console.error("Add Admin Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 
 export default router;
