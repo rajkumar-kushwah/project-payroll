@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
 
-
 const userSchema = new mongoose.Schema({
+  companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company" },
+
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
@@ -9,33 +10,30 @@ const userSchema = new mongoose.Schema({
   companyName: { type: String, default: "" },
   status: { type: String, enum: ["active", "inactive", "pending"], default: "pending" },
 
-
-    // profile 
-  avatar: {type: String, default: ""},
-  bio: {type: String, default: ""},
-  gender: {type: String, enum: ["male", "female", "other"], default: "other"},
- dateOfBirth: {type: Date, default: Date.new},
+  // Profile
+  avatar: { type: String, default: "" },
+  bio: { type: String, default: "" },
+  gender: { type: String, enum: ["male", "female", "other"], default: "other" },
+  dateOfBirth: { type: Date, default: null },
 
   address: {
-    Stream: {type: String, default: ""},
-    city: {type: String, default: ""},
-    state: {type: String, default: ""},
-    country: {type: String, default: ""},
-    pinCode: {type: String, default: ""},
+    street: { type: String, default: "" },
+    city: { type: String, default: "" },
+    state: { type: String, default: "" },
+    country: { type: String, default: "" },
+    pinCode: { type: String, default: "" },
   },
 
-
-  // Permissions and roles 
-    role: {
-  type: String,
-  enum: ["CEO", "HR","hr", "ceo", "admin", "employee", "user"],
-  trim: true,
-  lowercase: true,
-  required: true,
-  default: "user"
-},
-    roleUpdated: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now },
+  // Permissions and roles
+  role: {
+    type: String,
+    enum: ["ceo", "hr", "admin", "employee", "user"],
+    lowercase: true,
+    trim: true,
+    required: true,
+    default: "user"
+  },
+  roleUpdated: { type: Boolean, default: false },
 
   // Email verification
   emailVerified: { type: Boolean, default: false },
@@ -51,9 +49,6 @@ const userSchema = new mongoose.Schema({
   resetPasswordToken: { type: String },
   resetPasswordExpiry: { type: Date },
 
-  resetPasswordOTP: { type: String },
-  otpExpire: { type: Date },
-
   // Login security
   lastLogin: { type: Date },
   loginAttempts: { type: Number, default: 0 },
@@ -64,9 +59,8 @@ const userSchema = new mongoose.Schema({
   lastLoginIP: { type: String },
   deviceInfo: { type: String },
 
-// delete account
-isDeleted: { type: Boolean, default: false }
-
+  // Soft delete
+  isDeleted: { type: Boolean, default: false }
 
 }, { timestamps: true });
 

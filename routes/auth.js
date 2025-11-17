@@ -14,7 +14,7 @@ import moment from "moment-timezone";
 import axios from 'axios';
 import Employee from '../models/Employee.js';
 import Salary from '../models/Salary.js';
-
+import Company from '../models/Company.js';
 
 
 const router = express.Router();
@@ -31,246 +31,6 @@ const strictEmailRule = (email) => /^[A-Za-z]+[0-9]+@[A-Za-z0-9]+\.[A-Za-z]{2,}$
 const generateToken = () => crypto.randomBytes(20).toString("hex");
 
 // ===== REGISTER =====
-
-
-
-router.post("/register", async (req, res) => {
-  try {
-    const { name, email, password, phone, companyName, role } = req.body;
-
-    if (!name || !email || !password || !phone || !companyName || !role)
-      return res.status(400).json({ message: "All fields required" });
-
-    if (!strictEmailRule(email))
-      return res.status(400).json({ message: "Email must be like name123@example.com" });
-
-    const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
-    if (!phoneRegex.test(phone))
-      return res.status(400).json({ message: "Invalid phone number format" });
-
-    if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
-      return res.status(400).json({ message: "Email already registered" });
-
-    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
-    if (await User.findOne({ phone: formattedPhone }))
-      return res.status(400).json({ message: "Phone already registered" });
-
-    const hashedPassword = await bcrypt.hash(password, 12);
-    const token = crypto.randomBytes(32).toString("hex");
-
-    const newUser = new User({
-      name,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      phone: formattedPhone,
-      companyName,
-      role:role.toLowerCase(),
-      emailVerified: true, // auto-verify email
-      phoneVerified: false,
-      createdByIP: req.ip,
-      isDeleted: false,
-    });
-
-    await newUser.save();
-
-    // Fire-and-forget email
-    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
-    sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id)
-      .then(() => console.log("Info email sent successfully!"))
-      .catch(err => console.error("Email failed:", err.message));
-
-
-      // Auto verify after 1 sec
-      setTimeout(async () => {
-        newUser.emailVerified = true,
-        newUser.status = "active",
-        await newUser.save();
-       console.log(` ${newUser.email} auto-verified and activated`);
-      }, 1000);
-
-    // Immediate response to client
-    res.status(201).json({
-      message: "Registered successfully. Account Activated...",
-      userId: newUser._id,
-      token
-    });
-
-  } catch (err) {
-    console.error("Register router error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-
-router.post("/login", async (req, res) => {
-  const { email, password, captchaToken } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required." });
-  }
-
-  try {
-    // 1️⃣ Check user email first
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) return res.status(404).json({ message: "Account not registered." });
-
-    if (!user.emailVerified)
-      return res.status(400).json({ message: "Email not verified. Please check your inbox." });
-
-    // 2️⃣ Check password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
-
-    // 3️⃣ Now check reCAPTCHA
-    if (!captchaToken)
-      return res.status(400).json({ message: "Please complete the reCAPTCHA." });
-
-    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-    const { data: captchaData } = await axios.post(verifyUrl, null, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    });
-
-    if (!captchaData.success) {
-      console.error("Captcha failed:", captchaData["error-codes"]);
-      return res.status(400).json({ message: "reCAPTCHA verification failed." });
-    }
-
-    // 4️⃣ IP, last login, send email, JWT
-    const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
-
-    sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
-      .then(() => console.log("Login email sent!"))
-      .catch(err => console.error("Login email failed:", err.message));
-
-    user.lastLogin = new Date();
-    await user.save();
-
-    if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET missing in .env");
-      return res.status(500).json({ message: "Server configuration error." });
-    }
-
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || "1d",
-    });
-
-    const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-    const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-    const lastLoginIST = user.lastLogin
-      ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
-      : null;
-
-    res.status(200).json({
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        companyName: user.companyName,
-        avatar: user.avatar,
-        registeredAt,
-        updatedAt,
-        lastLogin: lastLoginIST,
-      },
-    });
-  } catch (err) {
-    console.error("Login error:", err.message, err.stack);
-    res.status(500).json({ message: "Server error. Please try again later." });
-  }
-});
-
-
-
-// router.post("/login", async (req, res) => {
-//   const { email, password, captchaToken } = req.body;
-
-//   try {
-//     // 1️ Basic validation
-//     if (!email || !password || !captchaToken) {
-//       return res.status(400).json({ message: "Email, password and captcha are required." });
-//     }
-
-//     // 2️ Verify reCAPTCHA
-//     const params = new URLSearchParams();
-//     params.append("secret", process.env.RECAPTCHA_SECRET_KEY);
-//     params.append("response", captchaToken);
-
-//     const { data: captchaRes } = await axios.post(
-//       "https://www.google.com/recaptcha/api/siteverify",
-//       params
-//     );
-
-//     if (!captchaRes.success) {
-//       return res.status(400).json({ message: "reCAPTCHA verification failed." });
-//     }
-
-//     // 3️ Find user
-//     const user = await User.findOne({ email: email.toLowerCase() });
-//     if (!user) return res.status(404).json({ message: "Account not registered." });
-//     if (!user.emailVerified)
-//       return res.status(400).json({ message: "Email not verified. Please check your inbox." });
-
-//     // 4️ Verify password
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
-
-//     // 5 Capture IP safely
-//     const ip =
-//       req.headers["x-forwarded-for"]?.split(",").shift() ||
-//       req.socket?.remoteAddress ||
-//       req.connection?.remoteAddress ||
-//       "Unknown";
-
-//     // Optional: send login email (fire-and-forget)
-//     sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"]).catch((err) =>
-//       console.error("Login email failed:", err.message)
-//     );
-
-//     // 6️ Update last login
-//     user.lastLogin = new Date();
-//     await user.save();
-
-//     // 7️ Generate JWT
-//     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-//       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
-//     });
-
-//     // 8️Format timestamps in IST
-//     const registeredAt = moment(user.createdAt)
-//       .tz("Asia/Kolkata")
-//       .format("DD/MM/YYYY hh:mm:ss A");
-//     const updatedAt = moment(user.updatedAt)
-//       .tz("Asia/Kolkata")
-//       .format("DD/MM/YYYY hh:mm:ss A");
-//     const lastLoginIST = user.lastLogin
-//       ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
-//       : null;
-
-//     // 9️ Send response
-//     res.status(200).json({
-//       message: "Login successful",
-//       token,
-//       user: {
-//         id: user._id,
-//         name: user.name,
-//         email: user.email,
-//         role: user.role,
-//         companyName: user.companyName,
-//         avatar: user.avatar,
-//         profileComplete: user.profileComplete,
-//         registeredAt,
-//         updatedAt,
-//         lastLogin: lastLoginIST,
-//       },
-//     });
-//   } catch (err) {
-//     console.error("Login error:", err.message, err.stack);
-//     res.status(500).json({ message: "Server error. Please try again later." });
-//   }
-// });
-
 
 
 
@@ -298,15 +58,14 @@ router.post("/login", async (req, res) => {
 //     const hashedPassword = await bcrypt.hash(password, 12);
 //     const token = crypto.randomBytes(32).toString("hex");
 
-//     // 1️ Create new user
 //     const newUser = new User({
 //       name,
 //       email: email.toLowerCase(),
 //       password: hashedPassword,
 //       phone: formattedPhone,
 //       companyName,
-//       role: role.toLowerCase(),
-//       emailVerified: true, // auto-verify
+//       role:role.toLowerCase(),
+//       emailVerified: true, // auto-verify email
 //       phoneVerified: false,
 //       createdByIP: req.ip,
 //       isDeleted: false,
@@ -314,283 +73,31 @@ router.post("/login", async (req, res) => {
 
 //     await newUser.save();
 
-//     // 2️ Create linked profile document
-//     const newProfile = new Profile({
-//       userId: newUser._id,
-//       companyName,
-//       role: role.toLowerCase(),
-//       address: { Stream: "", city: "", state: "", country: "", pinCode: "" },
-//       designation: "",
-//       department: "",
-//       bio: "",
-//       gender: "other",
-//       dateOfBirth: "",
-//       isDeleted: false,
-//       createdByIP: req.ip,
-//       updatedByIP: req.ip,
-      
-//     });
-//     await newProfile.save();
-
-//     // 3️ Fire-and-forget email
-//     const ip =
-//       req.headers["x-forwarded-for"]?.split(",").shift() ||
-//       req.socket?.remoteAddress ||
-//       "Unknown";
-//     sendInfoEmail(newUser.name, newUser.email, ip, req.headers["user-agent"], newUser._id)
+//     // Fire-and-forget email
+//     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
+//     sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id)
 //       .then(() => console.log("Info email sent successfully!"))
-//       .catch((err) => console.error("Email failed:", err.message));
+//       .catch(err => console.error("Email failed:", err.message));
 
-//     // 4 Auto verify after 1 second
-//     setTimeout(async () => {
-//       newUser.emailVerified = true;
-//       newUser.status = "active";
-//       await newUser.save();
-//       console.log(`${newUser.email} auto-verified and activated`);
-//     }, 1000);
 
-//     // 5 Respond immediately
+//       // Auto verify after 1 sec
+//       setTimeout(async () => {
+//         newUser.emailVerified = true,
+//         newUser.status = "active",
+//         await newUser.save();
+//        console.log(` ${newUser.email} auto-verified and activated`);
+//       }, 1000);
+
+//     // Immediate response to client
 //     res.status(201).json({
 //       message: "Registered successfully. Account Activated...",
 //       userId: newUser._id,
-//       profileId: newProfile._id,
-//       token,
+//       token
 //     });
+
 //   } catch (err) {
 //     console.error("Register router error:", err);
-//     res.status(500).json({ message: "Server error", error: err.message });
-//   }
-// });
-
-
-
-// router.post("/register", async (req, res) => {
-//   try {
-//     const { name, email, password, phone } = req.body;
-
-//     // 1. Basic validations
-//     if (!name || !email || !password || !phone)
-//       return res.status(400).json({ message: "All fields required" });
-
-//     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-//     if (!emailRegex.test(email))
-//       return res.status(400).json({ message: "Invalid email format" });
-
-//     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
-//     if (!phoneRegex.test(phone))
-//       return res.status(400).json({ message: "Invalid phone number" });
-
-//     // 2. Check existing user
-//     const existingEmail = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
-//     if (existingEmail)
-//       return res.status(400).json({ message: "Email already registered" });
-
-//     const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
-//     const existingPhone = await User.findOne({ phone: formattedPhone });
-//     if (existingPhone)
-//       return res.status(400).json({ message: "Phone already registered" });
-
-//     // 3. Hash password
-//     const hashedPassword = await bcrypt.hash(password, 10); // faster than 12
-
-//     // 4. Create user
-//     const newUser = new User({
-//       name,
-//       email: email.toLowerCase(),
-//       password: hashedPassword,
-//       phone: formattedPhone,
-//       emailVerified: true, // auto-verify
-//       phoneVerified: false,
-//       isDeleted: false,
-//       createdByIP: req.ip,
-      
-//     });
-
-//     await newUser.save();
-
-//     // 5. Send info email async
-//     (async () => {
-//       try {
-//         await sendInfoEmail(
-//           newUser.name,
-//           newUser.email,
-//           req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown",
-//           req.headers["user-agent"],
-//           newUser._id
-//         );
-//       } catch (err) {
-//         console.error("Info email error:", err.message);
-//       }
-//     })();
-
-//     // 6. Generate token
-//     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
-
-//     res.status(201).json({
-//       message: "Registered successfully",
-//       token,
-//       user: {
-//         id: newUser._id,
-//         name: newUser.name,
-//         email: newUser.email,
-//         phone: newUser.phone,
-//       },
-//     });
-
-//   } catch (err) {
-//     console.error("Register error:", err.message);
 //     res.status(500).json({ message: "Server error" });
-//   }
-// });
-
-
-
-
-// router.post("/login", async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-
-//     if (!email || !password)
-//       return res.status(400).json({ message: "Email and password required" });
-
-//     const user = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
-//     if (!user) return res.status(404).json({ message: "Account not registered" });
-
-//     if (!user.emailVerified)
-//       return res.status(400).json({ message: "Email not verified" });
-
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) return res.status(400).json({ message: "Incorrect password" });
-
-//     // Update last login
-//     user.lastLogin = new Date();
-//     await user.save();
-
-//     // Send login email async
-//     (async () => {
-//       try {
-//         await sendLoginEmail(
-//           user.name,
-//           user.email,
-//           req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown",
-//           req.headers["user-agent"]
-//         );
-//       } catch (err) {
-//         console.error("Login email error:", err.message);
-//       }
-//     })();
-
-//     // Generate JWT token
-//     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
-
-//     // Format timestamps
-//     const lastLoginIST = user.lastLogin
-//       ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
-//       : null;
-
-//     res.status(200).json({
-//       message: "Login successful",
-//       token,
-//       user: {
-//         id: user._id,
-//         name: user.name,
-//         email: user.email,
-//         role: user.role,
-//         lastLogin: lastLoginIST,
-//       },
-//     });
-
-//   } catch (err) {
-//     console.error("Login error:", err.message);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
-
-// Login (email must be verified)
-
-// router.post("/login", async (req, res) => {
-//   const { email, password } = req.body;
-
-//   try {
-//     if (!email || !password) {
-//       return res.status(400).json({ message: "Email and password are required." });
-//     }
-
-//     const user = await User.findOne({ email: email.toLowerCase() });
-//     if (!user) {
-//       return res.status(404).json({ message: "Account not registered." });
-//     }
-
-//     //  Email verification check
-//     if (!user.emailVerified) {
-//       return res.status(400).json({ message: "Email not verified. Please check your inbox." });
-//     }
-
-//     //  Password check
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) {
-//       return res.status(400).json({ message: "Incorrect password." });
-//     }
-
-//     // Capture IP safely
-//     const ip =
-//       req.headers["x-forwarded-for"]?.split(",").shift() ||
-//       req.socket?.remoteAddress ||
-//       req.connection?.remoteAddress ||
-//       "Unknown";
-
-//     //  Send login notification email (fail-safe)
-//     try {
-//       await sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"]);
-//     } catch (emailErr) {
-//       console.error("Login email sending failed:", emailErr.message);
-//       // Don't block login if email fails
-//     }
-
-//     //  Update last login time
-//     user.lastLogin = new Date();
-//     await user.save();
-
-//     //  Generate token (check env)
-//     if (!process.env.JWT_SECRET) {
-//       console.error("JWT_SECRET missing in .env");
-//       return res.status(500).json({ message: "Server configuration error." });
-//     }
-
-//     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-//       expiresIn: "1d",
-//     });
-
-//     //  Format timestamps
-//     const registeredAt = moment(user.createdAt)
-//       .tz("Asia/Kolkata")
-//       .format("DD/MM/YYYY hh:mm:ss A");
-//     const updatedAt = moment(user.updatedAt)
-//       .tz("Asia/Kolkata")
-//       .format("DD/MM/YYYY hh:mm:ss A");
-//     const lastLoginIST = user.lastLogin
-//       ? moment(user.lastLogin)
-//           .tz("Asia/Kolkata")
-//           .format("DD/MM/YYYY hh:mm:ss A")
-//       : null;
-
-//     //  Send response
-//     res.status(200).json({
-//       message: "Login successful",
-//       token,
-//       user: {
-//         id: user._id,
-//         name: user.name,
-//         email: user.email,
-//         role: user.role,
-//         registeredAt,
-//         updatedAt,
-//         lastLogin: lastLoginIST,
-//       },
-//     });
-//   } catch (err) {
-//     console.error("Login error:", err.message, err.stack);
-//     res.status(500).json({ message: "Server error. Please try again later." });
 //   }
 // });
 
@@ -598,46 +105,43 @@ router.post("/login", async (req, res) => {
 // router.post("/login", async (req, res) => {
 //   const { email, password, captchaToken } = req.body;
 
-//   try {
-//     if (!email || !password || !captchaToken) {
-//       return res.status(400).json({ message: "Email, password captcha are required." });
-//     }
+//   if (!email || !password) {
+//     return res.status(400).json({ message: "Email and password are required." });
+//   }
 
-//     // verify reCAPTCHA WITH GOOGLE
+//   try {
+//     // 1️⃣ Check user email first
+//     const user = await User.findOne({ email: email.toLowerCase() });
+//     if (!user) return res.status(404).json({ message: "Account not registered." });
+
+//     if (!user.emailVerified)
+//       return res.status(400).json({ message: "Email not verified. Please check your inbox." });
+
+//     // 2️⃣ Check password
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
+
+//     // 3️ Now check reCAPTCHA
+//     if (!captchaToken)
+//       return res.status(400).json({ message: "Please complete the reCAPTCHA." });
+
 //     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-//     const {data: captchaData} = await axios.post(verifyUrl);
+//     const { data: captchaData } = await axios.post(verifyUrl, null, {
+//       headers: { "Content-Type": "application/x-www-form-urlencoded" },
+//     });
 
 //     if (!captchaData.success) {
-//       return res.status(400).json({ message: "reCAPTCHA verify faild."})
+//       console.error("Captcha failed:", captchaData["error-codes"]);
+//       return res.status(400).json({ message: "reCAPTCHA verification failed." });
 //     }
 
-//     const user = await User.findOne({ email: email.toLowerCase() });
-//     if (!user) {
-//       return res.status(404).json({ message: "Account not registered." });
-//     }
+//     // 4️ IP, last login, send email, JWT
+//     const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
 
-//     if (!user.emailVerified) {
-//       return res.status(400).json({ message: "Email not verified. Please check your inbox." });
-//     }
-
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) {
-//       return res.status(400).json({ message: "Incorrect password." });
-//     }
-
-//     // Capture IP safely
-//     const ip =
-//       req.headers["x-forwarded-for"]?.split(",").shift() ||
-//       req.socket?.remoteAddress ||
-//       req.connection?.remoteAddress ||
-//       "Unknown";
-
-//     // Fire-and-forget login email
 //     sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
-//       .then(() => console.log("Login email sent successfully!"))
-//       .catch((emailErr) => console.error("Login email failed:", emailErr.message));
+//       .then(() => console.log("Login email sent!"))
+//       .catch(err => console.error("Login email failed:", err.message));
 
-//     // Update last login time
 //     user.lastLogin = new Date();
 //     await user.save();
 
@@ -650,19 +154,12 @@ router.post("/login", async (req, res) => {
 //       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
 //     });
 
-//     const registeredAt = moment(user.createdAt)
-//       .tz("Asia/Kolkata")
-//       .format("DD/MM/YYYY hh:mm:ss A");
-//     const updatedAt = moment(user.updatedAt)
-//       .tz("Asia/Kolkata")
-//       .format("DD/MM/YYYY hh:mm:ss A");
+//     const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+//     const updatedAt = moment(user.updatedAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
 //     const lastLoginIST = user.lastLogin
-//       ? moment(user.lastLogin)
-//           .tz("Asia/Kolkata")
-//           .format("DD/MM/YYYY hh:mm:ss A")
+//       ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A")
 //       : null;
 
-//     // Send immediate response
 //     res.status(200).json({
 //       message: "Login successful",
 //       token,
@@ -685,10 +182,149 @@ router.post("/login", async (req, res) => {
 // });
 
 
+router.post("/register", async (req, res) => {
+  try {
+    const { name, email, password, phone, companyName } = req.body;
 
-// ===== VERIFY LOGIN OTP =====
+    // Validation
+    if (!name || !email || !password || !phone || !companyName)
+      return res.status(400).json({ message: "All fields are required" });
 
+    if (!strictEmailRule(email))
+      return res.status(400).json({ message: "Email must be like name123@example.com" });
 
+    const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
+    if (!phoneRegex.test(phone))
+      return res.status(400).json({ message: "Invalid phone number format" });
+
+    if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
+      return res.status(400).json({ message: "Email already registered" });
+
+    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+    if (await User.findOne({ phone: formattedPhone }))
+      return res.status(400).json({ message: "Phone already registered" });
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const token = generateToken();
+
+    // 1️ Create USER (default role)
+    const newUser = new User({
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      phone: formattedPhone,
+      companyName,
+      role: "user",          // Default role
+      emailVerified: true,   // auto verify
+      phoneVerified: false,
+      createdByIP: req.ip,
+      isDeleted: false,
+    });
+
+    await newUser.save();
+
+    // 2️ Create Company automatically
+    const newCompany = new Company({
+      name: companyName,
+      ownerId: newUser._id,
+      admins: [],
+      employees: [],
+      status: "active"
+    });
+    await newCompany.save();
+
+    // 3️ Link USER with companyId
+    newUser.companyId = newCompany._id;
+    await newUser.save();
+
+    // Fire-and-forget info email
+    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
+    sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id)
+      .then(() => console.log("Info email sent successfully!"))
+      .catch(err => console.error("Email failed:", err.message));
+
+    // Optional: auto-verify after 1 sec
+    setTimeout(async () => {
+      newUser.emailVerified = true;
+      newUser.status = "active";
+      await newUser.save();
+      console.log(`${newUser.email} auto-verified and activated`);
+    }, 1000);
+
+    res.status(201).json({
+      message: "Registered successfully. Account Activated!",
+      userId: newUser._id,
+      companyId: newCompany._id,
+      token
+    });
+
+  } catch (err) {
+    console.error("Register error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ===== LOGIN =====
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password, captchaToken } = req.body;
+
+    if (!email || !password || !captchaToken)
+      return res.status(400).json({ message: "Email, password and captcha required." });
+
+    // Check user
+    const user = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
+    if (!user) return res.status(404).json({ message: "Account not registered." });
+    if (!user.emailVerified) return res.status(400).json({ message: "Email not verified." });
+
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
+
+    // Verify reCAPTCHA
+    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
+    const { data: captchaData } = await axios.post(verifyUrl, null, {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+    if (!captchaData.success) return res.status(400).json({ message: "reCAPTCHA failed." });
+
+    // Send login email
+    const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
+    sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
+      .then(() => console.log("Login email sent"))
+      .catch(err => console.error(err.message));
+
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+
+    // Generate JWT
+    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "1d" });
+
+    const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
+    const lastLoginIST = user.lastLogin ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A") : null;
+
+    res.status(200).json({
+      message: "Login successful",
+      token: jwtToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        companyName: user.companyName,
+        companyId: user.companyId,
+        registeredAt,
+        lastLogin: lastLoginIST
+      }
+    });
+
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 //  Logout (secure)
 router.post('/logout', async (req, res) => {
@@ -720,31 +356,6 @@ router.post('/logout', async (req, res) => {
 
 
 //  Send OTP (email only)
-// router.post('/send-otp', async (req, res) => {
-//   const { email } = req.body;
-
-//   try {
-//     const user = await User.findOne({ email });
-//     if (!user) return res.status(404).json({ message: 'User not found' });
-
-//     const otp = generateOTP();
-//     const hashedOtp = hashData(otp);
-
-//     user.resetPasswordOTP = hashedOtp;
-//     user.otpExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
-//     await user.save();
-
-//     await sendOtpEmail(user.email, otp);
-
-//     res.json({ message: `OTP sent to email` });
-//   } catch (err) {
-//     console.error("Send OTP error:", err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// });
-
-
-// /api/auth/send-otp
 router.post('/send-otp', async (req, res) => {
   const { email } = req.body;
 
@@ -845,50 +456,7 @@ router.get('/profile', protect , async (req, res) => {
 });
 
 
-
-
-// router.put("/profile", protect , upload.single("avatar"), async (req, res) => {
-//   try {
-//     const user = await User.findById(req.user.id);
-//     if (!user) return res.status(404).json({ message: "User not found" });
-
-//     const { name, phone, bio, gender, dateofBirth, address,role } = req.body;
-
-//     if (name) user.name = name;
-//     if (phone) user.phone = phone;
-//     if (bio) user.bio = bio;
-//     if (gender) user.gender = gender;
-//     if (dateofBirth) user.dateofBirth = new Date(dateofBirth);
-//    if (address) {
-//   user.address = typeof address === "string" ? JSON.parse(address) : address;
-// }
-
-//   // Check if user has never updated role
-//   if (role) {
-//       // Only allow if roleUpdated not set
-//       if (!user.roleUpdated) {
-//         user.role = role.toLowerCase().trim();
-//         user.roleUpdated = true; // mark it so user cannot change again
-//       } else {
-//         return res.status(403).json({ message: "Role can only be updated once" });
-//       }
-//     }
-
-//     if (req.file && req.file.path) user.avatar = req.file.path;
-
-//     await user.save();
-//     res.json({ message: "Profile updated successfully", user });
-//   } catch (err) {
-//     console.error("Update profile error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
-
-//  PUT: Update profile info
-
-
-
-//  Update Profile (user can edit later)
+// Update Profile
 
 router.put("/profile", protect, upload.single("avatar"), async (req, res) => {
   try {
@@ -946,7 +514,6 @@ router.put("/profile", protect, upload.single("avatar"), async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 
 
 //===================== DELETE USER ======================
@@ -1029,6 +596,40 @@ router.put("/update-password", protect , async (req, res) => {
   }
 });
 
+// Admin delete by Owner
+router.delete("/admin/:adminId", protect, async (req, res) => {
+  try {
+    const owner = req.user; // Must be USER (owner)
+    const { adminId } = req.params;
+
+    const company = await Company.findById(owner.companyId);
+    if (!company) return res.status(404).json({ message: "Company not found" });
+
+    // Check if admin belongs to same company
+    if (!company.admins.includes(adminId)) 
+      return res.status(400).json({ message: "Admin not found in your company" });
+
+    // Soft delete admin
+    const admin = await User.findById(adminId);
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+
+    admin.isDeleted = true;
+    await admin.save();
+
+    // Remove admin from company admins array
+    company.admins = company.admins.filter(a => a.toString() !== adminId);
+    await company.save();
+
+    // Optional: send email
+    // sendAccessRevokedEmail(admin.email);
+
+    res.json({ message: "Admin access revoked successfully" });
+
+  } catch (err) {
+    console.error("Delete Admin Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 
 
