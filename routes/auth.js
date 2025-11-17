@@ -720,6 +720,31 @@ router.post('/logout', async (req, res) => {
 
 
 //  Send OTP (email only)
+// router.post('/send-otp', async (req, res) => {
+//   const { email } = req.body;
+
+//   try {
+//     const user = await User.findOne({ email });
+//     if (!user) return res.status(404).json({ message: 'User not found' });
+
+//     const otp = generateOTP();
+//     const hashedOtp = hashData(otp);
+
+//     user.resetPasswordOTP = hashedOtp;
+//     user.otpExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+//     await user.save();
+
+//     await sendOtpEmail(user.email, otp);
+
+//     res.json({ message: `OTP sent to email` });
+//   } catch (err) {
+//     console.error("Send OTP error:", err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// });
+
+
+// /api/auth/send-otp
 router.post('/send-otp', async (req, res) => {
   const { email } = req.body;
 
