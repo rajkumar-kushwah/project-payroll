@@ -24,13 +24,15 @@ const userSchema = new mongoose.Schema({
     pinCode: String,
   },
 
-  role: {
-    type: String,
-    enum: ["owner", "hr", "ceo", "admin", "employee", "user"],
-    required: true,
-  },
+ role: {
+      type: String,
+      enum: ["owner", "admin", "hr", "ceo", "employee", "user"],
+      default: "user",
+    },
 
+  roleUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   roleUpdated: { type: Boolean, default: false },
+
 
   emailVerified: { type: Boolean, default: false },
   phoneVerified: { type: Boolean, default: false },
@@ -38,6 +40,14 @@ const userSchema = new mongoose.Schema({
   createdByIP: String,
   lastLoginIP: String,
   deviceInfo: String,
+  lastLogin: { type: Date, default: null },
+
+  resetPasswordToken: { type: String, default: null },
+  resetPasswordExpires: { type: Date, default: null },
+
+  verificationToken: { type: String, default: null },
+  verificationExpires: { type: Date, default: null },
+  
 
   loginAttempts: { type: Number, default: 0 },
   lockUntil: { type: Date },

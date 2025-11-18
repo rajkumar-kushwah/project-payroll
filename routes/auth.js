@@ -66,14 +66,14 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Phone already registered' });
     }
 
+    // Password hash
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // 2. First user = OWNER, others = USER
+    // 2. First user = OWNER
     const totalUsers = await User.countDocuments({});
     const role = totalUsers === 0 ? "owner" : "user";
 
-    // 🔥 IMPORTANT FIX → Email auto-verified hai = status always ACTIVE
-    const status = "active";
+    const status = "active"; // auto verified
 
     // 3. Create user
     const newUser = await User.create({
@@ -83,8 +83,8 @@ router.post('/register', async (req, res) => {
       phone: formattedPhone,
       companyName,
       role,
-      status, 
-      emailVerified: true,    // auto verified
+      status,
+      emailVerified: true,
       phoneVerified: false,
       createdByIP: req.ip,
       isDeleted: false,
@@ -92,7 +92,7 @@ router.post('/register', async (req, res) => {
 
     let companyId = null;
 
-    // 4. OWNER → create company
+    // 4. If OWNER → create a company
     if (role === "owner") {
       const newCompany = await Company.create({
         name: companyName,
@@ -106,9 +106,9 @@ router.post('/register', async (req, res) => {
       await newUser.save();
 
       companyId = newCompany._id;
-
-    } else {
-      // 5. USER → attach to first company created
+    } 
+    else {
+      // 5. Normal user → assign to first company
       const ownerCompany = await Company.findOne().sort({ createdAt: 1 });
 
       if (ownerCompany) {
@@ -117,6 +117,17 @@ router.post('/register', async (req, res) => {
         companyId = ownerCompany._id;
       }
     }
+
+    // ======================
+    // CORRECT EMAIL CALL
+    // ======================
+    await sendInfoEmail(
+      newUser.name,             // ✔️ name
+      newUser.email,            // ✔️ email
+      req.ip,                   // ✔️ ip
+      req.headers['user-agent'],// ✔️ browser info
+      newUser._id               // ✔️ user id (for audit link)
+    );
 
     // 6. Response
     res.status(201).json({
@@ -132,9 +143,6 @@ router.post('/register', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-
-
 
 
 // ===== LOGIN =====
