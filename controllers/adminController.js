@@ -5,7 +5,8 @@ import Company from "../models/Company.js";
 export const addUser = async (req, res) => {
   try {
     const owner = req.user;
-    if (owner.role !== "owner") return res.status(403).json({ message: "Only owner can add users" });
+    if (owner.role !== "owner") 
+      return res.status(403).json({ message: "Only owner can add users" });
 
     const { name, email, password, role } = req.body;
     const newUser = await User.create({
@@ -14,6 +15,8 @@ export const addUser = async (req, res) => {
       password,
       role,
       companyId: owner.companyId,
+      emailVerified: true, // ✅ Auto-verify email
+      status: "active",    // ✅ Set status to active immediately
     });
 
     res.status(201).json({ message: "User added", user: newUser });
