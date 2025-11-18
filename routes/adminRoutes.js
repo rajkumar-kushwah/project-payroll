@@ -1,17 +1,19 @@
 import express from "express";
-import { adminProtect, protect } from "../middleware/authMiddleware.js";
-import { addAdmin, removeAdmin } from "../controllers/adminController.js";
-import { adminDashboardController } from "../controllers/dashboardController.js";
+import { protect, adminProtect } from "../middleware/authMiddleware.js";
+import { addUser, addAdmin, removeAdmin, getAdminDashboardData } from "../controllers/adminController.js";
 
 const router = express.Router();
 
-// Promote a user to admin
-router.post("/admin/:userId", protect, addAdmin);
+// Owner only → Add new user
+router.post("/company/add-user", protect, adminProtect, addUser);
 
-// Remove admin → downgrade to user
-router.delete("/admin/:adminId", protect, removeAdmin);
+// Owner only → Promote to admin
+router.post("/admin/:userId", protect, adminProtect, addAdmin);
 
-// Dashboard → only admin/owner
-router.get("/", protect, adminProtect, adminDashboardController);
+// Owner only → Demote admin
+router.delete("/admin/:adminId", protect, adminProtect, removeAdmin);
+
+// Owner/Admin → Fetch all users for dashboard
+router.get("/admin-dashboard", protect, adminProtect, getAdminDashboardData);
 
 export default router;

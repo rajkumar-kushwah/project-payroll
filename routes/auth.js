@@ -223,9 +223,9 @@ router.post('/login', async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: 'Incorrect password.' });
 
     // Verify reCAPTCHA
-    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-    const { data: captchaData } = await axios.post(verifyUrl, null, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-    if (!captchaData.success) return res.status(400).json({ message: 'reCAPTCHA failed.' });
+    // const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
+    // const { data: captchaData } = await axios.post(verifyUrl, null, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+    // if (!captchaData.success) return res.status(400).json({ message: 'reCAPTCHA failed.' });
 
     // Send login email
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
