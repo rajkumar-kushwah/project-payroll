@@ -66,17 +66,16 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Phone already registered' });
     }
 
-    // Password hash
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // 2. First user = OWNER, others = USER
     const totalUsers = await User.countDocuments({});
-    let role = totalUsers === 0 ? "owner" : "user";
+    const role = totalUsers === 0 ? "owner" : "user";
 
-    // 3. Status fix
-    let status = role === "owner" ? "active" : "pending";
+    // 🔥 IMPORTANT FIX → Email auto-verified hai = status always ACTIVE
+    const status = "active";
 
-    // 4. Create user first
+    // 3. Create user
     const newUser = await User.create({
       name,
       email: email.toLowerCase(),
@@ -84,8 +83,8 @@ router.post('/register', async (req, res) => {
       phone: formattedPhone,
       companyName,
       role,
-      status,         // ✅ MAIN FIX
-      emailVerified: true,
+      status, 
+      emailVerified: true,    // auto verified
       phoneVerified: false,
       createdByIP: req.ip,
       isDeleted: false,
@@ -93,7 +92,7 @@ router.post('/register', async (req, res) => {
 
     let companyId = null;
 
-    // 5. If OWNER → create company
+    // 4. OWNER → create company
     if (role === "owner") {
       const newCompany = await Company.create({
         name: companyName,
@@ -109,7 +108,7 @@ router.post('/register', async (req, res) => {
       companyId = newCompany._id;
 
     } else {
-      // 6. USER → add to first company created
+      // 5. USER → attach to first company created
       const ownerCompany = await Company.findOne().sort({ createdAt: 1 });
 
       if (ownerCompany) {
@@ -119,9 +118,9 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // 7. Response
+    // 6. Response
     res.status(201).json({
-      message: "Registered successfully",
+      message: "Registered successfully. Email Activated!",
       userId: newUser._id,
       companyId,
       role,
@@ -130,9 +129,10 @@ router.post('/register', async (req, res) => {
 
   } catch (err) {
     console.error("Register error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 
 
