@@ -1,20 +1,25 @@
 import mongoose from "mongoose";
 
-const companySchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  
-  admins: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", default: [] }],
-  employees: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", default: [] }],
 
-  status: { type: String, enum: ["active", "inactive", "pending"], default: "pending" },
+const companySchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
+  admins: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  employees: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
+  status: {
+    type: String,
+    enum: ["active", "inactive", "pending"],
+    default: "active"
+  },
 
   address: {
-    street: { type: String, default: "" },
-    city: { type: String, default: "" },
-    state: { type: String, default: "" },
-    country: { type: String, default: "" },
-    pinCode: { type: String, default: "" },
+    street: String,
+    city: String,
+    state: String,
+    country: String,
+    pinCode: String,
   },
 
 }, { timestamps: true });

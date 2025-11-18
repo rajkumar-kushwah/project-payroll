@@ -41,83 +41,100 @@ router.post('/register', async (req, res) => {
   try {
     const { name, email, password, phone, companyName } = req.body;
 
-    // Validation
-    if (!name || !email || !password || !phone || !companyName)
+    // 1. Validation
+    if (!name || !email || !password || !phone || !companyName) {
       return res.status(400).json({ message: 'All fields are required' });
+    }
 
-    if (!strictEmailRule(email))
-      return res.status(400).json({ message: 'Email must be like name123@example.com' });
+    if (!strictEmailRule(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
 
     const phoneRegex = /^(\+91)?[6-9][0-9]{9}$/;
-    if (!phoneRegex.test(phone))
+    if (!phoneRegex.test(phone)) {
       return res.status(400).json({ message: 'Invalid phone number format' });
-
-    if (await User.findOne({ email: email.toLowerCase(), isDeleted: false }))
-      return res.status(400).json({ message: 'Email already registered' });
+    }
 
     const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`;
-    if (await User.findOne({ phone: formattedPhone }))
-      return res.status(400).json({ message: 'Phone already registered' });
 
-    // Hash password
+    // Duplicate checks
+    if (await User.findOne({ email: email.toLowerCase(), isDeleted: false })) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+
+    if (await User.findOne({ phone: formattedPhone })) {
+      return res.status(400).json({ message: 'Phone already registered' });
+    }
+
+    // Password hash
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Check if any users exist to assign role
+    // 2. First user = OWNER, others = USER
     const totalUsers = await User.countDocuments({});
-    const role = totalUsers === 0 ? 'owner' : 'user'; // First user = Owner, others = User
+    let role = totalUsers === 0 ? "owner" : "user";
 
-    // 1. Create USER
-    const newUser = new User({
+    // 3. Status fix
+    let status = role === "owner" ? "active" : "pending";
+
+    // 4. Create user first
+    const newUser = await User.create({
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       phone: formattedPhone,
       companyName,
       role,
-      emailVerified: true,  // auto-verify for now
+      status,         // ✅ MAIN FIX
+      emailVerified: true,
       phoneVerified: false,
       createdByIP: req.ip,
       isDeleted: false,
     });
 
-    await newUser.save();
-
-    // 2. Create Company if owner
     let companyId = null;
-    if (role === 'owner') {
-      const newCompany = new Company({
+
+    // 5. If OWNER → create company
+    if (role === "owner") {
+      const newCompany = await Company.create({
         name: companyName,
         ownerId: newUser._id,
         admins: [newUser._id],
         employees: [],
-        status: '',
+        status: "active",
       });
-      await newCompany.save();
 
-      // Link user to company
       newUser.companyId = newCompany._id;
       await newUser.save();
+
       companyId = newCompany._id;
+
+    } else {
+      // 6. USER → add to first company created
+      const ownerCompany = await Company.findOne().sort({ createdAt: 1 });
+
+      if (ownerCompany) {
+        newUser.companyId = ownerCompany._id;
+        await newUser.save();
+        companyId = ownerCompany._id;
+      }
     }
 
-    // Fire-and-forget info email
-    const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
-    sendInfoEmail(newUser.name, newUser.email, ip, req.headers['user-agent'], newUser._id)
-      .then(() => console.log('Info email sent successfully!'))
-      .catch(err => console.error('Email failed:', err.message));
-
+    // 7. Response
     res.status(201).json({
-      message: 'Registered successfully. Account Activated!',
+      message: "Registered successfully",
       userId: newUser._id,
       companyId,
       role,
+      status,
     });
 
   } catch (err) {
-    console.error('Register error:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Register error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
+
+
 
 
 // ===== LOGIN =====
