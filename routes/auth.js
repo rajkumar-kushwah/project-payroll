@@ -210,7 +210,8 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password, captchaToken } = req.body;
-    if (!email || !password || !captchaToken)
+    if (!email || !password ) 
+      // || !captchaToken
       return res.status(400).json({ message: 'Email, password and captcha required.' });
 
     const user = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
@@ -531,82 +532,89 @@ router.put("/update-password", protect , async (req, res) => {
 });
 
 
-// Owner can remove an admin
-// =======================
-router.delete("/admin/:adminId", protect, async (req, res) => {
-  try {
-    const owner = req.user; // Must be the company owner
-    const { adminId } = req.params;
 
-    const company = await Company.findById(owner.companyId);
-    if (!company) return res.status(404).json({ message: "Company not found" });
+// Owner can remove an admin (downgrade to user)
+// // =======================
+// router.delete("/admin/:adminId", protect, async (req, res) => {
+//   try {
+//     const owner = req.user; // Must be the company owner
+//     const { adminId } = req.params;
 
-    // Only owner can remove admins
-    if (company.ownerId.toString() !== owner._id.toString())
-      return res.status(403).json({ message: "Only owner can remove admins" });
+//     const company = await Company.findById(owner.companyId);
+//     if (!company) return res.status(404).json({ message: "Company not found" });
 
-    // Admin exists?
-    if (!company.admins.includes(adminId))
-      return res.status(400).json({ message: "Admin not found in your company" });
+//     // Only owner can remove admins
+//     if (company.ownerId.toString() !== owner._id.toString())
+//       return res.status(403).json({ message: "Only owner can remove admins" });
 
-    const admin = await User.findById(adminId);
-    if (!admin) return res.status(404).json({ message: "Admin not found" });
+//     // Admin exists in company?
+//     if (!company.admins.includes(adminId))
+//       return res.status(400).json({ message: "Admin not found in your company" });
 
-    // Soft delete admin
-    admin.isDeleted = true;
-    await admin.save();
+//     const admin = await User.findById(adminId);
+//     if (!admin) return res.status(404).json({ message: "Admin not found" });
 
-    // Remove from company admins array
-    company.admins = company.admins.filter(a => a.toString() !== adminId);
-    await company.save();
+//     // Downgrade role to user
+//     admin.role = "user";
+//     await admin.save();
 
-    res.json({ message: "Admin access revoked successfully" });
-  } catch (err) {
-    console.error("Delete Admin Error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+//     // Remove from company admins array
+//     company.admins = company.admins.filter(a => a.toString() !== adminId);
+//     await company.save();
 
-// ADD ADMIN API
-// Owner can promote a user to admin
-// =======================
-router.post("/admin/:userId", protect, async (req, res) => {
-  try {
-    const owner = req.user; // Must be the company owner
-    const { userId } = req.params;
+//     // Optional: send email notification to the user
+//     // await sendInfoEmail(admin.email, "Role Update", "Your admin access has been revoked.");
 
-    const company = await Company.findById(owner.companyId);
-    if (!company) return res.status(404).json({ message: "Company not found" });
+//     res.json({ message: "Admin downgraded to user successfully" });
+//   } catch (err) {
+//     console.error("Remove Admin Error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
 
-    // Only owner can add admins
-    if (company.ownerId.toString() !== owner._id.toString())
-      return res.status(403).json({ message: "Only owner can add admins" });
+// // =======================
+// // Owner can promote a user to admin
+// // =======================
+// router.post("/admin/:userId", protect, async (req, res) => {
+//   try {
+//     const owner = req.user; // Must be the company owner
+//     const { userId } = req.params;
 
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+//     const company = await Company.findById(owner.companyId);
+//     if (!company) return res.status(404).json({ message: "Company not found" });
 
-    // Check if user belongs to same company
-    if (user.companyId?.toString() !== company._id.toString())
-      return res.status(400).json({ message: "User does not belong to your company" });
+//     // Only owner can add admins
+//     if (company.ownerId.toString() !== owner._id.toString())
+//       return res.status(403).json({ message: "Only owner can add admins" });
 
-    // Already admin?
-    if (company.admins.includes(userId))
-      return res.status(400).json({ message: "User is already an admin" });
+//     const user = await User.findById(userId);
+//     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Add to company admins
-    company.admins.push(userId);
-    await company.save();
+//     // Check if user belongs to same company
+//     if (user.companyId?.toString() !== company._id.toString())
+//       return res.status(400).json({ message: "User does not belong to your company" });
 
-    // Update user role
-    user.role = "admin";
-    await user.save();
+//     // Already admin?
+//     if (company.admins.includes(userId))
+//       return res.status(400).json({ message: "User is already an admin" });
 
-    res.status(200).json({ message: "User promoted to admin successfully", userId: user._id });
-  } catch (err) {
-    console.error("Add Admin Error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+//     // Add to company admins
+//     company.admins.push(userId);
+//     await company.save();
+
+//     // Update user role
+//     user.role = "admin";
+//     await user.save();
+
+//     // Optional: send email notification to the user
+//     // await sendInfoEmail(user.email, "Role Update", "You have been promoted to admin.");
+
+//     res.status(200).json({ message: "User promoted to admin successfully", userId: user._id });
+//   } catch (err) {
+//     console.error("Add Admin Error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// });
 
 
 export default router;

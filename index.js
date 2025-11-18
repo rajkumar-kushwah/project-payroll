@@ -6,6 +6,8 @@ import authRoutes from './routes/auth.js';
 import employeeRoutes from "./routes/employees.js";
 import salaryRoutes from "./routes/salary.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
+
 
 
 dotenv.config();
@@ -49,6 +51,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/salary", salaryRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api", adminRoutes); 
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
