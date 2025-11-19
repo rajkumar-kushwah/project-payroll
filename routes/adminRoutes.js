@@ -1,6 +1,6 @@
 import express from "express";
 import { protect, adminProtect,ownerProtect } from "../middleware/authMiddleware.js";
-import { addUser, addAdmin, removeAdmin, getAdminDashboardData } from "../controllers/adminController.js";
+import { addUser, addAdmin, removeAdmin, getAdminDashboardData, deleteUser } from "../controllers/adminController.js";
 
 const router = express.Router();
 
@@ -15,5 +15,9 @@ router.delete("/admin/:adminId", protect, ownerProtect, removeAdmin);
 
 // Owner/Admin → Fetch all users for dashboard
 router.get("/admin-dashboard", protect, adminProtect, getAdminDashboardData);
+
+// Owner only → Delete user
+router.delete("/company/user/:userId", protect, ownerProtect, deleteUser);
+
 
 export default router;
