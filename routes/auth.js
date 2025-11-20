@@ -210,9 +210,8 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password, captchaToken } = req.body;
-    if (!email || !password ) 
-      // || !captchaToken
-      return res.status(400).json({ message: 'Email, password and captcha required.' });
+    if (!email || !password) 
+      return res.status(400).json({ message: 'Email and password required.' });
 
     const user = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
     if (!user) return res.status(404).json({ message: 'Account not registered.' });
@@ -222,23 +221,25 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Incorrect password.' });
 
-    // Verify reCAPTCHA
-    // const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-    // const { data: captchaData } = await axios.post(verifyUrl, null, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-    // if (!captchaData.success) return res.status(400).json({ message: 'reCAPTCHA failed.' });
+    // Optional: reCAPTCHA
+    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
+    const { data: captchaData } = await axios.post(verifyUrl, null, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+    if (!captchaData.success) return res.status(400).json({ message: 'reCAPTCHA failed.' });
 
     // Send login email
     const ip = req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress || 'Unknown';
-    sendLoginEmail(user.name, user.email, ip, req.headers['user-agent'])
-      .then(() => console.log('Login email sent'))
-      .catch(err => console.error(err.message));
+    sendLoginEmail(user.name, user.email, ip, req.headers['user-agent']).catch(err => console.error(err.message));
 
     // Update last login
     user.lastLogin = new Date();
     await user.save();
 
-    // Generate JWT
-    const jwtToken = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '1d' });
+    // Generate JWT including companyId
+    const jwtToken = jwt.sign(
+      { id: user._id, role: user.role, companyId: user.companyId },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
+    );
 
     res.status(200).json({
       message: 'Login successful',
@@ -248,7 +249,6 @@ router.post('/login', async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        companyName: user.companyName,
         companyId: user.companyId,
         registeredAt: moment(user.createdAt).tz('Asia/Kolkata').format('DD/MM/YYYY hh:mm:ss A'),
         lastLogin: user.lastLogin ? moment(user.lastLogin).tz('Asia/Kolkata').format('DD/MM/YYYY hh:mm:ss A') : null,
