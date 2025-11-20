@@ -1,18 +1,22 @@
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
+import mongoose from "mongoose";
 
-
-// --------------------------------------
-// 1) Add Attendance
-// --------------------------------------
+// ---------------------------------------------------
+// 1️ Add Attendance
+// ---------------------------------------------------
 export const addAttendance = async (req, res) => {
   try {
-    const { employeeId, date, status, checkIn, checkOut } = req.body;
+    const { employeeId, date, status, checkIn, checkOut, remarks } = req.body;
 
-    // Check employee belongs to logged-in user
+    // Validate employeeId
+    if (!mongoose.isValidObjectId(employeeId))
+      return res.status(400).json({ message: "Invalid employee ID" });
+
+    // Check employee belongs to the same company as logged-in user
     const employee = await Employee.findOne({
       _id: employeeId,
-      createdBy: req.user._id,
+      companyId: req.user.companyId,
     });
 
     if (!employee)
@@ -26,7 +30,7 @@ export const addAttendance = async (req, res) => {
     });
 
     if (existing)
-      return res.status(400).json({ message: "Attendance already added for this date" });
+      return res.status(400).json({ message: "Attendance already exists for this date" });
 
     // Create attendance record
     const record = await Attendance.create({
@@ -35,46 +39,36 @@ export const addAttendance = async (req, res) => {
       status,
       checkIn,
       checkOut,
+      remarks,
       createdBy: req.user._id,
     });
 
-    res.status(201).json({
-      message: "Attendance added successfully",
-      data: record,
-    });
-
+    res.status(201).json({ message: "Attendance added successfully", data: record });
   } catch (err) {
-    console.error("Add attendance error:", err);
+    console.error("Add Attendance Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-
-
-// --------------------------------------
-// 2) Get all Attendance
-// --------------------------------------
+// ---------------------------------------------------
+// 2️ Get All Attendance
+// ---------------------------------------------------
 export const getAttendance = async (req, res) => {
   try {
-    const records = await Attendance.find({
-      createdBy: req.user._id
-    })
-      .populate("employeeId", "name employeeID department jobRole")
+    const records = await Attendance.find({ companyId: req.user.companyId })
+      .populate("employeeId", "name employeeCode department jobRole")
       .sort({ date: -1 });
 
     res.json(records);
-
   } catch (err) {
-    console.error("Get all attendance error:", err);
+    console.error("Get Attendance Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-
-
-// --------------------------------------
-// 3) Delete Attendance
-// --------------------------------------
+// ---------------------------------------------------
+// 3️ Delete Attendance
+// ---------------------------------------------------
 export const deleteAttendance = async (req, res) => {
   try {
     const id = req.params.id;
@@ -87,40 +81,63 @@ export const deleteAttendance = async (req, res) => {
     if (!deleted)
       return res.status(404).json({ message: "Attendance not found or unauthorized" });
 
-    return res.json({ message: "Attendance deleted successfully" });
-
+    res.json({ message: "Attendance deleted successfully" });
   } catch (err) {
-    console.error("Delete attendance error:", err);
+    console.error("Delete Attendance Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-
-
-// --------------------------------------
-// 4) Update Attendance
-// --------------------------------------
+// ---------------------------------------------------
+// 4️ Update Attendance
+// ---------------------------------------------------
 export const updateAttendance = async (req, res) => {
   try {
     const id = req.params.id;
-    const { date, status, checkIn, checkOut } = req.body;
+    const { date, status, checkIn, checkOut, remarks } = req.body;
 
     const updated = await Attendance.findOneAndUpdate(
-      { _id: id, createdBy: req.user._id },   // secure condition
-      { date, status, checkIn, checkOut },
+      { _id: id, createdBy: req.user._id }, // secure condition
+      { date, status, checkIn, checkOut, remarks },
       { new: true }
-    ).populate("employeeId", "name employeeID department jobRole");
+    ).populate("employeeId", "name employeeCode department jobRole");
 
     if (!updated)
       return res.status(404).json({ message: "Attendance not found or unauthorized" });
 
-    return res.json({
-      message: "Attendance updated successfully",
-      data: updated,
-    });
-
+    res.json({ message: "Attendance updated successfully", data: updated });
   } catch (err) {
     console.error("Update Attendance Error:", err);
-    res.status(500).json({ message: "Server Error" });
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ---------------------------------------------------
+// 5️ Filter Attendance (Advanced)
+// ---------------------------------------------------
+export const filterAttendance = async (req, res) => {
+  try {
+    const { startDate, endDate, status, employeeId } = req.query;
+
+    const query = { companyId: req.user.companyId };
+
+    if (startDate && endDate) {
+      query.date = { $gte: startDate, $lte: endDate };
+    }
+
+    if (status) query.status = status;
+
+    if (employeeId && mongoose.isValidObjectId(employeeId)) {
+      query.employeeId = employeeId;
+    }
+
+    const records = await Attendance.find(query)
+      .populate("employeeId", "name employeeCode department jobRole")
+      .sort({ date: -1 });
+
+    res.json({ success: true, count: records.length, records });
+  } catch (err) {
+    console.error("Filter Attendance Error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

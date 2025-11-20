@@ -2,14 +2,17 @@ import User from "../models/User.js";
 import Company from "../models/Company.js";
 import bcrypt from "bcryptjs";
 
-// Add new user
+// Add new user (Owner only)
 export const addUser = async (req, res) => {
   try {
-    const owner = req.user;
-    if (owner.role !== "owner")
+    if (req.user.role !== "owner")
       return res.status(403).json({ message: "Only owner can add users" });
 
     const { name, email, password, role } = req.body;
+
+    // Check if email exists
+    const exists = await User.findOne({ email });
+    if (exists) return res.status(400).json({ message: "Email already exists" });
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -19,12 +22,11 @@ export const addUser = async (req, res) => {
       email,
       password: hashedPassword,
       role,
-      companyId: owner.companyId,
+      companyId: req.user.companyId,
       emailVerified: true,
       status: "active",
     });
 
-    // Emit frontend event via response (optional)
     res.status(201).json({ message: "User added", user: newUser });
   } catch (err) {
     console.error(err);
@@ -32,23 +34,22 @@ export const addUser = async (req, res) => {
   }
 };
 
-// Promote to admin
+// Promote user to admin (Owner only)
 export const addAdmin = async (req, res) => {
   try {
-    const owner = req.user;
     const { userId } = req.params;
 
-    const company = await Company.findById(owner.companyId);
+    const company = await Company.findById(req.user.companyId);
     if (!company) return res.status(404).json({ message: "Company not found" });
 
-    if (company.ownerId.toString() !== owner._id.toString())
-      return res.status(403).json({ message: "Only owner can add admins" });
+    if (company.ownerId.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Only owner can promote admin" });
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (company.admins.includes(userId))
-      return res.status(400).json({ message: "User already admin" });
+      return res.status(400).json({ message: "User is already an admin" });
 
     company.admins.push(userId);
     await company.save();
@@ -63,16 +64,15 @@ export const addAdmin = async (req, res) => {
   }
 };
 
-// Demote admin
+// Demote admin (Owner only)
 export const removeAdmin = async (req, res) => {
   try {
-    const owner = req.user;
     const { adminId } = req.params;
 
-    const company = await Company.findById(owner.companyId);
+    const company = await Company.findById(req.user.companyId);
     if (!company) return res.status(404).json({ message: "Company not found" });
 
-    company.admins = company.admins.filter((a) => a.toString() !== adminId);
+    company.admins = company.admins.filter((id) => id.toString() !== adminId);
     await company.save();
 
     const admin = await User.findById(adminId);
@@ -88,22 +88,19 @@ export const removeAdmin = async (req, res) => {
   }
 };
 
-// Fetch all company users (Owner/Admin only)
+// Fetch dashboard users (Owner/Admin)
 export const getAdminDashboardData = async (req, res) => {
   try {
-    const user = req.user;
-
-    if (!["owner", "admin"].includes(user.role)) {
+    if (!["owner", "admin"].includes(req.user.role))
       return res.status(403).json({ message: "Access denied" });
-    }
 
     const users = await User.find({
-      companyId: user.companyId,
-      isDeleted: false,
+      companyId: req.user.companyId,
       status: "active",
-    }).select("-password"); // hide password
+      isDeleted: false,
+    }).select("-password");
 
-    res.json({ users });
+    res.json({ success: true, users });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -114,18 +111,17 @@ export const getAdminDashboardData = async (req, res) => {
 export const deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = await User.findById(userId);
 
+    const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (user.role === "owner")
-      return res.status(400).json({ message: "Owner cannot be deleted" });
+    if (user.role === "owner") return res.status(400).json({ message: "Owner cannot be deleted" });
 
     await User.findByIdAndDelete(userId);
 
-    // Trigger frontend event (optional)
-    res.json({ message: "User deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.json({ success: true, message: "User deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };

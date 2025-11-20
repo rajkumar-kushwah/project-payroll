@@ -1,26 +1,25 @@
 import Salary from "../models/Salary.js";
 import Employee from "../models/Employee.js";
+import Attendance from "../models/Attendance.js";
 import { v4 as uuidv4 } from "uuid";
+import mongoose from "mongoose";
 
-// 1️ Get all salaries of an employee (company-based)
+// 1️ Get all salaries of a specific employee
 export const getSalariesByEmployee = async (req, res) => {
   try {
     const salaries = await Salary.find({
       employeeId: req.params.employeeId,
-      companyId: req.user.companyId,   // ✔ company based data
-    });
+      companyId: req.user.companyId,
+    }).sort({ createdAt: -1 });
 
-    if (!salaries.length)
-      return res.status(404).json({ message: "No salaries found" });
-
-    res.json(salaries);
-
+    res.json({ success: true, count: salaries.length, data: salaries });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Error in getSalariesByEmployee:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// 2️⃣ Get Salary By ID
+// 2️ Get salary by ID
 export const getSalaryById = async (req, res) => {
   try {
     const salary = await Salary.findOne({
@@ -29,48 +28,53 @@ export const getSalaryById = async (req, res) => {
     }).populate("employeeId", "name email department jobRole");
 
     if (!salary)
-      return res.status(404).json({ message: "Salary record not found" });
+      return res.status(404).json({ success: false, message: "Salary not found" });
 
-    res.json(salary);
-
+    res.json({ success: true, data: salary });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Error in getSalaryById:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// 3️ Add Salary
+
+// 3️ Add new salary with attendance integration
+
 export const addSalary = async (req, res) => {
   try {
-    const {
-      employeeId,
-      month,
-      basic,
-      hra,
-      allowances,
-      deductions,
-      leaves,
-      totalWorkingDays
-    } = req.body;
+    const { employeeId, month, basic, hra, allowances, deductions } = req.body;
 
-    // Employee MUST belong to same company
+    if (!mongoose.isValidObjectId(employeeId)) {
+      return res.status(400).json({ success: false, message: "Invalid employee ID" });
+    }
+
     const emp = await Employee.findOne({
       _id: employeeId,
-      companyId: req.user.companyId
-    });
-
-    if (!emp)
-      return res.status(403).json({ message: "Employee not found or unauthorized" });
-
-    const exists = await Salary.findOne({
-      employeeId,
-      month,
       companyId: req.user.companyId,
     });
+    if (!emp)
+      return res.status(403).json({ success: false, message: "Employee not found or unauthorized" });
 
+    // Check duplicate
+    const exists = await Salary.findOne({ employeeId, month, companyId: req.user.companyId });
     if (exists)
-      return res.status(400).json({ message: "Salary for this month already exists" });
+      return res.status(400).json({ success: false, message: "Salary for this month already exists" });
 
-    const netSalary = basic + hra + allowances - deductions;
+    // Attendance check
+    const attendances = await Attendance.find({
+      employeeId,
+      date: { $regex: `^${month}` }, // all dates in the month
+      createdBy: req.user._id,
+    });
+
+    const totalDays = attendances.length || 30; // default 30 days if attendance not yet added
+    const absentDays = attendances.filter(a => a.status === "absent" || a.status === "leave").length;
+    const workingDays = totalDays - absentDays;
+
+    // Salary calculation
+    const perDaySalary = basic / totalDays;
+    const netSalary =
+      perDaySalary * workingDays + Number(hra || 0) + Number(allowances || 0) - Number(deductions || 0);
 
     const salary = await Salary.create({
       salaryId: `SAL-${uuidv4().slice(0, 8)}`,
@@ -80,22 +84,22 @@ export const addSalary = async (req, res) => {
       hra,
       allowances,
       deductions,
-      leaves,
-      totalWorkingDays,
+      leaves: absentDays,
+      totalWorkingDays: totalDays,
       netSalary,
-      companyId: req.user.companyId,   // ✔ Important
+      companyId: req.user.companyId,
       createdBy: req.user._id,
       status: "unpaid",
     });
 
-    res.status(201).json({ message: "Salary created successfully", data: salary });
-
+    res.status(201).json({ success: true, message: "Salary created successfully", data: salary });
   } catch (err) {
-    res.status(500).json({ message: "Error adding salary", error: err.message });
+    console.error("Error in addSalary:", err);
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };
 
-// 4️ Mark Salary Paid
+// 4️ Mark salary as paid
 export const markSalaryPaid = async (req, res) => {
   try {
     const salary = await Salary.findOne({
@@ -103,25 +107,21 @@ export const markSalaryPaid = async (req, res) => {
       companyId: req.user.companyId,
     });
 
-    if (!salary)
-      return res.status(404).json({ message: "Salary not found" });
-
-    if (salary.status === "paid")
-      return res.status(400).json({ message: "Already paid" });
+    if (!salary) return res.status(404).json({ success: false, message: "Salary not found" });
+    if (salary.status === "paid") return res.status(400).json({ success: false, message: "Salary already paid" });
 
     salary.status = "paid";
     salary.paidOn = new Date();
-
     await salary.save();
 
-    res.json({ message: "Salary marked as paid", data: salary });
-
+    res.json({ success: true, message: "Salary marked as paid", data: salary });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Error in markSalaryPaid:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// 5️ Delete Salary
+// 5️⃣ Delete salary
 export const deleteSalary = async (req, res) => {
   try {
     const salary = await Salary.findOneAndDelete({
@@ -129,61 +129,56 @@ export const deleteSalary = async (req, res) => {
       companyId: req.user.companyId,
     });
 
-    if (!salary)
-      return res.status(404).json({ message: "Salary not found" });
+    if (!salary) return res.status(404).json({ success: false, message: "Salary not found" });
 
-    res.json({ message: "Salary deleted" });
-
+    res.json({ success: true, message: "Salary deleted" });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Error in deleteSalary:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// 6️ Filter Salaries (month / status / employee)
+// 6️ Filter salaries (month / status / employee)
 export const filterSalaries = async (req, res) => {
   try {
     const { month, status, employeeId } = req.query;
 
-    const filter = {
-      companyId: req.user.companyId,
-    };
-
+    const filter = { companyId: req.user.companyId };
     if (month) filter.month = month;
     if (status) filter.status = status;
-    if (employeeId) filter.employeeId = employeeId;
+
+    if (employeeId) {
+      if (!mongoose.isValidObjectId(employeeId))
+        return res.status(400).json({ success: false, message: "Invalid employeeId" });
+      filter.employeeId = employeeId;
+    }
 
     const salaries = await Salary.find(filter)
       .populate("employeeId", "name email department jobRole")
       .sort({ createdAt: -1 });
 
-    res.json(salaries);
-
+    res.json({ success: true, count: salaries.length, data: salaries });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Error in filterSalaries:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// 7️ Update Salary
+// 7️ Update salary
 export const updateSalary = async (req, res) => {
   try {
     const updated = await Salary.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        companyId: req.user.companyId,
-      },
+      { _id: req.params.id, companyId: req.user.companyId },
       req.body,
       { new: true }
     );
 
     if (!updated)
-      return res.status(404).json({ message: "Salary not found or forbidden" });
+      return res.status(404).json({ success: false, message: "Salary not found or unauthorized" });
 
-    res.json({
-      message: "Salary updated successfully",
-      data: updated,
-    });
-
+    res.json({ success: true, message: "Salary updated successfully", data: updated });
   } catch (err) {
-    res.status(500).json({ message: "Error updating salary" });
+    console.error("Error in updateSalary:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };

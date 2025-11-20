@@ -20,7 +20,7 @@ const companySchema = new mongoose.Schema(
     employees: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Employee",
       },
     ],
 
@@ -31,11 +31,19 @@ const companySchema = new mongoose.Schema(
     },
 
     address: {
-      street: String,
-      city: String,
-      state: String,
-      country: String,
-      pinCode: String,
+      street: { type: String, default: "" },
+      city: { type: String, default: "" },
+      state: { type: String, default: "" },
+      country: { type: String, default: "" },
+      pinCode: { type: String, default: "" },
+    },
+
+    // Optional onboarding configuration
+    onboardingWorkflow: {
+      autoAssignTasks: { type: Boolean, default: true },
+      autoDocs: { type: Boolean, default: true },
+      autoSalarySetup: { type: Boolean, default: true },
+      customSteps: { type: Array, default: [] },
     },
   },
   { timestamps: true }
