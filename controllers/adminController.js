@@ -1,5 +1,6 @@
 import User from "../models/User.js";
 import Company from "../models/Company.js";
+import bcrypt from "bcryptjs";
 
 // Add new user
 export const addUser = async (req, res) => {
@@ -9,14 +10,18 @@ export const addUser = async (req, res) => {
       return res.status(403).json({ message: "Only owner can add users" });
 
     const { name, email, password, role } = req.body;
+
+          // hashed the password
+    const  hashedPassword = await bcrypt.hash(password, 10);
+    
     const newUser = await User.create({
       name,
       email,
-      password,
+      password: hashedPassword, //  Hashed password
       role,
       companyId: owner.companyId,
-      emailVerified: true, // ✅ Auto-verify email
-      status: "active",    // ✅ Set status to active immediately
+      emailVerified: true, //  Auto-verify email
+      status: "active",    //  Set status to active immediately
     });
 
     res.status(201).json({ message: "User added", user: newUser });
