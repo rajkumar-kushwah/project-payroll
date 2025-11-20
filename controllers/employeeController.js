@@ -19,7 +19,7 @@ export const getEmployees = async (req, res) => {
 };
 
 // -------------------------------------------------------------
-// GET SINGLE EMPLOYEE BY ID
+// GET SINGLE EMPLOYEE
 // -------------------------------------------------------------
 export const getEmployeeById = async (req, res) => {
   try {
@@ -28,8 +28,9 @@ export const getEmployeeById = async (req, res) => {
       createdBy: req.user._id,
     });
 
-    if (!emp)
+    if (!emp) {
       return res.status(404).json({ message: "Employee not found" });
+    }
 
     res.json(emp);
   } catch (err) {
@@ -39,7 +40,7 @@ export const getEmployeeById = async (req, res) => {
 };
 
 // -------------------------------------------------------------
-// ADD EMPLOYEE (WITH AUTO EMP-001 GENERATION)
+// ADD EMPLOYEE (AUTO EMP-ID)
 // -------------------------------------------------------------
 export const addEmployee = async (req, res) => {
   try {
@@ -56,24 +57,21 @@ export const addEmployee = async (req, res) => {
       notes,
     } = req.body;
 
-    // CHECK IF EMPLOYEE ALREADY EXISTS UNDER SAME USER
-    const existingEmployee = await Employee.findOne({
+    // Check existing employee
+    const exists = await Employee.findOne({
       $or: [{ email: email?.toLowerCase() }, { phone }],
       createdBy: req.user._id,
     });
 
-    if (existingEmployee) {
+    if (exists) {
       return res.status(400).json({ message: "Employee already exists" });
     }
 
-    // ------------------------------
-    // AUTO GENERATE EMPLOYEE CODE
-    // EMP-001, EMP-002, EMP-003 ...
-    // ------------------------------
+    // Auto employee code
     const count = await Employee.countDocuments({ createdBy: req.user._id });
     const employeeCode = `EMP-${String(count + 1).padStart(3, "0")}`;
 
-    // CREATE EMPLOYEE
+    // Create employee
     const emp = await Employee.create({
       employeeId: employeeCode,
       name,
@@ -89,7 +87,7 @@ export const addEmployee = async (req, res) => {
       createdBy: req.user._id,
     });
 
-    // CREATE SALARY RECORD
+    // Create salary record
     const salaryRecord = await Salary.create({
       salaryId: uuidv4(),
       employeeId: emp._id,
@@ -106,7 +104,7 @@ export const addEmployee = async (req, res) => {
     });
 
     res.status(201).json({
-      message: "Employee and salary created successfully",
+      message: "Employee created successfully",
       data: { emp, salaryRecord },
     });
 
@@ -127,10 +125,12 @@ export const updateEmployee = async (req, res) => {
       { new: true }
     );
 
-    if (!emp)
-      return res.status(404).json({ message: "Employee not found or unauthorized" });
+    if (!emp) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
 
-    res.json({ message: "Employee updated successfully", data: emp });
+    res.json({ message: "Employee updated", data: emp });
+
   } catch (err) {
     console.error("Error in updateEmployee:", err);
     res.status(500).json({ message: "Server error" });
@@ -138,7 +138,7 @@ export const updateEmployee = async (req, res) => {
 };
 
 // -------------------------------------------------------------
-// DELETE EMPLOYEE + RELATED SALARIES
+// DELETE EMPLOYEE + SALARIES
 // -------------------------------------------------------------
 export const deleteEmployee = async (req, res) => {
   try {
@@ -147,15 +147,14 @@ export const deleteEmployee = async (req, res) => {
       createdBy: req.user._id,
     });
 
-    if (!emp)
-      return res.status(404).json({ message: "Employee not found or unauthorized" });
+    if (!emp) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
 
-    // Delete salary linked with employee
     await Salary.deleteMany({ employeeId: emp._id });
 
-    res.json({
-      message: "Employee and related salary records deleted successfully",
-    });
+    res.json({ message: "Employee deleted" });
+
   } catch (err) {
     console.error("Error in deleteEmployee:", err);
     res.status(500).json({ message: "Server error" });
@@ -168,11 +167,11 @@ export const deleteEmployee = async (req, res) => {
 export const searchEmployees = async (req, res) => {
   try {
     const { search } = req.query;
+
     const query = {};
 
     if (search) {
       const regex = { $regex: search, $options: "i" };
-
       query.$or = [
         { name: regex },
         { email: regex },
@@ -180,23 +179,22 @@ export const searchEmployees = async (req, res) => {
         { department: regex },
         { jobRole: regex },
         { status: regex },
-        { employeeCode: regex }, // employeeCode search
+        { employeeCode: regex },
       ];
 
-      // user Mongo ObjectId
+      // ObjectId check
       if (mongoose.isValidObjectId(search)) {
         query.$or.push({ _id: new mongoose.Types.ObjectId(search) });
       }
     }
 
-    // Optional:  normal user filter 
-    if (req.user.role !== "admin") {
-      query.createdBy = req.user._id;
-    }
+    query.createdBy = req.user._id;
 
-    const employees = await Employee.find(query).sort({ createdAt: -1 });
+    const employees = await Employee.find(query)
+      .sort({ createdAt: -1 });
 
     res.json(employees);
+
   } catch (err) {
     console.error("Error in searchEmployees:", err);
     res.status(500).json({ message: "Server error" });
