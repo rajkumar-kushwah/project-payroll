@@ -2,36 +2,34 @@ import mongoose from "mongoose";
 
 const employeeSchema = new mongoose.Schema(
   {
-    // Auto-generated EMP-001, EMP-002...
     employeeCode: {
       type: String,
       unique: true,
     },
 
-    name: {
-      type: String,
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
       required: true,
     },
-    email: {
-      type: String,
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
-      unique: true,
     },
+
+    name: { type: String, required: true },
+    email: { type: String, required: true },
     phone: { type: String },
 
     jobRole: { type: String },
     department: { type: String },
+    designation: { type: String },
 
-    joinDate: {
-      type: Date,
-      default: Date.now,
-    },
+    joinDate: { type: Date, default: Date.now },
 
-    salary: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
+    salary: { type: Number, default: 0 },
 
     status: {
       type: String,
@@ -40,29 +38,22 @@ const employeeSchema = new mongoose.Schema(
     },
 
     notes: { type: String },
-
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
   },
   { timestamps: true }
 );
 
-// Auto-generate EMP-001
+// AUTO EMP-001
 employeeSchema.pre("save", async function (next) {
   if (!this.employeeCode) {
     const lastEmp = await mongoose
       .model("Employee")
-      .findOne()
+      .findOne({ companyId: this.companyId })
       .sort({ createdAt: -1 });
 
     let nextNumber = 1;
 
     if (lastEmp && lastEmp.employeeCode) {
-      nextNumber =
-        parseInt(lastEmp.employeeCode.split("-")[1]) + 1;
+      nextNumber = parseInt(lastEmp.employeeCode.split("-")[1]) + 1;
     }
 
     this.employeeCode = `EMP-${String(nextNumber).padStart(3, "0")}`;

@@ -13,6 +13,12 @@ const SalarySchema = new mongoose.Schema(
       required: true,
     },
 
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
+
     month: {
       type: String, // "2025-11"
       required: true,
@@ -23,7 +29,9 @@ const SalarySchema = new mongoose.Schema(
     allowances: { type: Number, default: 0 },
     deductions: { type: Number, default: 0 },
     leaves: { type: Number, default: 0 },
+
     totalWorkingDays: { type: Number, required: true },
+
     netSalary: { type: Number, required: true },
 
     status: {
@@ -45,19 +53,18 @@ const SalarySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Auto-generate SAL-001, SAL-002...
+// Auto-generate SAL-001
 SalarySchema.pre("save", async function (next) {
   if (!this.salaryId) {
     const lastSalary = await mongoose
       .model("Salary")
-      .findOne()
+      .findOne({ companyId: this.companyId })   // ✔ company-based auto ID
       .sort({ createdAt: -1 });
 
     let nextNumber = 1;
 
     if (lastSalary && lastSalary.salaryId) {
-      nextNumber =
-        parseInt(lastSalary.salaryId.split("-")[1]) + 1;
+      nextNumber = parseInt(lastSalary.salaryId.split("-")[1]) + 1;
     }
 
     this.salaryId = `SAL-${String(nextNumber).padStart(3, "0")}`;

@@ -4,12 +4,13 @@ import Salary from "../models/Salary.js";
 import { v4 as uuidv4 } from "uuid";
 
 // -------------------------------------------------------------
-// GET ALL EMPLOYEES
+// GET ALL EMPLOYEES (ADMIN + OWNER both see company data)
 // -------------------------------------------------------------
 export const getEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find({ createdBy: req.user._id })
-      .sort({ createdAt: -1 });
+    const employees = await Employee.find({
+      companyId: req.user.companyId,
+    }).sort({ createdAt: -1 });
 
     res.json(employees);
   } catch (err) {
@@ -25,7 +26,7 @@ export const getEmployeeById = async (req, res) => {
   try {
     const emp = await Employee.findOne({
       _id: req.params.id,
-      createdBy: req.user._id,
+      companyId: req.user.companyId,
     });
 
     if (!emp) {
@@ -40,7 +41,7 @@ export const getEmployeeById = async (req, res) => {
 };
 
 // -------------------------------------------------------------
-// ADD EMPLOYEE (AUTO EMP-ID)
+// ADD EMPLOYEE
 // -------------------------------------------------------------
 export const addEmployee = async (req, res) => {
   try {
@@ -57,40 +58,42 @@ export const addEmployee = async (req, res) => {
       notes,
     } = req.body;
 
-    // Check existing employee
+    // Check existing
     const exists = await Employee.findOne({
-      $or: [{ email: email?.toLowerCase() }, { phone }],
-      createdBy: req.user._id,
+      $or: [
+        { email: email?.toLowerCase() },
+        { phone: phone },
+      ],
+      companyId: req.user.companyId,
     });
 
     if (exists) {
       return res.status(400).json({ message: "Employee already exists" });
     }
 
-    // Auto employee code
-    const count = await Employee.countDocuments({ createdBy: req.user._id });
-    const employeeCode = `EMP-${String(count + 1).padStart(3, "0")}`;
-
     // Create employee
     const emp = await Employee.create({
-      employeeId: employeeCode,
       name,
       email,
       phone,
       jobRole,
-      department,
       designation,
+      department,
       salary,
       joinDate,
       status,
       notes,
+
+      companyId: req.user.companyId,
       createdBy: req.user._id,
     });
 
-    // Create salary record
+    // Create Salary Record
     const salaryRecord = await Salary.create({
       salaryId: uuidv4(),
       employeeId: emp._id,
+      companyId: req.user.companyId,
+
       month: new Date().toISOString().slice(0, 7),
       basic: emp.salary || 0,
       hra: 0,
@@ -99,7 +102,6 @@ export const addEmployee = async (req, res) => {
       leaves: 0,
       totalWorkingDays: 30,
       netSalary: emp.salary || 0,
-      createdBy: req.user._id,
       status: "unpaid",
     });
 
@@ -107,10 +109,9 @@ export const addEmployee = async (req, res) => {
       message: "Employee created successfully",
       data: { emp, salaryRecord },
     });
-
   } catch (err) {
     console.error("Error in addEmployee:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -120,7 +121,10 @@ export const addEmployee = async (req, res) => {
 export const updateEmployee = async (req, res) => {
   try {
     const emp = await Employee.findOneAndUpdate(
-      { _id: req.params.id, createdBy: req.user._id },
+      {
+        _id: req.params.id,
+        companyId: req.user.companyId,
+      },
       req.body,
       { new: true }
     );
@@ -130,7 +134,6 @@ export const updateEmployee = async (req, res) => {
     }
 
     res.json({ message: "Employee updated", data: emp });
-
   } catch (err) {
     console.error("Error in updateEmployee:", err);
     res.status(500).json({ message: "Server error" });
@@ -138,23 +141,25 @@ export const updateEmployee = async (req, res) => {
 };
 
 // -------------------------------------------------------------
-// DELETE EMPLOYEE + SALARIES
+// DELETE EMPLOYEE + SALARY RECORDS
 // -------------------------------------------------------------
 export const deleteEmployee = async (req, res) => {
   try {
     const emp = await Employee.findOneAndDelete({
       _id: req.params.id,
-      createdBy: req.user._id,
+      companyId: req.user.companyId,
     });
 
     if (!emp) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    await Salary.deleteMany({ employeeId: emp._id });
+    await Salary.deleteMany({
+      employeeId: emp._id,
+      companyId: req.user.companyId,
+    });
 
     res.json({ message: "Employee deleted" });
-
   } catch (err) {
     console.error("Error in deleteEmployee:", err);
     res.status(500).json({ message: "Server error" });
@@ -162,39 +167,36 @@ export const deleteEmployee = async (req, res) => {
 };
 
 // -------------------------------------------------------------
-// SEARCH EMPLOYEES
+// SEARCH
 // -------------------------------------------------------------
 export const searchEmployees = async (req, res) => {
   try {
     const { search } = req.query;
 
-    const query = {};
+    const query = { companyId: req.user.companyId };
 
     if (search) {
       const regex = { $regex: search, $options: "i" };
+
       query.$or = [
         { name: regex },
         { email: regex },
         { phone: regex },
         { department: regex },
         { jobRole: regex },
-        { status: regex },
         { employeeCode: regex },
+        { status: regex },
       ];
 
-      // ObjectId check
+      // If ID entered
       if (mongoose.isValidObjectId(search)) {
         query.$or.push({ _id: new mongoose.Types.ObjectId(search) });
       }
     }
 
-    query.createdBy = req.user._id;
-
-    const employees = await Employee.find(query)
-      .sort({ createdAt: -1 });
+    const employees = await Employee.find(query).sort({ createdAt: -1 });
 
     res.json(employees);
-
   } catch (err) {
     console.error("Error in searchEmployees:", err);
     res.status(500).json({ message: "Server error" });
