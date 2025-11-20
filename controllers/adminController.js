@@ -89,15 +89,26 @@ export const removeAdmin = async (req, res) => {
 // Fetch all users for dashboard including existing admins
 export const getAdminDashboardData = async (req, res) => {
   try {
-    const owner = req.user;
-    const users = await User.find({ companyId: owner.companyId, isDeleted: false });
+    const user = req.user;
 
-    res.json({ users }); // frontend will filter by role
+    // Only owner and admin can access this route
+    if (!["owner", "admin"].includes(user.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const users = await User.find({
+      companyId: user.companyId,
+      isDeleted: false,
+      status: "active",
+    }).select("-password"); // hide password
+
+    res.json({ users });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 export const deleteUser = async (req, res) => {
   try {
