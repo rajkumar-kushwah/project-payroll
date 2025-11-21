@@ -6,22 +6,20 @@ import {
   updateEmployee,
   deleteEmployee,
   getEmployeeById,
-  filterEmployees,
 } from "../controllers/employeeController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 router.use(protect);
 
-// Specific routes first
+// FIXED ROUTES FIRST
 router.get("/search", searchEmployees);
-router.get("/employees/filter", filterEmployees);
 
-// Then dynamic param routes
+// BASE ROUTES
 router.get("/", getEmployees);
-router.get("/:id", getEmployeeById);
 
-// CRUD
+// DYNAMIC ROUTES AT LAST
+router.get("/:id", getEmployeeById);
 router.post("/", addEmployee);
 router.put("/:id", updateEmployee);
 router.delete("/:id", deleteEmployee);
