@@ -9,9 +9,9 @@ import { v4 as uuidv4 } from "uuid";
 export const getEmployees = async (req, res) => {
   try {
     const employees = await Employee.find({ companyId: req.user.companyId }).sort({ createdAt: -1 });
-    res.json({ success: true, count: employees.length, data: employees });
+    res.json(employees);
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
@@ -21,10 +21,10 @@ export const getEmployees = async (req, res) => {
 export const getEmployeeById = async (req, res) => {
   try {
     const emp = await Employee.findOne({ _id: req.params.id, companyId: req.user.companyId });
-    if (!emp) return res.status(404).json({ success: false, message: "Employee not found" });
-    res.json({ success: true, data: emp });
+    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    res.json(emp);
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
@@ -37,51 +37,39 @@ export const addEmployee = async (req, res) => {
       name, email, phone, jobRole, joinDate, department, designation, salary, status, notes
     } = req.body;
 
-    // Check if employee exists by email or phone
     const exists = await Employee.findOne({
       $or: [{ email: email?.toLowerCase() }, { phone }],
       companyId: req.user.companyId
     });
-    if (exists) return res.status(400).json({ success: false, message: "Employee already exists" });
 
-    const basicSalary = Number(salary) || 0;
+    if (exists) return res.status(400).json({ message: "Employee already exists" });
 
-    // Create employee
     const emp = await Employee.create({
-      name,
-      email: email?.toLowerCase(),
-      phone,
-      jobRole,
-      designation,
-      department,
-      salary: basicSalary,
-      joinDate: joinDate || new Date().toISOString(),
-      status: status || "active",
-      notes: notes || "",
+      name, email, phone, jobRole, designation, department, salary, joinDate, status, notes,
       companyId: req.user.companyId,
       createdBy: req.user._id
     });
 
     // Create initial salary record
+    const netSalary = salary || 0;
     const salaryRecord = await Salary.create({
       salaryId: uuidv4(),
       employeeId: emp._id,
       companyId: req.user.companyId,
-      month: new Date().toISOString().slice(0, 7), // YYYY-MM
-      basic: basicSalary,
+      month: new Date().toISOString().slice(0, 7),
+      basic: salary || 0,
       hra: 0,
       allowances: 0,
       deductions: 0,
       leaves: 0,
       totalWorkingDays: 30,
-      netSalary: basicSalary,
+      netSalary,
       status: "unpaid",
-      createdBy: req.user._id
     });
 
-    res.status(201).json({ success: true, message: "Employee created", data: { emp, salaryRecord } });
+    res.status(201).json({ message: "Employee created", data: { emp, salaryRecord } });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
@@ -92,13 +80,12 @@ export const updateEmployee = async (req, res) => {
   try {
     const emp = await Employee.findOneAndUpdate(
       { _id: req.params.id, companyId: req.user.companyId },
-      req.body,
-      { new: true }
+      req.body, { new: true }
     );
-    if (!emp) return res.status(404).json({ success: false, message: "Employee not found" });
-    res.json({ success: true, message: "Employee updated", data: emp });
+    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    res.json({ message: "Employee updated", data: emp });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
@@ -108,14 +95,11 @@ export const updateEmployee = async (req, res) => {
 export const deleteEmployee = async (req, res) => {
   try {
     const emp = await Employee.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
-    if (!emp) return res.status(404).json({ success: false, message: "Employee not found" });
-
-    // Delete all salary records for this employee
+    if (!emp) return res.status(404).json({ message: "Employee not found" });
     await Salary.deleteMany({ employeeId: emp._id, companyId: req.user.companyId });
-
-    res.json({ success: true, message: "Employee and salary records deleted" });
+    res.json({ message: "Employee deleted" });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
@@ -126,7 +110,6 @@ export const searchEmployees = async (req, res) => {
   try {
     const { search } = req.query;
     const query = { companyId: req.user.companyId };
-
     if (search) {
       const regex = { $regex: search, $options: "i" };
       query.$or = [
@@ -136,11 +119,10 @@ export const searchEmployees = async (req, res) => {
       ];
       if (mongoose.isValidObjectId(search)) query.$or.push({ _id: new mongoose.Types.ObjectId(search) });
     }
-
     const employees = await Employee.find(query).sort({ createdAt: -1 });
-    res.json({ success: true, count: employees.length, data: employees });
+    res.json(employees);
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
@@ -159,13 +141,12 @@ export const filterEmployees = async (req, res) => {
 
     let employees = await Employee.find(query);
 
-    // Sorting
-    if (sort === "a-z") employees = employees.sort((a, b) => a.name.localeCompare(b.name));
-    else if (sort === "salary-high") employees = employees.sort((a, b) => b.salary - a.salary);
-    else if (sort === "latest") employees = employees.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    if (sort === "a-z") employees = employees.sort((a,b) => a.name.localeCompare(b.name));
+    else if (sort === "salary-high") employees = employees.sort((a,b) => b.salary - a.salary);
+    else if (sort === "latest") employees = employees.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    res.json({ success: true, count: employees.length, data: employees });
+    res.json({ success: true, count: employees.length, employees });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
