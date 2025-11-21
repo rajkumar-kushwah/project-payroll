@@ -13,11 +13,11 @@ import { protect } from "../middleware/authMiddleware.js";
 const router = express.Router();
 router.use(protect);
 
-// Static routes first
+// Specific routes first
 router.get("/search", searchEmployees);
 router.get("/employees/filter", filterEmployees);
 
-// Dynamic routes
+// Then dynamic param routes
 router.get("/", getEmployees);
 router.get("/:id", getEmployeeById);
 
