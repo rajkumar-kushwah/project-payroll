@@ -16,25 +16,24 @@ export const addAttendance = async (req, res) => {
       _id: employeeId,
       companyId: req.user.companyId,
     });
+    if (!emp) return res.status(404).json({ message: "Employee not found or unauthorized" });
 
-    if (!emp)
-      return res.status(404).json({ message: "Employee not found or unauthorized" });
+    const today = new Date().toISOString().split("T")[0];
+    const recordDate = date || today;
 
     const exists = await Attendance.findOne({
       employeeId,
-      date,
+      date: recordDate,
       companyId: req.user.companyId,
     });
-
-    if (exists)
-      return res.status(400).json({ message: "Attendance already exists for this date" });
+    if (exists) return res.status(400).json({ message: "Attendance already exists for this date" });
 
     const record = await Attendance.create({
       employeeId,
-      date,
+      date: recordDate,
       status,
-      checkIn,
-      checkOut,
+      checkIn: checkIn ? new Date(`${recordDate}T${checkIn}`) : undefined,
+      checkOut: checkOut ? new Date(`${recordDate}T${checkOut}`) : undefined,
       remarks,
       companyId: req.user.companyId,
       createdBy: req.user._id,
@@ -51,6 +50,7 @@ export const addAttendance = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /* ============================================================
    2) Update Attendance
