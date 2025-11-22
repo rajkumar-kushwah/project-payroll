@@ -97,7 +97,7 @@ export const getAdminDashboardData = async (req, res) => {
 
     const users = await User.find({
       companyId: req.user.companyId,
-      status: "active",
+      // status: "active",
       isDeleted: false,
     }).select("-password");
 
@@ -121,6 +121,29 @@ export const deleteUser = async (req, res) => {
     await User.findByIdAndDelete(userId);
 
     res.json({ success: true, message: "User deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const reactivateUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Only owner can reactivate
+    const company = await Company.findById(req.user.companyId);
+    if (company.ownerId.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Only owner can reactivate users" });
+
+    // Reactivate user
+    user.status = "active";
+    await user.save();
+
+    res.status(200).json({ message: "User reactivated successfully", user });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
