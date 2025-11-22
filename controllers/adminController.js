@@ -178,14 +178,14 @@ export const addUser = async (req, res) => {
       status: "active",
     });
 
-    res.status(201).json({ message: "User added", user: newUser });
+    res.status(201).json({ message: "User added successfully", user: newUser });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// 🔥 Single Toggle (Promote/Demote + Activate/Deactivate)
+//  Single Toggle (Promote/Demote + Activate/Deactivate)
 export const toggleUserRoleStatus = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -200,27 +200,47 @@ export const toggleUserRoleStatus = async (req, res) => {
     if (user.role === "owner")
       return res.status(400).json({ message: "Owner cannot be modified" });
 
-    // 🔄 Toggle Role + Status
+    // Find company
+    const company = await Company.findById(loginUser.companyId);
+    if (!company)
+      return res.status(404).json({ message: "Company not found" });
+
+    // --- TOGGLE LOGIC ---
     if (user.role === "admin") {
       user.role = "user";
       user.status = "inactive";
+
+      // Remove from company admins[]
+      company.admins = company.admins.filter(
+        (id) => id.toString() !== user._id.toString()
+      );
+
     } else {
       user.role = "admin";
       user.status = "active";
+
+      // Add to company admins[]
+      if (!company.admins.includes(user._id)) {
+        company.admins.push(user._id);
+      }
     }
 
     await user.save();
+    await company.save();
 
     res.json({
       success: true,
-      message: "Role & Status toggled",
+      message: "User role updated + Company updated",
       user,
+      company,
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // Fetch all users
 export const getAdminDashboardData = async (req, res) => {

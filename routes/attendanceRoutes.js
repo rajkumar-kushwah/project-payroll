@@ -1,6 +1,4 @@
 import express from "express";
-import { protect } from "../middleware/authMiddleware.js";
-
 import {
   addAttendance,
   updateAttendance,
@@ -11,20 +9,35 @@ import {
   checkOut,
 } from "../controllers/attendanceController.js";
 
+import {
+  protect,
+  adminProtect,
+  ownerProtect,
+} from "../middleware/authMiddleware.js";
+
 const router = express.Router();
+
+/* ===========================
+   LOGIN REQUIRED FOR ALL
+=========================== */
 router.use(protect);
 
-// STATIC ROUTES FIRST
-router.get("/filter", filterAttendance);
-router.get("/", getAttendance);
+/* ===========================
+   EMPLOYEE SIDE (AUTO)
+=========================== */
 
-// AUTO (Employee Side)
-router.post("/check-in", checkIn);
-router.post("/check-out", checkOut);
+router.post("/check-in", adminProtect, checkIn);   // Admin/Owner mark attendance
+router.post("/check-out", adminProtect, checkOut); // Admin/Owner mark attendance
+router.get("/", adminProtect, getAttendance);
+router.get("/filter", adminProtect, filterAttendance);
+router.post("/add", adminProtect, addAttendance);
+router.put("/:id", adminProtect, updateAttendance);
+router.delete("/:id", adminProtect, deleteAttendance);
 
-// MANUAL (Admin/Owner)
-router.post("/add", addAttendance);
-router.put("/:id", updateAttendance);
-router.delete("/:id", deleteAttendance);
+/* ===========================
+   OWNER ONLY
+   (Optional Advance Feature)
+=========================== */
+// router.delete("/delete-all", ownerProtect, deleteAllAttendance);
 
 export default router;
