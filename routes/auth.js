@@ -217,6 +217,9 @@ router.post('/login', async (req, res) => {
     if (!user) return res.status(404).json({ message: 'Account not registered.' });
     if (!user.emailVerified) return res.status(400).json({ message: 'Email not verified.' });
 
+    if (user.status !== 'active') {
+      return res.status(403).json({message: 'Account is inactive by admin. Please contact the owner to reactivate.'});
+    }
     // Check password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Incorrect password.' });

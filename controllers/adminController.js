@@ -78,6 +78,7 @@ export const removeAdmin = async (req, res) => {
     const admin = await User.findById(adminId);
     if (admin) {
       admin.role = "user";
+      admin.status = "inactive";
       await admin.save();
     }
 
