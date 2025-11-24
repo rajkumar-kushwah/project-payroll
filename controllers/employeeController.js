@@ -213,7 +213,7 @@ export const createEmployeeProfile = async (req, res) => {
       notes,
     } = req.body;
 
-    // Check if employee exists
+    // Check if employee already exists
     const exists = await Employee.findOne({
       $or: [{ email: email?.toLowerCase() }, { phone }],
       companyId: req.user.companyId,
@@ -222,10 +222,10 @@ export const createEmployeeProfile = async (req, res) => {
     if (exists)
       return res.status(400).json({ message: "Employee already exists" });
 
-    // Avatar (file)
+    // Avatar upload
     let avatar = "";
     if (req.file && req.file.path) {
-      avatar = req.file.path;
+      avatar = req.file.path; // Cloudinary URL
     }
 
     const emp = await Employee.create({
@@ -238,7 +238,7 @@ export const createEmployeeProfile = async (req, res) => {
       joinDate,
       status,
       notes,
-      avatar,            // <<<<<< IMPORTANT LINE
+      avatar, // save avatar URL
       companyId: req.user.companyId,
       createdBy: req.user._id,
     });
@@ -255,11 +255,11 @@ export const createEmployeeProfile = async (req, res) => {
 
 export const updateEmployeeProfile = async (req, res) => {
   try {
-    let updateData = { ...req.body };
+    const updateData = { ...req.body };
 
-    // If avatar uploaded
+    // If new avatar uploaded
     if (req.file && req.file.path) {
-      updateData.avatar = req.file.path;
+      updateData.avatar = req.file.path; // Cloudinary URL
     }
 
     const emp = await Employee.findOneAndUpdate(

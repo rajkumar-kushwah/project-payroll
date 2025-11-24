@@ -25,7 +25,7 @@ router.put("/profile/:id", upload.single("avatar"), updateEmployeeProfile);
 
 // NORMAL EMPLOYEE ROUTES
 router.get("/", getEmployees);
-router.post("/", addEmployee);
+router.post("/", upload.single("avatar"), addEmployee);
 
 // DYNAMIC ROUTES LAST
 router.get("/:id", getEmployeeById);

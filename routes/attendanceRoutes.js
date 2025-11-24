@@ -7,6 +7,8 @@ import {
   filterAttendance,
   checkIn,
   checkOut,
+//   updateAttandanceProfile,
+//   createAttendanceProfile,
 } from "../controllers/attendanceController.js";
 
 import {
@@ -15,6 +17,8 @@ import {
   ownerProtect,
 } from "../middleware/authMiddleware.js";
 
+import upload from "../middleware/upload.js";
+
 const router = express.Router();
 
 /* ===========================
@@ -22,10 +26,14 @@ const router = express.Router();
 =========================== */
 router.use(protect);
 
-/* ===========================
-   EMPLOYEE SIDE (AUTO)
-=========================== */
 
+// // Routes with avatar upload
+// router.post("/profile", upload.single("avatar"), createAttendanceProfile);
+// router.put("/profile/:id", upload.single("avatar"), updateAttandanceProfile);
+
+/* ===========================
+   ADMIN/OWNER SIDE
+=========================== */
 router.post("/check-in", adminProtect, checkIn);   // Admin/Owner mark attendance
 router.post("/check-out", adminProtect, checkOut); // Admin/Owner mark attendance
 router.get("/", adminProtect, getAttendance);
