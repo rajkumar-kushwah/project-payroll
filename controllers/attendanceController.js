@@ -5,64 +5,82 @@ import Company from "../models/Company.js";
 import mongoose from "mongoose";
 import { hhmmToDate, minutesBetween, minutesToHoursDecimal } from "../utils/time.js";
 
+
 /**
- * Configurable defaults (can be moved to Company settings)
+ * Configurable defaults
  */
 const DEFAULT_FIXED_IN = "10:00";
 const DEFAULT_FIXED_OUT = "18:30";
-const FULL_DAY_MINUTES = 8 * 60; // 8 hours (change if you want 8.5)
+
+const FULL_DAY_MINUTES = 8 * 60; // 8 hours
 const HALF_DAY_MINUTES = 4 * 60; // 4 hours
 
-// helper: yyyy-mm-dd
+// helper
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
 /* ============================================================
    computeDerivedFields(record, emp, companyDefaults)
    - fills: totalMinutes, totalHours, lateMinutes, earlyLeaveMinutes, overtimeMinutes, status
    ============================================================ */
+
+/* ============================================================================
+   MAIN LOGIC FUNCTION
+   totalHours, late, early, overtime, status
+============================================================================ */
 const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => {
   const dateStr = new Date(record.date).toISOString().split("T")[0];
 
   const fixedIn = emp.fixedIn || companyDefaults.fixedIn || DEFAULT_FIXED_IN;
   const fixedOut = emp.fixedOut || companyDefaults.fixedOut || DEFAULT_FIXED_OUT;
 
+  // NO CHECKOUT? No status change
   if (!record.checkIn || !record.checkOut) {
     record.totalMinutes = 0;
     record.totalHours = 0;
     record.lateMinutes = 0;
     record.earlyLeaveMinutes = 0;
-    record.overtimeMinutes = 0;
-    // status remains as-is or set to absent if no checkIn/checkOut
-    if (!record.checkIn && !record.checkOut) record.status = "absent";
+    record.overtimeMinutes = 0;  
     return;
   }
 
   const checkInDt = new Date(record.checkIn);
   const checkOutDt = new Date(record.checkOut);
 
-  // total minutes worked
   const totalMins = minutesBetween(checkInDt, checkOutDt);
   record.totalMinutes = totalMins;
   record.totalHours = minutesToHoursDecimal(totalMins);
 
-  // fixed times as Date objects (for that date)
   const fixedInDt = hhmmToDate(dateStr, fixedIn);
   const fixedOutDt = hhmmToDate(dateStr, fixedOut);
 
-  // late minutes (if checked in after fixedIn)
   record.lateMinutes = checkInDt > fixedInDt ? minutesBetween(fixedInDt, checkInDt) : 0;
-
-  // early leave minutes (if checked out before fixedOut)
   record.earlyLeaveMinutes = checkOutDt < fixedOutDt ? minutesBetween(checkOutDt, fixedOutDt) : 0;
-
-  // overtime minutes (if checked out after fixedOut)
   record.overtimeMinutes = checkOutDt > fixedOutDt ? minutesBetween(fixedOutDt, checkOutDt) : 0;
 
-  // status based on total minutes thresholds
-  if (totalMins < HALF_DAY_MINUTES) record.status = "absent";
-  else if (totalMins >= HALF_DAY_MINUTES && totalMins < FULL_DAY_MINUTES) record.status = "half-day";
-  else record.status = "present";
+  /** -------------------------------------
+   *   FINAL STATUS LOGIC (Correct)
+   * ----------------------------------- */
+
+  // If employee checked-in → NEVER mark absent
+  if (record.checkIn) {
+    // 8+ hrs
+    if (totalMins >= FULL_DAY_MINUTES) {
+      record.status = "present";
+    }
+    // 4–7.99 hrs
+    else if (totalMins >= HALF_DAY_MINUTES) {
+      record.status = "half-day";
+    }
+    // less than 4 hrs → still PRESENT (as per your rule)
+    else {
+      record.status = "present";
+    }
+  } else {
+    // no check-in → absent
+    record.status = "absent";
+  }
 };
+
 
 /* ============================================================
    1) Add Attendance (Manual by Admin/Owner) - company-secure
@@ -191,9 +209,9 @@ export const deleteAttendance = async (req, res) => {
   }
 };
 
-/* ============================================================
-   4) Check-In (Employee / Admin impersonation) - company-secure
-=============================================================== */
+/* ============================================================================
+   CHECK-IN
+============================================================================ */
 export const checkIn = async (req, res) => {
   try {
     const targetId =
@@ -201,9 +219,13 @@ export const checkIn = async (req, res) => {
         ? req.body.employeeId
         : req.user._id;
 
-    if (!mongoose.isValidObjectId(targetId)) return res.status(400).json({ message: "Invalid employee ID" });
+    if (!mongoose.isValidObjectId(targetId))
+      return res.status(400).json({ message: "Invalid employee ID" });
 
-    const emp = await Employee.findOne({ _id: targetId, companyId: req.user.companyId });
+    const emp = await Employee.findOne({
+      _id: targetId,
+      companyId: req.user.companyId,
+    });
     if (!emp) return res.status(404).json({ message: "Employee unauthorized" });
 
     const today = toDateString(new Date());
@@ -213,18 +235,22 @@ export const checkIn = async (req, res) => {
       date: today,
       companyId: req.user.companyId,
     });
-    if (exists) return res.status(400).json({ message: "Already checked in today" });
+    if (exists)
+      return res.status(400).json({ message: "Already checked in today" });
 
     const record = await Attendance.create({
       employeeId: targetId,
       companyId: req.user.companyId,
       checkIn: new Date(),
       date: today,
-      status: "present",
+      status: "present", // default on check-in
       createdBy: req.user._id,
     });
 
-    const populated = await record.populate("employeeId", "name employeeCode department jobRole");
+    const populated = await record.populate(
+      "employeeId",
+      "name employeeCode department jobRole"
+    );
     res.status(201).json({ success: true, message: "Checked in", data: populated });
   } catch (err) {
     console.error("checkIn Error:", err);
@@ -232,10 +258,9 @@ export const checkIn = async (req, res) => {
   }
 };
 
-/* ============================================================
-   5) Check-Out (Employee / Admin) - company-secure
-   Computes derived fields using employee/company settings
-=============================================================== */
+/* ============================================================================
+   CHECK-OUT
+============================================================================ */
 export const checkOut = async (req, res) => {
   try {
     const targetId =
@@ -243,31 +268,41 @@ export const checkOut = async (req, res) => {
         ? req.body.employeeId
         : req.user._id;
 
-    if (!mongoose.isValidObjectId(targetId)) return res.status(400).json({ message: "Invalid employee ID" });
+    if (!mongoose.isValidObjectId(targetId))
+      return res.status(400).json({ message: "Invalid employee ID" });
 
     const today = toDateString(new Date());
-
     const record = await Attendance.findOne({
       employeeId: targetId,
       date: today,
       companyId: req.user.companyId,
     });
-    if (!record) return res.status(404).json({ message: "Check-in missing" });
 
-    if (record.checkOut) return res.status(400).json({ message: "Already checked out" });
+    if (!record) return res.status(404).json({ message: "Check-in missing" });
+    if (record.checkOut)
+      return res.status(400).json({ message: "Already checked out" });
 
     record.checkOut = new Date();
 
-    // fetch employee + company defaults (company-scoped)
-    const emp = await Employee.findOne({ _id: targetId, companyId: req.user.companyId });
-    if (!emp) return res.status(404).json({ message: "Employee unauthorized" });
+    const emp = await Employee.findOne({
+      _id: targetId,
+      companyId: req.user.companyId,
+    });
+    const company = await Company.findById(req.user.companyId).select(
+      "fixedIn fixedOut"
+    );
 
-    const company = await Company.findById(req.user.companyId).select("fixedIn fixedOut");
-
-    computeDerivedFields(record, emp, company ? { fixedIn: company.fixedIn, fixedOut: company.fixedOut } : {});
+    computeDerivedFields(record, emp, {
+      fixedIn: company?.fixedIn,
+      fixedOut: company?.fixedOut,
+    });
 
     await record.save();
-    const populated = await record.populate("employeeId", "name employeeCode department jobRole");
+
+    const populated = await record.populate(
+      "employeeId",
+      "name employeeCode department jobRole"
+    );
     res.json({ success: true, message: "Checked out", data: populated });
   } catch (err) {
     console.error("checkOut Error:", err);

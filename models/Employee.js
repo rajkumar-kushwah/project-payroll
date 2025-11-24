@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 
 const employeeSchema = new mongoose.Schema(
   {
+    
+    avatar: { type: String, default: "" },
     employeeCode: { type: String, unique: true },
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
