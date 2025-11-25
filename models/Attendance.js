@@ -10,6 +10,7 @@ const attendanceSchema = new mongoose.Schema({
   checkOut: { type: Date },
   totalHours: { type: Number },
   overtimeHours: { type: Number },
+  remarks: { type: String },
   missingHours: { type: Number }, // full day se kam ki hui hours
   logType: { type: String, enum: ["manual","self"], default: "manual" }, // manual = admin/owner marks, self = employee login
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // admin/owner id
