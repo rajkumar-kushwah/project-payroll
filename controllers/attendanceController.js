@@ -3,7 +3,7 @@ import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
 import mongoose from "mongoose";
-import {  hhmmToDate, minutesBetween, minutesToHoursDecimal, formatTimeHHMM } from "../utils/time.js";
+import {  hhmmToDate, minutesBetween, minutesToHoursDecimal,formatTime12H } from "../utils/time.js";
 
 const FULL_DAY_MINUTES = 8 * 60; // 8 hours
 const HALF_DAY_MINUTES = 4 * 60; // 4 hours
@@ -20,6 +20,7 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
   const fixedIn = emp.fixedIn || companyDefaults.fixedIn || "10:00";
   const fixedOut = emp.fixedOut || companyDefaults.fixedOut || "18:30";
 
+  // अगर check-in या check-out missing हो
   if (!record.checkIn || !record.checkOut) {
     record.totalMinutes = 0;
     record.totalHours = 0;
@@ -31,14 +32,15 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
     record.missingHours = FULL_DAY_MINUTES / 60;
     record.status = "absent";
 
-    record.checkInHHMM = record.checkIn ? formatTimeHHMM(record.checkIn) : "-";
-    record.checkOutHHMM = record.checkOut ? formatTimeHHMM(record.checkOut) : "-";
+    record.checkInHHMM = record.checkIn ? formatTime12H(record.checkIn) : "-";
+    record.checkOutHHMM = record.checkOut ? formatTime12H(record.checkOut) : "-";
     return;
   }
 
   const checkInDt = new Date(record.checkIn);
   const checkOutDt = new Date(record.checkOut);
 
+  // total working minutes
   const totalMins = minutesBetween(checkInDt, checkOutDt);
   record.totalMinutes = totalMins;
   record.totalHours = minutesToHoursDecimal(totalMins);
@@ -58,11 +60,10 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
   else if (totalMins >= HALF_DAY_MINUTES) record.status = "half-day";
   else record.status = "absent";
 
-  // HH:mm formatted fields for frontend
-  record.checkInHHMM = formatTimeHHMM(checkInDt);
-  record.checkOutHHMM = formatTimeHHMM(checkOutDt);
+  // 12-hour formatted fields for frontend
+  record.checkInHHMM = formatTime12H(checkInDt);
+  record.checkOutHHMM = formatTime12H(checkOutDt);
 };
-
 /* =========================================================
    ADD ATTENDANCE
 ========================================================= */

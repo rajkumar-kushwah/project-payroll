@@ -32,13 +32,20 @@ export const minutesToHoursDecimal = (mins) => {
 /**
  * Format Date object → "HH:mm" string
  */
-export const formatTimeHHMM = (date) => {
+/**
+ * Format Date object → "h:mm AM/PM" string
+ */
+export const formatTime12H = (date) => {
   if (!date) return "-";
   const d = new Date(date);
-  const hours = d.getHours().toString().padStart(2, "0");
+  let hours = d.getHours();
   const minutes = d.getMinutes().toString().padStart(2, "0");
-  return `${hours}:${minutes}`;
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  return `${hours}:${minutes} ${ampm}`;
 };
+
 
 /**
  * Format Date object → "YYYY-MM-DD" string
