@@ -7,8 +7,6 @@ import {
   filterAttendance,
   checkIn,
   checkOut,
-  registerAttendance,
-  getRegisteredEmployees,
 } from "../controllers/attendanceController.js";
 
 import {
@@ -26,27 +24,26 @@ const router = express.Router();
 =========================== */
 router.use(protect);
 
+
+// // Routes with avatar upload
+// router.post("/profile", upload.single("avatar"), createAttendanceProfile);
+// router.put("/profile/:id", upload.single("avatar"), updateAttandanceProfile);
+
 /* ===========================
-   ADMIN/OWNER SIDE ATTENDANCE
+   ADMIN/OWNER SIDE
 =========================== */
-// Admin/Owner can manually mark attendance
-router.post("/check-in", adminProtect, checkIn);
-router.post("/check-out", adminProtect, checkOut);
+router.post("/check-in", adminProtect, checkIn);   // Admin/Owner mark attendance
+router.post("/check-out", adminProtect, checkOut); // Admin/Owner mark attendance
 router.get("/", adminProtect, getAttendance);
 router.get("/filter", adminProtect, filterAttendance);
 router.post("/add", adminProtect, addAttendance);
 router.put("/:id", adminProtect, updateAttendance);
 router.delete("/:id", adminProtect, deleteAttendance);
+router
 
 /* ===========================
-   ATTENDANCE REGISTER (NEW)
-=========================== */
-// Admin/Owner register employee office timings
-router.post("/register", adminProtect, registerAttendance);         // Add employee to AttendanceRegister
-router.get("/register", adminProtect, getRegisteredEmployees);      // Get all registered employees
-
-/* ===========================
-   OWNER ONLY (Optional)
+   OWNER ONLY
+   (Optional Advance Feature)
 =========================== */
 // router.delete("/delete-all", ownerProtect, deleteAllAttendance);
 
