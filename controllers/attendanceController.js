@@ -2,6 +2,7 @@
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
+import AttendanceRegister from "../models/AttendanceRegister.js";
 import mongoose from "mongoose";
 import {  hhmmToDate, minutesBetween, minutesToHoursDecimal,formatTime12H } from "../utils/time.js";
 
@@ -312,6 +313,46 @@ export const filterAttendance = async (req, res) => {
     res.json({ success: true, count: total, records });
   } catch (err) {
     console.error("filterAttendance Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const registerAttendance = async (req, res) => {
+  try {
+    const { employeeId, fixedIn, fixedOut } = req.body;
+
+    const exists = await AttendanceRegister.findOne({
+      employeeId,
+      companyId: req.user.companyId
+    });
+
+    if (exists)
+      return res.status(400).json({ success: false, message: "Employee already registered" });
+
+    const reg = await AttendanceRegister.create({
+      employeeId,
+      companyId: req.user.companyId,
+      fixedIn,
+      fixedOut,
+      createdBy: req.user._id
+    });
+
+    const populated = await reg.populate("employeeId", "name employeeCode");
+
+    res.json({ success: true, message: "Registered", data: populated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getRegisteredEmployees = async (req, res) => {
+  try {
+    const list = await AttendanceRegister.find({
+      companyId: req.user.companyId
+    }).populate("employeeId", "name employeeCode department");
+
+    res.json({ success: true, data: list });
+  } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 };
