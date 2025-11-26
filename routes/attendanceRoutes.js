@@ -39,7 +39,7 @@ router.get("/filter", adminProtect, filterAttendance);
 router.post("/add", adminProtect, addAttendance);
 router.put("/:id", adminProtect, updateAttendance);
 router.delete("/:id", adminProtect, deleteAttendance);
-router
+
 
 /* ===========================
    OWNER ONLY
