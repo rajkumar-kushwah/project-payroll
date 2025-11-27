@@ -10,7 +10,7 @@ import AttendanceAdd from "../models/AttendanceAdd.js";
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
 /* ================================================================
-   1️⃣ ADD MASTER ATTENDANCE (ADMIN MANUAL FIX ENTRY)
+   1️ ADD MASTER ATTENDANCE (ADMIN MANUAL FIX ENTRY)
 ================================================================ */
 export const addAttendance = async (req, res) => {
   try {
@@ -53,12 +53,12 @@ export const addAttendance = async (req, res) => {
       remarks: remarks || "",
       registeredFromForm: true,
       createdBy: req.user._id,
-      // Daily attendance will calculate status, so keep undefined
+
+      // DAILY ATTENDANCE WILL CALCULATE STATUS
       status: undefined,
     });
 
     await record.save();
-
     const populated = await record.populate(
       "employeeId",
       "name employeeCode department jobRole avatar"
@@ -76,7 +76,7 @@ export const addAttendance = async (req, res) => {
 };
 
 /* ================================================================
-   2️⃣ UPDATE MASTER ATTENDANCE
+   2️ UPDATE MASTER ATTENDANCE
 ================================================================ */
 export const updateAttendance = async (req, res) => {
   try {
@@ -94,14 +94,16 @@ export const updateAttendance = async (req, res) => {
     if (date) rec.date = toDateString(date);
     if (remarks !== undefined) rec.remarks = remarks;
 
-    if (checkIn) rec.checkIn = new Date(`${rec.date}T${checkIn}`);
-    if (checkOut) rec.checkOut = new Date(`${rec.date}T${checkOut}`);
+    if (checkIn)
+      rec.checkIn = new Date(`${rec.date}T${checkIn}`);
 
-    // Reset status → daily attendance will calculate later
+    if (checkOut)
+      rec.checkOut = new Date(`${rec.date}T${checkOut}`);
+
+    // Daily system will re-calc status
     rec.status = undefined;
 
     await rec.save();
-
     const populated = await rec.populate(
       "employeeId",
       "name employeeCode department jobRole avatar"
@@ -119,7 +121,7 @@ export const updateAttendance = async (req, res) => {
 };
 
 /* ================================================================
-   3️⃣ DELETE MASTER ATTENDANCE
+   3️ DELETE MASTER ATTENDANCE
 ================================================================ */
 export const deleteAttendance = async (req, res) => {
   try {
@@ -143,13 +145,10 @@ export const deleteAttendance = async (req, res) => {
   }
 };
 
-/* ================================================================
-   4️⃣ FILTER MASTER ATTENDANCE
-================================================================ */
+
 export const filterAttendance = async (req, res) => {
   try {
     const { employeeName, employeeCode, department, role, status, startDate, endDate, page = 1, limit = 200 } = req.query;
-
     const query = { companyId: req.user.companyId };
     if (status) query.status = status;
     if (startDate && endDate) query.date = { $gte: startDate, $lte: endDate };
@@ -169,12 +168,12 @@ export const filterAttendance = async (req, res) => {
 
     const skip = (page - 1) * limit;
     const [records, total] = await Promise.all([
-      AttendanceAdd.find(query)
+      Attendance.find(query)
         .populate("employeeId", "name employeeCode department jobRole avatar")
         .sort({ date: -1 })
         .skip(skip)
         .limit(limit),
-      AttendanceAdd.countDocuments(query),
+      Attendance.countDocuments(query),
     ]);
 
     res.json({ success: true, count: total, records });

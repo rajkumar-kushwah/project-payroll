@@ -187,72 +187,36 @@ export const checkIn = async (req, res) => {
     if (!mongoose.isValidObjectId(targetId))
       return res.status(400).json({ message: "Invalid employee ID" });
 
-    // 1️⃣ Check if employee exists and active
-    const emp = await Employee.findOne({
-      _id: targetId,
-      companyId: req.user.companyId,
-      status: "active",
-    });
+    const emp = await Employee.findOne({ _id: targetId, companyId: req.user.companyId });
+    if (!emp) return res.status(404).json({ message: "Employee unauthorized" });
 
-    if (!emp)
-      return res.status(404).json({ message: "Employee not found or inactive" });
+    const today = toDateString(new Date());
 
-    // 2️⃣ Check if office timing exists
-    const company = await Company.findById(req.user.companyId).select(
-      "fixedIn fixedOut"
-    );
+    const exists = await Attendance.findOne({ employeeId: targetId, date: today, companyId: req.user.companyId });
+    if (exists) return res.status(400).json({ message: "Already checked in today" });
 
-    if (!company?.fixedIn || !company?.fixedOut) {
-      return res.status(400).json({
-        message: "Office timing not set. Please set Fixed In / Fixed Out first.",
-      });
-    }
-
-    // 3️⃣ Check if today's attendance already exists
-    const today = new Date().toISOString().split("T")[0];
-
-    const exists = await Attendance.findOne({
-      employeeId: targetId,
-      date: today,
-      companyId: req.user.companyId,
-    });
-
-    if (exists)
-      return res.status(400).json({ message: "Already checked in today" });
-
-    // 4️⃣ Create attendance
     const record = await Attendance.create({
       employeeId: targetId,
       companyId: req.user.companyId,
-      date: today,
       checkIn: new Date(),
+      date: today,
       status: "present",
       createdBy: req.user._id,
     });
 
-    const populated = await record.populate(
-      "employeeId",
-      "name employeeCode department jobRole avatar"
-    );
-
-    res.status(201).json({
-      success: true,
-      message: "Checked in",
-      data: populated,
-    });
+    const populated = await record.populate("employeeId", "name employeeCode department jobRole avatar");
+    res.status(201).json({ success: true, message: "Checked in", data: populated });
   } catch (err) {
     console.error("checkIn Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-
 /* =========================================================
    CHECK-OUT
 ========================================================= */
 export const checkOut = async (req, res) => {
   try {
-    // 1) TARGET EMPLOYEE ID
     const targetId =
       ["admin", "owner"].includes(req.user.role) && req.body.employeeId
         ? req.body.employeeId
@@ -261,79 +225,26 @@ export const checkOut = async (req, res) => {
     if (!mongoose.isValidObjectId(targetId))
       return res.status(400).json({ message: "Invalid employee ID" });
 
-    // 2) EMPLOYEE ACTIVE CHECK
-    const emp = await Employee.findOne({
-      _id: targetId,
-      companyId: req.user.companyId,
-      status: "active", // IMPORTANT
-    });
-
-    if (!emp)
-      return res.status(404).json({ message: "Employee inactive or unauthorized" });
-
-    // 3) COMPANY FIXED TIME REQUIRED
-    const company = await Company.findById(req.user.companyId).select(
-      "fixedIn fixedOut"
-    );
-
-    if (!company?.fixedIn || !company?.fixedOut) {
-      return res.status(400).json({
-        message: "Company office timing not set. Please set fixedIn & fixedOut.",
-      });
-    }
-
-    // 4) TODAY DATE STRING
     const today = toDateString(new Date());
+    const record = await Attendance.findOne({ employeeId: targetId, date: today, companyId: req.user.companyId });
+    if (!record) return res.status(404).json({ message: "Check-in missing" });
+    if (record.checkOut) return res.status(400).json({ message: "Already checked out" });
 
-    // 5) TODAY RECORD REQUIRED
-    const record = await Attendance.findOne({
-      employeeId: targetId,
-      date: today,
-      companyId: req.user.companyId,
-    });
-
-    if (!record)
-      return res.status(404).json({ message: "Check-in missing" });
-
-    // 6) ALREADY CHECKED OUT
-    if (record.checkOut)
-      return res.status(400).json({ message: "Already checked out" });
-
-    // 7) MANUAL ADD (Admin Added Attendance) → Checkout Not Allowed
-    if (record.registeredFromForm === true) {
-      return res.status(400).json({
-        message: "This attendance was added manually. Checkout not allowed.",
-      });
-    }
-
-    // 8) SET CHECK-OUT TIME NOW
     record.checkOut = new Date();
 
-    // 9) CALCULATE ALL HOURS, LATE, EARLY LEAVE, OVERTIME
-    computeDerivedFields(record, emp, {
-      fixedIn: company.fixedIn,
-      fixedOut: company.fixedOut,
-    });
+    const emp = await Employee.findOne({ _id: targetId, companyId: req.user.companyId });
+    const company = await Company.findById(req.user.companyId).select("fixedIn fixedOut");
 
-    // 10) SAVE
+    computeDerivedFields(record, emp, { fixedIn: company?.fixedIn, fixedOut: company?.fixedOut });
+
     await record.save();
-
-    const populated = await record.populate(
-      "employeeId",
-      "name employeeCode department jobRole avatar"
-    );
-
-    return res.json({
-      success: true,
-      message: "Checked out successfully",
-      data: populated,
-    });
+    const populated = await record.populate("employeeId", "name employeeCode department jobRole avatar");
+    res.json({ success: true, message: "Checked out", data: populated });
   } catch (err) {
     console.error("checkOut Error:", err);
-    return res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 };
-
 
 /* =========================================================
    GET ATTENDANCE
