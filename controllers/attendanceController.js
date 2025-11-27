@@ -118,40 +118,40 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
 /* =========================================================
    UPDATE ATTENDANCE
 ========================================================= */
-// export const updateAttendance = async (req, res) => {
-//   try {
-//     const { date, checkIn, checkOut, remarks } = req.body;
-//     const id = req.params.id;
+export const updateAttendance = async (req, res) => {
+  try {
+    const { date, checkIn, checkOut, remarks } = req.body;
+    const id = req.params.id;
 
-//     const rec = await Attendance.findOne({ _id: id, companyId: req.user.companyId });
-//     if (!rec) return res.status(404).json({ message: "Attendance not found" });
+    const rec = await Attendance.findOne({ _id: id, companyId: req.user.companyId });
+    if (!rec) return res.status(404).json({ message: "Attendance not found" });
 
-//     if (date) rec.date = new Date(date).toISOString().split("T")[0];
-//     if (remarks !== undefined) rec.remarks = remarks;
-//     if (checkIn) rec.checkIn = new Date(checkIn.includes("T") ? checkIn : `${rec.date}T${checkIn}`);
-//     if (checkOut) rec.checkOut = new Date(checkOut.includes("T") ? checkOut : `${rec.date}T${checkOut}`);
+    if (date) rec.date = new Date(date).toISOString().split("T")[0];
+    if (remarks !== undefined) rec.remarks = remarks;
+    if (checkIn) rec.checkIn = new Date(checkIn.includes("T") ? checkIn : `${rec.date}T${checkIn}`);
+    if (checkOut) rec.checkOut = new Date(checkOut.includes("T") ? checkOut : `${rec.date}T${checkOut}`);
 
-//     const emp = await Employee.findOne({ _id: rec.employeeId, companyId: req.user.companyId });
-//     const company = await Company.findById(req.user.companyId).select("fixedIn fixedOut");
+    const emp = await Employee.findOne({ _id: rec.employeeId, companyId: req.user.companyId });
+    const company = await Company.findById(req.user.companyId).select("fixedIn fixedOut");
 
-//     if (rec.checkIn && rec.checkOut) computeDerivedFields(rec, emp, { fixedIn: company?.fixedIn, fixedOut: company?.fixedOut });
-//     else {
-//       rec.totalMinutes = 0;
-//       rec.totalHours = 0;
-//       rec.lateMinutes = 0;
-//       rec.earlyLeaveMinutes = 0;
-//       rec.overtimeMinutes = 0;
-//       rec.status = "absent";
-//     }
+    if (rec.checkIn && rec.checkOut) computeDerivedFields(rec, emp, { fixedIn: company?.fixedIn, fixedOut: company?.fixedOut });
+    else {
+      rec.totalMinutes = 0;
+      rec.totalHours = 0;
+      rec.lateMinutes = 0;
+      rec.earlyLeaveMinutes = 0;
+      rec.overtimeMinutes = 0;
+      rec.status = "absent";
+    }
 
-//     await rec.save();
-//     const populated = await rec.populate("employeeId", "name employeeCode department jobRole avatar");
-//     res.json({ success: true, message: "Attendance updated", data: populated });
-//   } catch (err) {
-//     console.error("updateAttendance Error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
+    await rec.save();
+    const populated = await rec.populate("employeeId", "name employeeCode department jobRole avatar");
+    res.json({ success: true, message: "Attendance updated", data: populated });
+  } catch (err) {
+    console.error("updateAttendance Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 /* =========================================================
    DELETE ATTENDANCE

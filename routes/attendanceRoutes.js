@@ -5,8 +5,9 @@ import {
   filterAttendance,
   checkIn,
   checkOut,
+  updateAttendance,
+  deleteAttendance,
 } from "../controllers/attendanceController.js";
- import {addAttendance, updateAttendance, deleteAttendance,} from "../controllers/addAttanadace.js";
 
 import {
   protect,
@@ -35,7 +36,6 @@ router.post("/check-in", adminProtect, checkIn);   // Admin/Owner mark attendanc
 router.post("/check-out", adminProtect, checkOut); // Admin/Owner mark attendance
 router.get("/", adminProtect, getAttendance);
 router.get("/filter", adminProtect, filterAttendance);
-router.post("/add", adminProtect, addAttendance);
 router.put("/:id", adminProtect, updateAttendance);
 router.delete("/:id", adminProtect, deleteAttendance);
 

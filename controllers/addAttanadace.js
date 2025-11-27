@@ -9,6 +9,17 @@ import AttendanceAdd from "../models/AttendanceAdd.js";
 ================================================================ */
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
+/* Convert Date object to 12-hour time string */
+const formatTime12Hour = (date) => {
+  if (!date) return null;
+  const dt = new Date(date);
+  let hours = dt.getHours();
+  const minutes = dt.getMinutes().toString().padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${hours}:${minutes} ${ampm}`;
+};
+
 /* ================================================================
    1️ ADD MASTER ATTENDANCE (ADMIN MANUAL FIX ENTRY)
 ================================================================ */
@@ -44,6 +55,10 @@ export const addAttendance = async (req, res) => {
     const checkInDt = checkIn ? new Date(`${recordDate}T${checkIn}`) : null;
     const checkOutDt = checkOut ? new Date(`${recordDate}T${checkOut}`) : null;
 
+    // Determine status
+    let status = "Inactive";
+    if (checkInDt && checkOutDt) status = "Active";
+
     const record = new AttendanceAdd({
       employeeId,
       companyId: req.user.companyId,
@@ -53,9 +68,7 @@ export const addAttendance = async (req, res) => {
       remarks: remarks || "",
       registeredFromForm: true,
       createdBy: req.user._id,
-
-      // DAILY ATTENDANCE WILL CALCULATE STATUS
-      status: undefined,
+      status,
     });
 
     await record.save();
@@ -64,10 +77,15 @@ export const addAttendance = async (req, res) => {
       "name employeeCode department jobRole avatar"
     );
 
+    // Return with formatted times
     res.status(201).json({
       success: true,
       message: "Master Attendance added successfully",
-      data: populated,
+      data: {
+        ...populated.toObject(),
+        checkIn: formatTime12Hour(populated.checkIn),
+        checkOut: formatTime12Hour(populated.checkOut),
+      },
     });
   } catch (err) {
     console.error("addAttendance Error:", err);
@@ -94,14 +112,11 @@ export const updateAttendance = async (req, res) => {
     if (date) rec.date = toDateString(date);
     if (remarks !== undefined) rec.remarks = remarks;
 
-    if (checkIn)
-      rec.checkIn = new Date(`${rec.date}T${checkIn}`);
+    if (checkIn) rec.checkIn = new Date(`${rec.date}T${checkIn}`);
+    if (checkOut) rec.checkOut = new Date(`${rec.date}T${checkOut}`);
 
-    if (checkOut)
-      rec.checkOut = new Date(`${rec.date}T${checkOut}`);
-
-    // Daily system will re-calc status
-    rec.status = undefined;
+    // Recalculate status
+    rec.status = rec.checkIn && rec.checkOut ? "Active" : "Inactive";
 
     await rec.save();
     const populated = await rec.populate(
@@ -112,7 +127,11 @@ export const updateAttendance = async (req, res) => {
     res.json({
       success: true,
       message: "Master Attendance updated successfully",
-      data: populated,
+      data: {
+        ...populated.toObject(),
+        checkIn: formatTime12Hour(populated.checkIn),
+        checkOut: formatTime12Hour(populated.checkOut),
+      },
     });
   } catch (err) {
     console.error("updateAttendance Error:", err);
@@ -145,7 +164,9 @@ export const deleteAttendance = async (req, res) => {
   }
 };
 
-
+/* ================================================================
+   4️ FILTER ATTENDANCE
+================================================================ */
 export const filterAttendance = async (req, res) => {
   try {
     const { employeeName, employeeCode, department, role, status, startDate, endDate, page = 1, limit = 200 } = req.query;
@@ -168,15 +189,22 @@ export const filterAttendance = async (req, res) => {
 
     const skip = (page - 1) * limit;
     const [records, total] = await Promise.all([
-      Attendance.find(query)
+      AttendanceAdd.find(query)
         .populate("employeeId", "name employeeCode department jobRole avatar")
         .sort({ date: -1 })
         .skip(skip)
         .limit(limit),
-      Attendance.countDocuments(query),
+      AttendanceAdd.countDocuments(query),
     ]);
 
-    res.json({ success: true, count: total, records });
+    // Format checkIn/checkOut to 12-hour before sending
+    const formattedRecords = records.map(rec => ({
+      ...rec.toObject(),
+      checkIn: formatTime12Hour(rec.checkIn),
+      checkOut: formatTime12Hour(rec.checkOut),
+    }));
+
+    res.json({ success: true, count: total, records: formattedRecords });
   } catch (err) {
     console.error("filterAttendance Error:", err);
     res.status(500).json({ message: "Server error" });
