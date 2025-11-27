@@ -156,23 +156,23 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
 /* =========================================================
    DELETE ATTENDANCE
 ========================================================= */
-// export const deleteAttendance = async (req, res) => {
-//   try {
-//     const id = req.params.id;
+export const deleteAttendance = async (req, res) => {
+  try {
+    const id = req.params.id;
 
-//     const deleted = await Attendance.findOneAndDelete({
-//       _id: id,
-//       companyId: req.user.companyId,
-//     });
+    const deleted = await Attendance.findOneAndDelete({
+      _id: id,
+      companyId: req.user.companyId,
+    });
 
-//     if (!deleted) return res.status(404).json({ message: "Record not found or unauthorized" });
+    if (!deleted) return res.status(404).json({ message: "Record not found or unauthorized" });
 
-//     res.json({ success: true, message: "Attendance deleted" });
-//   } catch (err) {
-//     console.error("deleteAttendance Error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
+    res.json({ success: true, message: "Attendance deleted" });
+  } catch (err) {
+    console.error("deleteAttendance Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 /* =========================================================
    CHECK-IN
