@@ -23,7 +23,7 @@ const attendanceAddSchema = new mongoose.Schema({
   checkIn: { type: Date },       // office IN time (fixed)
   checkOut: { type: Date },      // office OUT time (fixed)
   remarks: { type: String },
-  status: { type: String, enum: ["active", "inactive"], required: true },
+  status: { type: String, enum: ["present", "absent", "leave", "half-day"] },
 
   // Important flag — tells system this record came from manual admin form
   registeredFromForm: { 
