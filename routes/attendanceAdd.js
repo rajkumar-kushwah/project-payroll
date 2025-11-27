@@ -6,7 +6,7 @@ import {
   getWorkScheduleById,
   updateWorkSchedule,
   deleteWorkSchedule
-} from "../controllers/workScheduleController.js";
+} from "../controllers/addattanadace.js";
 
 import { protect, adminProtect, ownerProtect } from "../middleware/authMiddleware.js";
 
