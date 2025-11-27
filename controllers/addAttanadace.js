@@ -76,7 +76,7 @@ export const addAttendance = async (req, res) => {
 };
 
 /* ================================================================
-   2️⃣ UPDATE MASTER ATTENDANCE
+   2️ UPDATE MASTER ATTENDANCE
 ================================================================ */
 export const updateAttendance = async (req, res) => {
   try {
@@ -121,7 +121,7 @@ export const updateAttendance = async (req, res) => {
 };
 
 /* ================================================================
-   3️⃣ DELETE MASTER ATTENDANCE
+   3️ DELETE MASTER ATTENDANCE
 ================================================================ */
 export const deleteAttendance = async (req, res) => {
   try {
@@ -141,6 +141,44 @@ export const deleteAttendance = async (req, res) => {
     });
   } catch (err) {
     console.error("deleteAttendance Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+export const filterAttendance = async (req, res) => {
+  try {
+    const { employeeName, employeeCode, department, role, status, startDate, endDate, page = 1, limit = 200 } = req.query;
+    const query = { companyId: req.user.companyId };
+    if (status) query.status = status;
+    if (startDate && endDate) query.date = { $gte: startDate, $lte: endDate };
+
+    const employeeQuery = {};
+    if (employeeName) employeeQuery.name = new RegExp(employeeName, "i");
+    if (employeeCode) employeeQuery.employeeCode = new RegExp(employeeCode, "i");
+    if (department) employeeQuery.department = department;
+    if (role) employeeQuery.jobRole = role;
+
+    if (Object.keys(employeeQuery).length > 0) {
+      const empList = await Employee.find({ ...employeeQuery, companyId: req.user.companyId }).select("_id");
+      const ids = empList.map(e => e._id);
+      if (!ids.length) return res.json({ success: true, count: 0, records: [] });
+      query.employeeId = { $in: ids };
+    }
+
+    const skip = (page - 1) * limit;
+    const [records, total] = await Promise.all([
+      Attendance.find(query)
+        .populate("employeeId", "name employeeCode department jobRole avatar")
+        .sort({ date: -1 })
+        .skip(skip)
+        .limit(limit),
+      Attendance.countDocuments(query),
+    ]);
+
+    res.json({ success: true, count: total, records });
+  } catch (err) {
+    console.error("filterAttendance Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
