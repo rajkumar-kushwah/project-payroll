@@ -67,112 +67,112 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
 /* =========================================================
    ADD ATTENDANCE
 ========================================================= */
-export const addAttendance = async (req, res) => {
-  try {
-    const { employeeId, date, checkIn, checkOut, remarks } = req.body;
+// export const addAttendance = async (req, res) => {
+//   try {
+//     const { employeeId, date, checkIn, checkOut, remarks } = req.body;
 
-    if (!mongoose.isValidObjectId(employeeId))
-      return res.status(400).json({ message: "Invalid employee ID" });
+//     if (!mongoose.isValidObjectId(employeeId))
+//       return res.status(400).json({ message: "Invalid employee ID" });
 
-    const emp = await Employee.findOne({ _id: employeeId, companyId: req.user.companyId });
-    if (!emp) return res.status(404).json({ message: "Employee not found or unauthorized" });
+//     const emp = await Employee.findOne({ _id: employeeId, companyId: req.user.companyId });
+//     if (!emp) return res.status(404).json({ message: "Employee not found or unauthorized" });
 
-    const recordDate = date ? new Date(date).toISOString().split("T")[0] : toDateString(new Date());
+//     const recordDate = date ? new Date(date).toISOString().split("T")[0] : toDateString(new Date());
 
-    const exists = await Attendance.findOne({
-      employeeId,
-      date: recordDate,
-      companyId: req.user.companyId,
-    });
-    if (exists) return res.status(400).json({ message: "Attendance already exists for this date" });
+//     const exists = await Attendance.findOne({
+//       employeeId,
+//       date: recordDate,
+//       companyId: req.user.companyId,
+//     });
+//     if (exists) return res.status(400).json({ message: "Attendance already exists for this date" });
 
-    const checkInDt = checkIn ? new Date(checkIn.includes("T") ? checkIn : `${recordDate}T${checkIn}`) : undefined;
-    const checkOutDt = checkOut ? new Date(checkOut.includes("T") ? checkOut : `${recordDate}T${checkOut}`) : undefined;
+//     const checkInDt = checkIn ? new Date(checkIn.includes("T") ? checkIn : `${recordDate}T${checkIn}`) : undefined;
+//     const checkOutDt = checkOut ? new Date(checkOut.includes("T") ? checkOut : `${recordDate}T${checkOut}`) : undefined;
 
-    const record = new Attendance({
-      employeeId,
-      companyId: req.user.companyId,
-      date: recordDate,
-      checkIn: checkInDt,
-      checkOut: checkOutDt,
-      remarks: remarks || "",
-      status: checkInDt ? "present" : "absent",
-      createdBy: req.user._id,
-    });
+//     const record = new Attendance({
+//       employeeId,
+//       companyId: req.user.companyId,
+//       date: recordDate,
+//       checkIn: checkInDt,
+//       checkOut: checkOutDt,
+//       remarks: remarks || "",
+//       status: checkInDt ? "present" : "absent",
+//       createdBy: req.user._id,
+//     });
 
-    const company = await Company.findById(req.user.companyId).select("fixedIn fixedOut");
-    const companyDefaults = { fixedIn: company?.fixedIn, fixedOut: company?.fixedOut };
+//     const company = await Company.findById(req.user.companyId).select("fixedIn fixedOut");
+//     const companyDefaults = { fixedIn: company?.fixedIn, fixedOut: company?.fixedOut };
 
-    if (checkInDt && checkOutDt) computeDerivedFields(record, emp, companyDefaults);
+//     if (checkInDt && checkOutDt) computeDerivedFields(record, emp, companyDefaults);
 
-    await record.save();
-    const populated = await record.populate("employeeId", "name employeeCode department jobRole avatar");
+//     await record.save();
+//     const populated = await record.populate("employeeId", "name employeeCode department jobRole avatar");
 
-    res.status(201).json({ success: true, message: "Attendance added", data: populated });
-  } catch (err) {
-    console.error("addAttendance Error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
+//     res.status(201).json({ success: true, message: "Attendance added", data: populated });
+//   } catch (err) {
+//     console.error("addAttendance Error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
 
 /* =========================================================
    UPDATE ATTENDANCE
 ========================================================= */
-export const updateAttendance = async (req, res) => {
-  try {
-    const { date, checkIn, checkOut, remarks } = req.body;
-    const id = req.params.id;
+// export const updateAttendance = async (req, res) => {
+//   try {
+//     const { date, checkIn, checkOut, remarks } = req.body;
+//     const id = req.params.id;
 
-    const rec = await Attendance.findOne({ _id: id, companyId: req.user.companyId });
-    if (!rec) return res.status(404).json({ message: "Attendance not found" });
+//     const rec = await Attendance.findOne({ _id: id, companyId: req.user.companyId });
+//     if (!rec) return res.status(404).json({ message: "Attendance not found" });
 
-    if (date) rec.date = new Date(date).toISOString().split("T")[0];
-    if (remarks !== undefined) rec.remarks = remarks;
-    if (checkIn) rec.checkIn = new Date(checkIn.includes("T") ? checkIn : `${rec.date}T${checkIn}`);
-    if (checkOut) rec.checkOut = new Date(checkOut.includes("T") ? checkOut : `${rec.date}T${checkOut}`);
+//     if (date) rec.date = new Date(date).toISOString().split("T")[0];
+//     if (remarks !== undefined) rec.remarks = remarks;
+//     if (checkIn) rec.checkIn = new Date(checkIn.includes("T") ? checkIn : `${rec.date}T${checkIn}`);
+//     if (checkOut) rec.checkOut = new Date(checkOut.includes("T") ? checkOut : `${rec.date}T${checkOut}`);
 
-    const emp = await Employee.findOne({ _id: rec.employeeId, companyId: req.user.companyId });
-    const company = await Company.findById(req.user.companyId).select("fixedIn fixedOut");
+//     const emp = await Employee.findOne({ _id: rec.employeeId, companyId: req.user.companyId });
+//     const company = await Company.findById(req.user.companyId).select("fixedIn fixedOut");
 
-    if (rec.checkIn && rec.checkOut) computeDerivedFields(rec, emp, { fixedIn: company?.fixedIn, fixedOut: company?.fixedOut });
-    else {
-      rec.totalMinutes = 0;
-      rec.totalHours = 0;
-      rec.lateMinutes = 0;
-      rec.earlyLeaveMinutes = 0;
-      rec.overtimeMinutes = 0;
-      rec.status = "absent";
-    }
+//     if (rec.checkIn && rec.checkOut) computeDerivedFields(rec, emp, { fixedIn: company?.fixedIn, fixedOut: company?.fixedOut });
+//     else {
+//       rec.totalMinutes = 0;
+//       rec.totalHours = 0;
+//       rec.lateMinutes = 0;
+//       rec.earlyLeaveMinutes = 0;
+//       rec.overtimeMinutes = 0;
+//       rec.status = "absent";
+//     }
 
-    await rec.save();
-    const populated = await rec.populate("employeeId", "name employeeCode department jobRole avatar");
-    res.json({ success: true, message: "Attendance updated", data: populated });
-  } catch (err) {
-    console.error("updateAttendance Error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
+//     await rec.save();
+//     const populated = await rec.populate("employeeId", "name employeeCode department jobRole avatar");
+//     res.json({ success: true, message: "Attendance updated", data: populated });
+//   } catch (err) {
+//     console.error("updateAttendance Error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
 
 /* =========================================================
    DELETE ATTENDANCE
 ========================================================= */
-export const deleteAttendance = async (req, res) => {
-  try {
-    const id = req.params.id;
+// export const deleteAttendance = async (req, res) => {
+//   try {
+//     const id = req.params.id;
 
-    const deleted = await Attendance.findOneAndDelete({
-      _id: id,
-      companyId: req.user.companyId,
-    });
+//     const deleted = await Attendance.findOneAndDelete({
+//       _id: id,
+//       companyId: req.user.companyId,
+//     });
 
-    if (!deleted) return res.status(404).json({ message: "Record not found or unauthorized" });
+//     if (!deleted) return res.status(404).json({ message: "Record not found or unauthorized" });
 
-    res.json({ success: true, message: "Attendance deleted" });
-  } catch (err) {
-    console.error("deleteAttendance Error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
+//     res.json({ success: true, message: "Attendance deleted" });
+//   } catch (err) {
+//     console.error("deleteAttendance Error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
 
 /* =========================================================
    CHECK-IN

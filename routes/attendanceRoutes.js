@@ -1,13 +1,12 @@
 import express from "express";
 import {
-  addAttendance,
-  updateAttendance,
-  deleteAttendance,
+  
   getAttendance,
   filterAttendance,
   checkIn,
   checkOut,
 } from "../controllers/attendanceController.js";
+ import {addAttendance, updateAttendance, deleteAttendance,} from "../controllers/addAttanadace.js";
 
 import {
   protect,
