@@ -1,5 +1,5 @@
 // controllers/workScheduleController.js
-import WorkSchedule from "../models/WorkSchedule.js";
+import WorkSchedule from "../models/addAttendance.js";
 import mongoose from "mongoose";
 
 // -------------------------------------------------------------------
