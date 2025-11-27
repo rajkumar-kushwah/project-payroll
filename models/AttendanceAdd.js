@@ -1,41 +1,26 @@
-// models/AttendanceAdd.js
+// models/WorkSchedule.js
 import mongoose from "mongoose";
 
-const attendanceAddSchema = new mongoose.Schema({
+const WorkScheduleSchema = new mongoose.Schema({
   employeeId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: "Employee", 
-    required: true 
+    required: false // agar company-wide default schedule ho to optional
   },
-
   companyId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: "Company", 
     required: true 
   },
-
-  // Store date in yyyy-mm-dd format
-  date: { 
-    type: String,  
-    required: true 
-  },
-
-  checkIn: { type: Date },       // office IN time (fixed)
-  checkOut: { type: Date },      // office OUT time (fixed)
-  remarks: { type: String },
-  status: { type: String, enum: ["present", "absent", "leave", "half-day"] },
-
-  // Important flag — tells system this record came from manual admin form
-  registeredFromForm: { 
-    type: Boolean, 
-    default: true 
-  },
-
-  createdBy: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "User" 
-  },
-
+  shiftName: { type: String, default: "Default Shift" },
+  inTime: { type: String, required: true },      // "HH:MM"
+  outTime: { type: String, required: true },     // "HH:MM"
+  weeklyOff: { type: [String], default: ["Sunday"] },
+  shiftType: { type: String, enum: ["Full-day", "Half-day", "Night", "Flexible"], default: "Full-day" },
+  breakStart: { type: String },  // optional
+  breakEnd: { type: String },    // optional
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 }, { timestamps: true });
 
-export default mongoose.model("AttendanceAdd", attendanceAddSchema);
+export default mongoose.model("WorkSchedule", WorkScheduleSchema);
+
