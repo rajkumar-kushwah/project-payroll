@@ -1,4 +1,4 @@
-// controllers/masterAttendanceController.js
+// controllers/addAttendanceController.js
 
 import mongoose from "mongoose";
 import Employee from "../models/Employee.js";
