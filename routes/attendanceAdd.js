@@ -1,22 +1,32 @@
-// routes/masterAttendanceRoutes.js
+// routes/workScheduleRoutes.js
 import express from "express";
 import {
-  addAttendance,
-  updateAttendance,
-  deleteAttendance,
-  filterAttendance
-} from "../controllers/addAttanadace.js";
-import { protect, adminProtect } from "../middleware/authMiddleware.js";
+  addWorkSchedule,
+  getWorkSchedules,
+  getWorkScheduleById,
+  updateWorkSchedule,
+  deleteWorkSchedule
+} from "../controllers/workScheduleController.js";
+
+import { protect, adminProtect, ownerProtect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Login required for all
+// Login required for all routes
 router.use(protect);
 
-// Admin only: manual add/update/delete
-router.post("/add", adminProtect, addAttendance);
-router.put("/:id", adminProtect, updateAttendance);
-router.delete("/:id", adminProtect, deleteAttendance);
-router.get("/filter", adminProtect, filterAttendance);
+// ----------------------------
+// Admin / Owner only routes
+// ----------------------------
+router.post("/add", adminProtect, addWorkSchedule);
+router.put("/:id", adminProtect, updateWorkSchedule);
+router.delete("/:id", adminProtect, deleteWorkSchedule);
+
+// ----------------------------
+// Get schedules (admin / owner can see all, others can see their own)
+// ----------------------------
+router.get("/", adminProtect, getWorkSchedules);
+router.get("/:id", adminProtect, getWorkScheduleById);
 
 export default router;
+
