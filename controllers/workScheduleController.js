@@ -71,7 +71,7 @@ export const getWorkSchedules = async (req, res) => {
 };
 
 // -------------------------------------------------------------------
-// 3️⃣ Get single schedule by ID
+// 3️ Get single schedule by ID
 // -------------------------------------------------------------------
 export const getWorkScheduleById = async (req, res) => {
   try {
@@ -90,7 +90,7 @@ export const getWorkScheduleById = async (req, res) => {
 };
 
 // -------------------------------------------------------------------
-// 4️⃣ Update Work Schedule
+// 4️ Update Work Schedule
 // -------------------------------------------------------------------
 export const updateWorkSchedule = async (req, res) => {
   try {
@@ -112,7 +112,7 @@ export const updateWorkSchedule = async (req, res) => {
 };
 
 // -------------------------------------------------------------------
-// 5️⃣ Delete Work Schedule
+// 5️ Delete Work Schedule
 // -------------------------------------------------------------------
 export const deleteWorkSchedule = async (req, res) => {
   try {
