@@ -1,17 +1,26 @@
 // controllers/workScheduleController.js
 import WorkSchedule from "../models/Worksechudel.js";
+import Company from "../models/Company.js"; // import Company
 import mongoose from "mongoose";
 
-// -------------------------------------------------------------------
-// 1️ Add / Create Work Schedule
-// -------------------------------------------------------------------
 export const addWorkSchedule = async (req, res) => {
   try {
     const { employeeId, inTime, outTime, shiftName, weeklyOff, shiftType, breakStart, breakEnd } = req.body;
 
+    // Ensure employeeId exists
+    if (!employeeId) return res.status(400).json({ success: false, message: "Employee is required" });
+
+    // Get companyId from user or fallback by employee
+    let companyId = req.user.companyId;
+    if (!companyId) {
+      const company = await Company.findOne({ employees: employeeId });
+      if (!company) return res.status(400).json({ success: false, message: "Employee is not assigned to any company" });
+      companyId = company._id;
+    }
+
     const schedule = new WorkSchedule({
       employeeId,
-      companyId: req.user.companyId,
+      companyId,
       shiftName: shiftName || "Default Shift",
       inTime,
       outTime,
@@ -32,7 +41,7 @@ export const addWorkSchedule = async (req, res) => {
 };
 
 // -------------------------------------------------------------------
-// 2️⃣ Get all schedules (for company or employee)
+// 2️ Get all schedules (for company or employee)
 // -------------------------------------------------------------------
 export const getWorkSchedules = async (req, res) => {
   try {
