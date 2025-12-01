@@ -1,9 +1,9 @@
 // controllers/workScheduleController.js
-import WorkSchedule from "../models/AttendanceAdd.js";
+import WorkSchedule from "../models/Worksechudel.js";
 import mongoose from "mongoose";
 
 // -------------------------------------------------------------------
-// 1️⃣ Add / Create Work Schedule
+// 1️ Add / Create Work Schedule
 // -------------------------------------------------------------------
 export const addWorkSchedule = async (req, res) => {
   try {

@@ -1,8 +1,6 @@
 import express from "express";
 import {
-  
   getAttendance,
-  filterAttendance,
   checkIn,
   checkOut,
   updateAttendance,
@@ -15,8 +13,6 @@ import {
   ownerProtect,
 } from "../middleware/authMiddleware.js";
 
-import upload from "../middleware/upload.js";
-
 const router = express.Router();
 
 /* ===========================
@@ -24,25 +20,22 @@ const router = express.Router();
 =========================== */
 router.use(protect);
 
-
-// // Routes with avatar upload
-// router.post("/profile", upload.single("avatar"), createAttendanceProfile);
-// router.put("/profile/:id", upload.single("avatar"), updateAttandanceProfile);
-
 /* ===========================
-   ADMIN/OWNER SIDE
+   ADMIN / OWNER SIDE
 =========================== */
-router.post("/check-in", adminProtect, checkIn);   // Admin/Owner mark attendance
-router.post("/check-out", adminProtect, checkOut); // Admin/Owner mark attendance
+// Admin/Owner can mark check-in/out for any employee
+router.post("/check-in", adminProtect, checkIn);
+router.post("/check-out", adminProtect, checkOut);
+
+// Get attendance with full filter (employee, status, date-range, month, year, pagination)
 router.get("/", adminProtect, getAttendance);
-router.get("/filter", adminProtect, filterAttendance);
+
+// Update / Delete attendance by ID
 router.put("/:id", adminProtect, updateAttendance);
 router.delete("/:id", adminProtect, deleteAttendance);
 
-
 /* ===========================
-   OWNER ONLY
-   (Optional Advance Feature)
+   OWNER ONLY (Optional)
 =========================== */
 // router.delete("/delete-all", ownerProtect, deleteAllAttendance);
 

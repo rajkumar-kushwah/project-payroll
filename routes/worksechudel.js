@@ -6,7 +6,7 @@ import {
   getWorkScheduleById,
   updateWorkSchedule,
   deleteWorkSchedule
-} from "../controllers/addAttanadace.js";
+} from "../controllers/workScheduleController.js";
 
 import { protect, adminProtect, ownerProtect } from "../middleware/authMiddleware.js";
 
@@ -29,4 +29,3 @@ router.get("/", adminProtect, getWorkSchedules);
 router.get("/:id", adminProtect, getWorkScheduleById);
 
 export default router;
-
