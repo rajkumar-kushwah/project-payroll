@@ -2,6 +2,7 @@
 import mongoose from "mongoose";
 
 const WorkScheduleSchema = new mongoose.Schema({
+  employeeCode: { type: String, required: true, unique: true },
   companyId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: "Company", 

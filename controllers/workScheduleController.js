@@ -15,6 +15,11 @@ export const addWorkSchedule = async (req, res) => {
     const employee = await Employee.findById(employeeId);
     if (!employee) return res.status(400).json({ success: false, message: "Employee not found" });
 
+    const exists = await WorkSchedule.findOne({ employeeId });
+if (exists) {
+  return res.status(400).json({ success: false, message: "Schedule for this employee already exists" });
+}
+
     // Get companyId from user or fallback by employee
     let companyId = req.user.companyId;
     if (!companyId) {
@@ -28,6 +33,7 @@ export const addWorkSchedule = async (req, res) => {
       employeeId,
       employeeName: employee.name,
       employeeAvatar: employee.avatar || "/default-avatar.png",
+      employeeCode: employee.employeeCode,
       companyId,
       shiftName: shiftName || "Default Shift",
       inTime,
