@@ -13,6 +13,9 @@ const WorkScheduleSchema = new mongoose.Schema({
     ref: "Employee",
     required: true
   },
+   // Add static fields for name & avatar
+  employeeName: { type: String, required: true },
+  employeeAvatar: { type: String, default: "/default-avatar.png" },
 
   shiftName: { type: String, required: true },
 

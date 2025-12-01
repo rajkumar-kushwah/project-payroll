@@ -1,25 +1,30 @@
 // controllers/workScheduleController.js
 import WorkSchedule from "../models/Worksechudel.js";
 import Company from "../models/Company.js"; // import Company
+import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
 
 export const addWorkSchedule = async (req, res) => {
   try {
     const { employeeId, inTime, outTime, shiftName, weeklyOff, shiftType, breakStart, breakEnd } = req.body;
 
-    // Ensure employeeId exists
     if (!employeeId) return res.status(400).json({ success: false, message: "Employee is required" });
 
-    // Get companyId from user or fallback by employee
+    // Fetch employee details for name & avatar
+    const employee = await Employee.findById(employeeId);
+    if (!employee) return res.status(400).json({ success: false, message: "Employee not found" });
+
     let companyId = req.user.companyId;
     if (!companyId) {
       const company = await Company.findOne({ employees: employeeId });
-      if (!company) return res.status(400).json({ success: false, message: "Employee is not assigned to any company" });
+      if (!company) return res.status(400).json({ success: false, message: "Employee not assigned to any company" });
       companyId = company._id;
     }
 
     const schedule = new WorkSchedule({
       employeeId,
+      employeeName: employee.name,
+      employeeAvatar: employee.avatar || "/default-avatar.png",
       companyId,
       shiftName: shiftName || "Default Shift",
       inTime,
@@ -32,14 +37,13 @@ export const addWorkSchedule = async (req, res) => {
     });
 
     await schedule.save();
-
     res.status(201).json({ success: true, message: "Work schedule added", data: schedule });
+
   } catch (err) {
     console.error("addWorkSchedule Error:", err);
     res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };
-
 // -------------------------------------------------------------------
 // 2️ Get all schedules (for company or employee)
 // -------------------------------------------------------------------

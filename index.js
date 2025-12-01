@@ -7,8 +7,7 @@ import employeeRoutes from "./routes/employees.js";
 import salaryRoutes from "./routes/salary.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
-import workScheduleRoutes from "./routes/worksechudel.js";
-
+import workScheduleRoutes from "./routes/worksechudel.js"; 
 
 
 
@@ -56,7 +55,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/salary", salaryRoutes);
 app.use("/api/attendance", attendanceRoutes);
-app.use("/api/worksechudel", workScheduleRoutes);
+app.use("/api/workschedule", workScheduleRoutes);
 app.use("/api", adminRoutes); 
 
 // Connect to MongoDB
