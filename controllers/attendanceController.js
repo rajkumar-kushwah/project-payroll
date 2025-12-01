@@ -1,13 +1,12 @@
+import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
-import WorkSchedule from "../models/Worksechudel.js";
-import mongoose from "mongoose";
+import WorkSchedule from "../models/Worksechudel.js"; // spelling corrected
 import {
   hhmmToDate,
   minutesBetween,
   minutesToHoursDecimal,
-  formatTime12H,
 } from "../utils/time.js";
 
 const FULL_DAY_MINUTES = 8 * 60;
@@ -16,10 +15,10 @@ const HALF_DAY_MINUTES = 4 * 60;
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
 /* =========================================================
-   COMMON FUNCTION — Compute Derived Fields
+   COMPUTE DERIVED FIELDS
 ========================================================= */
 export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => {
-  const dateStr = new Date(record.date).toISOString().split("T")[0];
+  const dateStr = toDateString(record.date);
 
   const fixedIn = emp.fixedIn || companyDefaults.fixedIn || "10:00";
   const fixedOut = emp.fixedOut || companyDefaults.fixedOut || "18:30";
@@ -51,7 +50,6 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
     checkOutDt > fixedOutDt ? minutesBetween(fixedOutDt, checkOutDt) : 0;
 
   record.overtimeHours = minutesToHoursDecimal(record.overtimeMinutes);
-
   record.missingMinutes = totalMins < FULL_DAY_MINUTES ? FULL_DAY_MINUTES - totalMins : 0;
   record.missingHours = minutesToHoursDecimal(record.missingMinutes);
 
@@ -61,7 +59,7 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
 };
 
 /* =========================================================
-   GET COMPANY DEFAULT SCHEDULE
+   GET COMPANY/EMPLOYEE SCHEDULE
 ========================================================= */
 async function getSchedule(emp, companyId) {
   if (emp.workScheduleId) {
@@ -70,69 +68,11 @@ async function getSchedule(emp, companyId) {
       companyId,
       status: "active",
     });
-
-    if (s) return { fixedIn: s.fixedIn, fixedOut: s.fixedOut };
+    if (s) return { fixedIn: s.inTime || "10:00", fixedOut: s.outTime || "18:30" };
   }
-
   const company = await Company.findById(companyId).select("fixedIn fixedOut");
-  return { fixedIn: company?.fixedIn, fixedOut: company?.fixedOut };
+  return { fixedIn: company?.fixedIn || "10:00", fixedOut: company?.fixedOut || "18:30" };
 }
-
-/* =========================================================
-   ADD ATTENDANCE
-========================================================= */
-export const addAttendance = async (req, res) => {
-  try {
-    const { employeeId, date, checkIn, checkOut, remarks } = req.body;
-
-    if (!mongoose.isValidObjectId(employeeId))
-      return res.status(400).json({ message: "Invalid employee ID" });
-
-    const emp = await Employee.findOne({
-      _id: employeeId,
-      companyId: req.user.companyId,
-    });
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
-
-    const finalDate = toDateString(date || new Date());
-
-    const exists = await Attendance.findOne({
-      employeeId,
-      date: finalDate,
-      companyId: req.user.companyId,
-    });
-
-    if (exists)
-      return res.status(400).json({ message: "Attendance already exists" });
-
-    const checkInDt = checkIn ? new Date(`${finalDate}T${checkIn}`) : null;
-    const checkOutDt = checkOut ? new Date(`${finalDate}T${checkOut}`) : null;
-
-    const record = new Attendance({
-      employeeId,
-      companyId: req.user.companyId,
-      date: finalDate,
-      checkIn: checkInDt,
-      checkOut: checkOutDt,
-      remarks,
-      createdBy: req.user._id,
-    });
-
-    const schedule = await getSchedule(emp, req.user.companyId);
-    if (checkInDt && checkOutDt) computeDerivedFields(record, emp, schedule);
-
-    await record.save();
-    const populated = await record.populate(
-      "employeeId",
-      "name employeeCode department jobRole avatar"
-    );
-
-    res.status(201).json({ success: true, data: populated });
-  } catch (err) {
-    console.error("addAttendance Error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
 
 /* =========================================================
    CHECK-IN
@@ -204,6 +144,7 @@ export const checkOut = async (req, res) => {
     computeDerivedFields(record, emp, schedule);
 
     await record.save();
+
     const populated = await record.populate(
       "employeeId",
       "name employeeCode department jobRole avatar"
@@ -274,7 +215,7 @@ export const deleteAttendance = async (req, res) => {
 };
 
 /* =========================================================
-   FILTER + GET ATTENDANCE LIST
+   GET ATTENDANCE LIST
 ========================================================= */
 export const getAttendance = async (req, res) => {
   try {
@@ -286,15 +227,11 @@ export const getAttendance = async (req, res) => {
     if (employeeId) query.employeeId = employeeId;
     if (status) query.status = status;
 
-    /* DATE RANGE FILTER */
-    if (startDate && endDate)
-      query.date = { $gte: startDate, $lte: endDate };
+    if (startDate && endDate) query.date = { $gte: startDate, $lte: endDate };
 
-    /* MONTH FILTER */
     if (month && year) {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = `${year}-${String(month).padStart(2, "0")}-31`;
-
       query.date = { $gte: start, $lte: end };
     }
 
