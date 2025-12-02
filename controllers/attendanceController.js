@@ -86,6 +86,7 @@ export const checkIn = async (req, res) => {
 
     const today = toDateString(new Date());
 
+    // check duplicate
     const already = await Attendance.findOne({
       employeeId: targetId,
       date: today,
@@ -94,8 +95,14 @@ export const checkIn = async (req, res) => {
 
     if (already) return res.status(400).json({ message: "Already checked in" });
 
+    // 🔥 FIX: Fetch employee for code
+    const emp = await Employee.findById(targetId).select("employeeCode");
+    if (!emp) return res.status(404).json({ message: "Employee not found" });
+
+    // create attendance
     const record = await Attendance.create({
       employeeId: targetId,
+      employeeCode: emp.employeeCode,   // 👍 REQUIRED FIELD FIXED
       companyId: req.user.companyId,
       date: today,
       checkIn: new Date(),
@@ -108,11 +115,13 @@ export const checkIn = async (req, res) => {
     );
 
     res.json({ success: true, data: populated });
+
   } catch (err) {
     console.error("checkIn Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /* =========================================================
    CHECK-OUT
