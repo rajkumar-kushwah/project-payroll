@@ -171,7 +171,6 @@ export const checkOut = async (req, res) => {
 ========================================================= */
 export const updateAttendance = async (req, res) => {
   try {
-    // Find the attendance record by ID and company
     const rec = await Attendance.findOne({
       _id: req.params.id,
       companyId: req.user.companyId,
@@ -179,39 +178,39 @@ export const updateAttendance = async (req, res) => {
 
     if (!rec) return res.status(404).json({ message: "Attendance not found" });
 
-    const { date, checkIn, checkOut, status } = req.body;
+    const { checkIn, checkOut, status } = req.body;
 
-    // Update date if provided
-    if (date) rec.date = toDateString(date);
-
-    // Update status if provided
+    // Update status
     if (status) rec.status = status;
 
-    // Safely update checkIn and checkOut
-    if (checkIn && checkIn.trim() !== "") rec.checkIn = new Date(`${rec.date}T${checkIn}`);
-    if (checkOut && checkOut.trim() !== "") rec.checkOut = new Date(`${rec.date}T${checkOut}`);
+    // Direct ISO time update (no string concatenation)
+    rec.checkIn = checkIn || null;
+    rec.checkOut = checkOut || null;
 
-    // Fetch employee and schedule
+    // Fetch employee + schedule
     const emp = await Employee.findById(rec.employeeId);
     const schedule = await getSchedule(emp, req.user.companyId);
 
-    // Compute derived fields (like total hours) if both times exist
-    if (rec.checkIn && rec.checkOut) computeDerivedFields(rec, emp, schedule);
+    // Recompute totals if both exist
+    if (rec.checkIn && rec.checkOut) {
+      computeDerivedFields(rec, emp, schedule);
+    }
 
     await rec.save();
 
-    // Populate employee details
     const populated = await rec.populate(
       "employeeId",
       "name employeeCode department jobRole avatar"
     );
 
-    res.json({ success: true, data: populated });
+    return res.json({ success: true, data: populated });
+
   } catch (err) {
     console.error("updateAttendance Error:", err);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 /* =========================================================
