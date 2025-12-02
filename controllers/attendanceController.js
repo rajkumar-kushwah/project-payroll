@@ -84,6 +84,10 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
   const checkInDt = new Date(record.checkIn);
   const checkOutDt = new Date(record.checkOut);
 
+  // India time adjust
+  checkInDt.setMinutes(checkInDt.getMinutes() + 330);
+  checkOutDt.setMinutes(checkOutDt.getMinutes() + 330);
+
   const totalMins = minutesBetween(checkInDt, checkOutDt);
   record.totalMinutes = totalMins;
   record.totalHours = minutesToHoursDecimal(totalMins);
@@ -92,21 +96,19 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
   const fixedOutDt = hhmmToDate(dateStr, fixedOut);
 
   record.lateMinutes = checkInDt > fixedInDt ? minutesBetween(fixedInDt, checkInDt) : 0;
-  record.earlyLeaveMinutes =
-    checkOutDt < fixedOutDt ? minutesBetween(checkOutDt, fixedOutDt) : 0;
+  record.earlyLeaveMinutes = checkOutDt < fixedOutDt ? minutesBetween(checkOutDt, fixedOutDt) : 0;
 
-  record.overtimeMinutes =
-    checkOutDt > fixedOutDt ? minutesBetween(fixedOutDt, checkOutDt) : 0;
+  record.overtimeMinutes = checkOutDt > fixedOutDt ? minutesBetween(fixedOutDt, checkOutDt) : 0;
   record.overtimeHours = minutesToHoursDecimal(record.overtimeMinutes);
 
   const scheduleMinutes = minutesBetween(fixedInDt, fixedOutDt);
-  const fullDayThreshold = scheduleMinutes - 1; // 1 min tolerance
-  const halfDayThreshold = 4 * 60; // 4 hrs
+  const halfDayThreshold = 4 * 60; // 4 hours
+  const minFullDayMinutes = 8 * 60; // 8 hours minimum for full day
 
   record.missingMinutes = totalMins < scheduleMinutes ? scheduleMinutes - totalMins : 0;
   record.missingHours = minutesToHoursDecimal(record.missingMinutes);
 
-  if (totalMins >= fullDayThreshold) record.status = "present";
+  if (totalMins >= minFullDayMinutes) record.status = "present";
   else if (totalMins >= halfDayThreshold) record.status = "half-day";
   else record.status = "absent";
 };
