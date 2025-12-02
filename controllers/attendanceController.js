@@ -12,6 +12,9 @@ import {
 // const FULL_DAY_MINUTES = 8 * 60;
 // const HALF_DAY_MINUTES = 4 * 60;
 
+const fullDayThreshold = 8 * 60; // 480 mins
+const halfDayThreshold = 4 * 60;
+
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
 /* =========================================================
