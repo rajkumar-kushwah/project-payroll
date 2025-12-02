@@ -171,6 +171,7 @@ export const checkOut = async (req, res) => {
 ========================================================= */
 export const updateAttendance = async (req, res) => {
   try {
+    // Find the attendance record by ID and company
     const rec = await Attendance.findOne({
       _id: req.params.id,
       companyId: req.user.companyId,
@@ -178,20 +179,28 @@ export const updateAttendance = async (req, res) => {
 
     if (!rec) return res.status(404).json({ message: "Attendance not found" });
 
-    const { date, checkIn, checkOut, remarks } = req.body;
+    const { date, checkIn, checkOut, status } = req.body;
 
+    // Update date if provided
     if (date) rec.date = toDateString(date);
-    if (remarks !== undefined) rec.remarks = remarks;
-    if (checkIn) rec.checkIn = new Date(`${rec.date}T${checkIn}`);
-    if (checkOut) rec.checkOut = new Date(`${rec.date}T${checkOut}`);
 
+    // Update status if provided
+    if (status) rec.status = status;
+
+    // Safely update checkIn and checkOut
+    if (checkIn && checkIn.trim() !== "") rec.checkIn = new Date(`${rec.date}T${checkIn}`);
+    if (checkOut && checkOut.trim() !== "") rec.checkOut = new Date(`${rec.date}T${checkOut}`);
+
+    // Fetch employee and schedule
     const emp = await Employee.findById(rec.employeeId);
     const schedule = await getSchedule(emp, req.user.companyId);
 
+    // Compute derived fields (like total hours) if both times exist
     if (rec.checkIn && rec.checkOut) computeDerivedFields(rec, emp, schedule);
 
     await rec.save();
 
+    // Populate employee details
     const populated = await rec.populate(
       "employeeId",
       "name employeeCode department jobRole avatar"
@@ -203,6 +212,7 @@ export const updateAttendance = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /* =========================================================
    DELETE ATTENDANCE
