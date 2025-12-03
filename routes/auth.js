@@ -302,18 +302,14 @@ router.post('/send-otp', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Save OTP (plain, no hash needed)
     user.otp = otp;
-    user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 min expiry
+    user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 min
     await user.save();
 
-    // Send email
     await sendOtpEmail(user.email, otp);
-
     console.log("OTP sent:", otp);
+
     res.json({ message: 'OTP sent successfully' });
   } catch (err) {
     console.error("Send OTP error:", err);
@@ -322,7 +318,8 @@ router.post('/send-otp', async (req, res) => {
 });
 
 
-//  Verify OTP
+
+// Verify OTP
 router.post("/verify-otp", async (req, res) => {
   const { email, otp } = req.body;
 
@@ -330,29 +327,24 @@ router.post("/verify-otp", async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Check OTP exists
-    if (!user.otp) {
-      return res.status(400).json({ message: "No OTP set for this user" });
-    }
+    if (!user.otp) return res.status(400).json({ message: "No OTP set for this user" });
+    if (user.otpExpires < Date.now()) return res.status(400).json({ message: "OTP has expired" });
+    if (user.otp !== otp.trim()) return res.status(400).json({ message: "Invalid OTP" });
 
-    // Check expiry
-    if (user.otpExpires < Date.now()) {
-      return res.status(400).json({ message: "OTP has expired" });
-    }
-
-    // Match OTP
-    if (user.otp !== otp.trim()) {
-      return res.status(400).json({ message: "Invalid OTP" });
-    }
-
-    // OTP success → verify email or login
+    // OTP success
     user.emailVerified = true;
     user.otp = null;
     user.otpExpires = null;
     await user.save();
 
-    res.json({ message: "OTP verified successfully", success: true });
+    // Generate reset token
+    const resetToken = jwt.sign(
+      { email: user.email, id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" } // 15 minutes
+    );
 
+    res.json({ message: "OTP verified successfully", success: true, resetToken });
   } catch (err) {
     console.error("Verify OTP error:", err);
     res.status(500).json({ message: "Server error" });
@@ -360,13 +352,12 @@ router.post("/verify-otp", async (req, res) => {
 });
 
 
-
 //  Reset Password
+// Reset Password
 router.post("/reset-password", async (req, res) => {
   const { email, newPassword, resetToken } = req.body;
 
   try {
-    //  Verify resetToken
     const decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
     if (!decoded || decoded.email !== email) {
       return res.status(400).json({ message: "Invalid or expired reset token" });
@@ -384,7 +375,6 @@ router.post("/reset-password", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 // ======================= PROTECTED ROUTES =======================
 
 //  Example: Get Profile
