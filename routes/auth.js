@@ -326,7 +326,7 @@ router.post("/verify-otp", async (req, res) => {
   const { email, otp } = req.body;
 
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (!user.resetPasswordOTP) {
@@ -337,24 +337,25 @@ router.post("/verify-otp", async (req, res) => {
       return res.status(400).json({ message: "OTP has expired" });
     }
 
-    const hashedOtp = hashData(otp);
+    const hashedOtp = hashData(otp.trim());
     if (user.resetPasswordOTP !== hashedOtp) {
       return res.status(400).json({ message: "OTP does not match" });
     }
 
-    // OTP is correct → issue reset token
+    // OTP correct → issue reset token
     const resetToken = jwt.sign(
       { id: user._id, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: "10m" }
     );
 
-    // Clear OTP so it can't be reused
+    // Clear OTP
     user.resetPasswordOTP = undefined;
     user.otpExpire = undefined;
     await user.save();
 
     res.json({ message: "OTP verified successfully", resetToken });
+
   } catch (err) {
     console.error("Verify OTP error:", err);
     res.status(500).json({ message: "Server error" });
