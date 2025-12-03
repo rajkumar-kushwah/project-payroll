@@ -458,6 +458,52 @@ router.put("/profile", protect, upload.single("avatar"), async (req, res) => {
 //===================== DELETE USER ======================
 
 // DELETE account
+// router.delete("/delete-account", protect , async (req, res) => {
+//   try {
+//     const user = req.user;
+//     if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+//     // IP capture
+//     const ip =
+//       req.headers["x-forwarded-for"]?.split(",").shift() ||
+//       req.socket?.remoteAddress ||
+//       req.connection?.remoteAddress ||
+//       "Unknown";
+//     // User Agent
+//     const userAgent = req.headers["user-agent"] || "Unknown Device";
+
+//     // find all employee and this users
+//     const employees = await Employee.find({createdBy: user._id});
+//       // delete all employee salaries
+//     for (const emp of employees) {
+//       await Salary.deleteMany({employeeId: emp._id});
+//     }
+//       // delete all employees created by user
+//     await Employee.deleteMany({createdBy: user._id});
+
+   
+
+//     // Delete user first
+//     const deletedUser = await User.findByIdAndDelete(user._id);
+//     if (!deletedUser) {
+//       return res.status(404).json({ message: "User not found or already deleted" });
+//     }
+
+//     // Email send after deletion (non-blocking)
+//     try {
+//       await sendDeleteEmail(deletedUser.name, deletedUser.email, ip, userAgent);
+//     } catch (err) {
+//       console.error("Delete Email Error:", err.message);
+//     }
+
+//     return res.json({ message: "Account deleted successfully and confirmation email sent" });
+//   } catch (err) {
+//     console.error("Delete Account Error:", err);
+//     return res.status(500).json({ message: "Server error" });
+//   }
+// });
+
+
 router.delete("/delete-account", protect , async (req, res) => {
   try {
     const user = req.user;
@@ -469,44 +515,51 @@ router.delete("/delete-account", protect , async (req, res) => {
       req.socket?.remoteAddress ||
       req.connection?.remoteAddress ||
       "Unknown";
-    // User Agent
     const userAgent = req.headers["user-agent"] || "Unknown Device";
 
-    // find all employee and this users
-    const employees = await Employee.find({createdBy: user._id});
-      // delete all employee salaries
-    for (const emp of employees) {
-      await Salary.deleteMany({employeeId: emp._id});
-    }
-      // delete all employees created by user
-    await Employee.deleteMany({createdBy: user._id});
+    // --------------------------
+    // OWNER DELETE LOGIC
+    // --------------------------
+    if (user.role === "owner") {
+      const company = await Company.findOne({ ownerId: user._id });
 
-     // Find company of owner
-    const company = await Company.findOne({ ownerId: user._id });
+      if (company) {
+        // 1️ Delete all admins except owner
+        const adminsToDelete = company.admins.filter(
+          id => id.toString() !== user._id.toString()
+        );
+        if (adminsToDelete.length > 0) {
+          await User.deleteMany({ _id: { $in: adminsToDelete } });
+        }
 
-    if (company) {
-      // DELETE ONLY ADMINS WHO ARE NOT OWNER
-      const adminsToDelete = company.admins.filter(
-        (adminId) => adminId.toString() !== user._id.toString()
-      );
+        // 2️ Delete all employees + salaries
+        const employees = await Employee.find({ companyId: company._id });
+        for (const emp of employees) {
+          await Salary.deleteMany({ employeeId: emp._id });
+        }
+        await Employee.deleteMany({ companyId: company._id });
 
-      if (adminsToDelete.length > 0) {
-        await User.deleteMany({
-          _id: { $in: adminsToDelete },
-        });
+        // 3️ Delete the company itself
+        await Company.findByIdAndDelete(company._id);
       }
-
-      // DELETE COMPANY
-      await Company.findByIdAndDelete(company._id);
+    } else {
+      // --------------------------
+      // NORMAL USER DELETE LOGIC
+      // --------------------------
+      const employees = await Employee.find({ createdBy: user._id });
+      for (const emp of employees) {
+        await Salary.deleteMany({ employeeId: emp._id });
+      }
+      await Employee.deleteMany({ createdBy: user._id });
     }
 
-    // Delete user first
+    // 4️ Delete user itself (owner or normal)
     const deletedUser = await User.findByIdAndDelete(user._id);
     if (!deletedUser) {
       return res.status(404).json({ message: "User not found or already deleted" });
     }
 
-    // Email send after deletion (non-blocking)
+    // Optional: Send deletion email
     try {
       await sendDeleteEmail(deletedUser.name, deletedUser.email, ip, userAgent);
     } catch (err) {
@@ -519,6 +572,7 @@ router.delete("/delete-account", protect , async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
+
 
 router.put("/update-password", protect , async (req, res) => {
   try {
