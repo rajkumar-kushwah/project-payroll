@@ -519,16 +519,14 @@ router.delete("/delete-account", protect, async (req, res) => {
       const company = await Company.findOne({ ownerId: user._id });
 
       if (company) {
-        // 1️⃣ Delete all admins first (exclude owner)
-        await User.deleteMany({
-          companyId: company._id,
-          role: "admin"
-        });
+        // 1️⃣ Delete all admins (exclude owner)
+        await User.deleteMany({ companyId: company._id, role: "admin" });
 
-        // 2️⃣ Delete all employees + their salaries
+        // 2️⃣ Delete all employees, their salaries, and their work schedules
         const employees = await Employee.find({ companyId: company._id });
         for (const emp of employees) {
           await Salary.deleteMany({ employeeId: emp._id });
+          await WorkSchedule.deleteMany({ employeeId: emp._id });
         }
         await Employee.deleteMany({ companyId: company._id });
 
@@ -542,12 +540,13 @@ router.delete("/delete-account", protect, async (req, res) => {
       const employees = await Employee.find({ createdBy: user._id });
       for (const emp of employees) {
         await Salary.deleteMany({ employeeId: emp._id });
+        await WorkSchedule.deleteMany({ employeeId: emp._id });
       }
       await Employee.deleteMany({ createdBy: user._id });
     }
 
     // --------------------------
-    // DELETE USER ITSELF (owner or normal)
+    // DELETE USER ITSELF
     // --------------------------
     const deletedUser = await User.findByIdAndDelete(user._id);
     if (!deletedUser) {
@@ -567,6 +566,7 @@ router.delete("/delete-account", protect, async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 
