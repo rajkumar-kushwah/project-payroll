@@ -322,28 +322,32 @@ router.post('/send-otp', async (req, res) => {
 //  Verify OTP
 router.post("/verify-otp", async (req, res) => {
   const { email, otp } = req.body;
-
+  console.log("Incoming OTP:", otp);
   try {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    console.log("Stored OTP:", user.resetPasswordOTP);
+    console.log("OTP expire:", user.otpExpire, "Current time:", Date.now());
 
     if (!user.resetPasswordOTP || user.otpExpire < Date.now()) {
       return res.status(400).json({ message: "OTP expired or invalid" });
     }
 
     const hashedOtp = hashData(otp);
+    console.log("Hashed incoming OTP:", hashedOtp);
+
     if (user.resetPasswordOTP !== hashedOtp) {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    //  OTP verified → issue reset token
+    // OTP verified → issue reset token
     const resetToken = jwt.sign(
       { id: user._id, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: "10m" }
     );
 
-    // Clear OTP once verified
     user.resetPasswordOTP = undefined;
     user.otpExpire = undefined;
     await user.save();
