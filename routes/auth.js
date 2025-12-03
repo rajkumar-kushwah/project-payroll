@@ -504,12 +504,12 @@ router.put("/profile", protect, upload.single("avatar"), async (req, res) => {
 // });
 
 
-router.delete("/delete-account", protect , async (req, res) => {
+router.delete("/delete-account", protect, async (req, res) => {
   try {
     const user = req.user;
     if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-    // IP capture
+    // IP & User-Agent capture
     const ip =
       req.headers["x-forwarded-for"]?.split(",").shift() ||
       req.socket?.remoteAddress ||
@@ -524,22 +524,17 @@ router.delete("/delete-account", protect , async (req, res) => {
       const company = await Company.findOne({ ownerId: user._id });
 
       if (company) {
-        // 1️ Delete all admins except owner
-        const adminsToDelete = company.admins.filter(
-          id => id.toString() !== user._id.toString()
-        );
-        if (adminsToDelete.length > 0) {
-          await User.deleteMany({ _id: { $in: adminsToDelete } });
-        }
+        // 1️⃣ Delete all users (admins + owner) linked to this company
+        await User.deleteMany({ companyId: company._id });
 
-        // 2️ Delete all employees + salaries
+        // 2️⃣ Delete all employees + their salaries
         const employees = await Employee.find({ companyId: company._id });
         for (const emp of employees) {
           await Salary.deleteMany({ employeeId: emp._id });
         }
         await Employee.deleteMany({ companyId: company._id });
 
-        // 3️ Delete the company itself
+        // 3️⃣ Delete the company itself
         await Company.findByIdAndDelete(company._id);
       }
     } else {
@@ -553,7 +548,9 @@ router.delete("/delete-account", protect , async (req, res) => {
       await Employee.deleteMany({ createdBy: user._id });
     }
 
-    // 4️ Delete user itself (owner or normal)
+    // --------------------------
+    // DELETE USER ITSELF
+    // --------------------------
     const deletedUser = await User.findByIdAndDelete(user._id);
     if (!deletedUser) {
       return res.status(404).json({ message: "User not found or already deleted" });
@@ -572,6 +569,7 @@ router.delete("/delete-account", protect , async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 router.put("/update-password", protect , async (req, res) => {
