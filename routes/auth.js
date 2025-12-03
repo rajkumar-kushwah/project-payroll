@@ -302,17 +302,18 @@ router.post('/send-otp', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const otp = generateOTP();
-    const hashedOtp = hashData(otp);
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    user.resetPasswordOTP = hashedOtp;
-    user.otpExpire = Date.now() + 10 * 60 * 1000; // 10 minutes expiration
+    // Save OTP (plain, no hash needed)
+    user.otp = otp;
+    user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 min expiry
     await user.save();
 
-    // Send OTP via email (implement your sendOtpEmail function)
+    // Send email
     await sendOtpEmail(user.email, otp);
 
-    console.log("OTP sent:", otp); // Optional debug
+    console.log("OTP sent:", otp);
     res.json({ message: 'OTP sent successfully' });
   } catch (err) {
     console.error("Send OTP error:", err);
@@ -329,38 +330,35 @@ router.post("/verify-otp", async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (!user.resetPasswordOTP) {
+    // Check OTP exists
+    if (!user.otp) {
       return res.status(400).json({ message: "No OTP set for this user" });
     }
 
-    if (user.otpExpire < Date.now()) {
+    // Check expiry
+    if (user.otpExpires < Date.now()) {
       return res.status(400).json({ message: "OTP has expired" });
     }
 
-    const hashedOtp = hashData(otp.trim());
-    if (user.resetPasswordOTP !== hashedOtp) {
-      return res.status(400).json({ message: "OTP does not match" });
+    // Match OTP
+    if (user.otp !== otp.trim()) {
+      return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    // OTP correct → issue reset token
-    const resetToken = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: "10m" }
-    );
-
-    // Clear OTP
-    user.resetPasswordOTP = undefined;
-    user.otpExpire = undefined;
+    // OTP success → verify email or login
+    user.emailVerified = true;
+    user.otp = null;
+    user.otpExpires = null;
     await user.save();
 
-    res.json({ message: "OTP verified successfully", resetToken });
+    res.json({ message: "OTP verified successfully", success: true });
 
   } catch (err) {
     console.error("Verify OTP error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 //  Reset Password
