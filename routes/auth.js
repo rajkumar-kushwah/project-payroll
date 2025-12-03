@@ -509,7 +509,7 @@ router.delete("/delete-account", protect, async (req, res) => {
     const user = req.user;
     if (!user) return res.status(401).json({ message: "Unauthorized" });
 
-    // IP & User-Agent capture
+    // Capture IP & User-Agent
     const ip =
       req.headers["x-forwarded-for"]?.split(",").shift() ||
       req.socket?.remoteAddress ||
@@ -524,7 +524,7 @@ router.delete("/delete-account", protect, async (req, res) => {
       const company = await Company.findOne({ ownerId: user._id });
 
       if (company) {
-        // 1️⃣ Delete all users (admins + owner) linked to this company
+        // 1️⃣ Delete all users (owner + admins) linked to this company
         await User.deleteMany({ companyId: company._id });
 
         // 2️⃣ Delete all employees + their salaries
@@ -569,6 +569,7 @@ router.delete("/delete-account", protect, async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 
