@@ -17,6 +17,7 @@ import Salary from '../models/Salary.js';
 import Company from '../models/Company.js';
 
 
+
 const router = express.Router();
 
 // utils
@@ -479,6 +480,16 @@ router.delete("/delete-account", protect , async (req, res) => {
     }
       // delete all employees created by user
     await Employee.deleteMany({createdBy: user._id});
+
+
+     // Find company owned by this user (owner)
+    const company = await Company.findOne({ ownerId: user._id });
+
+    // Delete all admins of this company first
+    if (company && company.admins.length > 0) {
+      await User.deleteMany({ _id: { $in: company.admins } });
+    }
+
 
     // Delete user first
     const deletedUser = await User.findByIdAndDelete(user._id);
