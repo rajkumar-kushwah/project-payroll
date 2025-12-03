@@ -524,8 +524,11 @@ router.delete("/delete-account", protect, async (req, res) => {
       const company = await Company.findOne({ ownerId: user._id });
 
       if (company) {
-        // 1️⃣ Delete all users (owner + admins) linked to this company
-        await User.deleteMany({ companyId: company._id });
+        // 1️⃣ Delete all admins first (exclude owner)
+        await User.deleteMany({
+          companyId: company._id,
+          role: "admin"
+        });
 
         // 2️⃣ Delete all employees + their salaries
         const employees = await Employee.find({ companyId: company._id });
@@ -549,7 +552,7 @@ router.delete("/delete-account", protect, async (req, res) => {
     }
 
     // --------------------------
-    // DELETE USER ITSELF
+    // DELETE USER ITSELF (owner or normal)
     // --------------------------
     const deletedUser = await User.findByIdAndDelete(user._id);
     if (!deletedUser) {
