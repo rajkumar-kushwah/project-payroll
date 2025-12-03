@@ -59,9 +59,10 @@ export const addEmployee = async (req, res) => {
     if (exists)
       return res.status(400).json({ message: "Employee already exists" });
 
+    // Cloudinary upload
     let avatar = "";
-    if (req.file && req.file.path) {
-      avatar = req.file.path; // Cloudinary URL
+    if (req.file) {
+      avatar = req.file.path || req.file.secure_url || ""; // ✅ Cloudinary safe check
     }
 
     const emp = await Employee.create({
@@ -74,7 +75,7 @@ export const addEmployee = async (req, res) => {
       joinDate,
       status,
       notes,
-      avatar, // save avatar
+      avatar, // save Cloudinary URL
       companyId: req.user.companyId,
       createdBy: req.user._id,
     });
