@@ -306,12 +306,14 @@ router.post('/send-otp', async (req, res) => {
     const hashedOtp = hashData(otp);
 
     user.resetPasswordOTP = hashedOtp;
-    user.otpExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    user.otpExpire = Date.now() + 10 * 60 * 1000; // 10 minutes expiration
     await user.save();
 
+    // Send OTP via email (implement your sendOtpEmail function)
     await sendOtpEmail(user.email, otp);
 
-    res.json({ message: `OTP sent to email` });
+    console.log("OTP sent:", otp); // Optional debug
+    res.json({ message: 'OTP sent successfully' });
   } catch (err) {
     console.error("Send OTP error:", err);
     res.status(500).json({ message: 'Server error' });
@@ -322,32 +324,32 @@ router.post('/send-otp', async (req, res) => {
 //  Verify OTP
 router.post("/verify-otp", async (req, res) => {
   const { email, otp } = req.body;
-  console.log("Incoming OTP:", otp);
+
   try {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    console.log("Stored OTP:", user.resetPasswordOTP);
-    console.log("OTP expire:", user.otpExpire, "Current time:", Date.now());
+    if (!user.resetPasswordOTP) {
+      return res.status(400).json({ message: "No OTP set for this user" });
+    }
 
-    if (!user.resetPasswordOTP || user.otpExpire < Date.now()) {
-      return res.status(400).json({ message: "OTP expired or invalid" });
+    if (user.otpExpire < Date.now()) {
+      return res.status(400).json({ message: "OTP has expired" });
     }
 
     const hashedOtp = hashData(otp);
-    console.log("Hashed incoming OTP:", hashedOtp);
-
     if (user.resetPasswordOTP !== hashedOtp) {
-      return res.status(400).json({ message: "Invalid OTP" });
+      return res.status(400).json({ message: "OTP does not match" });
     }
 
-    // OTP verified → issue reset token
+    // OTP is correct → issue reset token
     const resetToken = jwt.sign(
       { id: user._id, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: "10m" }
     );
 
+    // Clear OTP so it can't be reused
     user.resetPasswordOTP = undefined;
     user.otpExpire = undefined;
     await user.save();
