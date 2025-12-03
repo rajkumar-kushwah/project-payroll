@@ -481,21 +481,22 @@ router.delete("/delete-account", protect , async (req, res) => {
       // delete all employees created by user
     await Employee.deleteMany({createdBy: user._id});
 
-    // Find company
+     // Find company of owner
     const company = await Company.findOne({ ownerId: user._id });
 
     if (company) {
-      // Filter: admin list se owner ko nikal do
+      // DELETE ONLY ADMINS WHO ARE NOT OWNER
       const adminsToDelete = company.admins.filter(
         (adminId) => adminId.toString() !== user._id.toString()
       );
 
-      // Delete admins only (owner not included)
       if (adminsToDelete.length > 0) {
-        await User.deleteMany({ _id: { $in: adminsToDelete } });
+        await User.deleteMany({
+          _id: { $in: adminsToDelete },
+        });
       }
 
-      // Delete company
+      // DELETE COMPANY
       await Company.findByIdAndDelete(company._id);
     }
 
