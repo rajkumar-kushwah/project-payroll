@@ -93,21 +93,21 @@ export const addEmployee = async (req, res) => {
 // -------------------------------------------------------------------
 // UPDATE EMPLOYEE
 // -------------------------------------------------------------------
-export const updateEmployee = async (req, res) => {
-  try {
-    const emp = await Employee.findOneAndUpdate(
-      { _id: req.params.id, companyId: req.user.companyId },
-      req.body,
-      { new: true }
-    );
+// export const updateEmployee = async (req, res) => {
+//   try {
+//     const emp = await Employee.findOneAndUpdate(
+//       { _id: req.params.id, companyId: req.user.companyId },
+//       req.body,
+//       { new: true }
+//     );
 
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+//     if (!emp) return res.status(404).json({ message: "Employee not found" });
 
-    res.json({ success: true, message: "Updated successfully", emp });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-};
+//     res.json({ success: true, message: "Updated successfully", emp });
+//   } catch (err) {
+//     res.status(500).json({ message: "Server error", error: err.message });
+//   }
+// };
 
 // -------------------------------------------------------------------
 // DELETE EMPLOYEE
@@ -206,59 +206,59 @@ export const filterEmployees = async (req, res) => {
   }
 };
 
-export const createEmployeeProfile = async (req, res) => {
-  try {
-    const {
-      name,
-      email,
-      phone,
-      jobRole,
-      department,
-      designation,
-      joinDate,
-      status,
-      notes,
-    } = req.body;
+// export const createEmployeeProfile = async (req, res) => {
+//   try {
+//     const {
+//       name,
+//       email,
+//       phone,
+//       jobRole,
+//       department,
+//       designation,
+//       joinDate,
+//       status,
+//       notes,
+//     } = req.body;
 
-    // Check if employee already exists
-    const exists = await Employee.findOne({
-      $or: [{ email: email?.toLowerCase() }, { phone }],
-      companyId: req.user.companyId,
-    });
+//     // Check if employee already exists
+//     const exists = await Employee.findOne({
+//       $or: [{ email: email?.toLowerCase() }, { phone }],
+//       companyId: req.user.companyId,
+//     });
 
-    if (exists)
-      return res.status(400).json({ message: "Employee already exists" });
+//     if (exists)
+//       return res.status(400).json({ message: "Employee already exists" });
 
-    // Avatar upload
-    let avatar = "";
-    if (req.file && req.file.path) {
-      avatar = req.file.path; // Cloudinary URL
-    }
+//     // Avatar upload
+//     let avatar = "";
+//     if (req.file && req.file.path) {
+//       avatar = req.file.path; // Cloudinary URL
+//     }
 
-    const emp = await Employee.create({
-      name,
-      email,
-      phone,
-      jobRole,
-      department,
-      designation,
-      joinDate,
-      status,
-      notes,
-      avatar, // save avatar URL
-      companyId: req.user.companyId,
-      createdBy: req.user._id,
-    });
+//     const emp = await Employee.create({
+//       name,
+//       email,
+//       phone,
+//       jobRole,
+//       department,
+//       designation,
+//       joinDate,
+//       status,
+//       notes,
+//       avatar, // save avatar URL
+//       companyId: req.user.companyId,
+//       createdBy: req.user._id,
+//     });
 
-    res.status(201).json({
-      success: true,
-      message: "Employee created successfully",
-      emp,
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-};
+//     res.status(201).json({
+//       success: true,
+//       message: "Employee created successfully",
+//       emp,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: "Server error", error: err.message });
+//   }
+// };
 
 export const updateEmployeeProfile = async (req, res) => {
   try {
