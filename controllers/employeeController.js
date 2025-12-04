@@ -262,11 +262,19 @@ export const createEmployeeProfile = async (req, res) => {
 
 export const updateEmployeeProfile = async (req, res) => {
   try {
-    const updateData = { ...req.body };
+    // Build update object safely
+    const updateData = {};
+    Object.keys(req.body).forEach((key) => {
+      if (req.body[key] !== undefined) updateData[key] = req.body[key];
+    });
 
-    // If new avatar uploaded
     if (req.file && req.file.path) {
-      updateData.avatar = req.file.path; // Cloudinary URL
+      updateData.avatar = req.file.path;
+    }
+
+    // Convert joinDate to Date type if present
+    if (updateData.joinDate) {
+      updateData.joinDate = new Date(updateData.joinDate);
     }
 
     const emp = await Employee.findOneAndUpdate(
@@ -279,7 +287,9 @@ export const updateEmployeeProfile = async (req, res) => {
 
     res.json({ success: true, message: "Updated successfully", emp });
   } catch (err) {
+    console.error("Update Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
