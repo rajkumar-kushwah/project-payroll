@@ -298,18 +298,25 @@ export const getAttendance = async (req, res) => {
     if (employeeId) query.employeeId = employeeId;
     if (status) query.status = status;
 
-    // Date filter
+    // --- DATE FILTER FIXED FOR IST ---
     if (startDate && endDate) {
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
+
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
+
       query.date = { $gte: start, $lte: end };
-    } else if (month && year) {
-      const start = new Date(`${year}-${String(month).padStart(2, "0")}-01`);
+    }
+
+    // Monthly filter
+    if (month && year) {
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month, 0); // last day of month
+
       start.setHours(0, 0, 0, 0);
-      const end = new Date(`${year}-${String(month).padStart(2, "0")}-31`);
       end.setHours(23, 59, 59, 999);
+
       query.date = { $gte: start, $lte: end };
     }
 
@@ -335,4 +342,5 @@ export const getAttendance = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
