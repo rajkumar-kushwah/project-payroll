@@ -35,6 +35,8 @@ const WorkScheduleSchema = new mongoose.Schema({
   breakEnd: { type: String, default: null },
 
   gracePeriod: { type: Number, default: 10 },
+  effectiveFrom: { type: Date, default: Date.now },  
+  effectiveTo: { type: Date, default: null },  
 
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
 

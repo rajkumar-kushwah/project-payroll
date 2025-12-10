@@ -93,21 +93,7 @@ export const addEmployee = async (req, res) => {
 // -------------------------------------------------------------------
 // UPDATE EMPLOYEE
 // -------------------------------------------------------------------
-// export const updateEmployee = async (req, res) => {
-//   try {
-//     const emp = await Employee.findOneAndUpdate(
-//       { _id: req.params.id, companyId: req.user.companyId },
-//       req.body,
-//       { new: true }
-//     );
 
-//     if (!emp) return res.status(404).json({ message: "Employee not found" });
-
-//     res.json({ success: true, message: "Updated successfully", emp });
-//   } catch (err) {
-//     res.status(500).json({ message: "Server error", error: err.message });
-//   }
-// };
 
 // -------------------------------------------------------------------
 // DELETE EMPLOYEE

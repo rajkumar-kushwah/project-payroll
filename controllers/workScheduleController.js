@@ -42,6 +42,7 @@ if (exists) {
       shiftType: shiftType || "Full-day",
       breakStart,
       breakEnd,
+      effectiveFrom: new Date(),
       createdBy: req.user._id
     });
 
