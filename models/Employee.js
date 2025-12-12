@@ -15,7 +15,7 @@ const employeeSchema = new mongoose.Schema(
     joinDate: { type: Date, default: Date.now },
     status: { type: String, enum: ["active","inactive","terminated"], default: "active" },
     notes: { type: String },
-    salary: { type: Number, default: 0 },
+    basicSalary: { type: Number, default: 0 },
   },
   { timestamps: true } // createdAt = registration date
 );

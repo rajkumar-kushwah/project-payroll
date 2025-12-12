@@ -48,6 +48,7 @@ export const addEmployee = async (req, res) => {
       designation,
       joinDate,
       status,
+      basicSalary,
       notes,
     } = req.body;
 
@@ -73,6 +74,7 @@ export const addEmployee = async (req, res) => {
       department,
       designation,
       joinDate,
+      basicSalary: Number(basicSalary),
       status,
       notes,
       avatar, // save Cloudinary URL
