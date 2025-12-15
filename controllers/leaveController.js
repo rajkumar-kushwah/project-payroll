@@ -86,3 +86,9 @@ export const updateLeave = async (req, res) => {
         res.status(500).json({ message: "server error", error: err.message });
     }
 }
+
+// Backend
+export const getAllEmployees = async (req, res) => {
+  const employees = await Employee.find({ companyId: req.user.companyId });
+  res.json({ success: true, employees });
+};

@@ -1,5 +1,7 @@
 import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import User from "../models/User.js";
 
 // -------------------------------------------------------------------
 // GET ALL EMPLOYEES
@@ -26,24 +28,36 @@ export const getEmployeeById = async (req, res) => {
       companyId: req.user.companyId,
     });
 
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    // Employee role ke liye check
+   if (req.user.role === "employee" && emp._id.toString() !== req.user.employeeId.toString()) {
+  return res.status(403).json({ message: "Access denied" });
+}
 
+
+
+    if (!emp) return res.status(404).json({ message: "Employee not found" });
     res.json({ success: true, emp });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
+
 // -------------------------------------------------------------------
 // ADD EMPLOYEE (Salary auto-generate nahi hoti)
 // -------------------------------------------------------------------
+
+// ------------------------------------------------
+// ADD EMPLOYEE + CREATE LOGIN USER
+// ------------------------------------------------
 export const addEmployee = async (req, res) => {
   try {
     const {
       name,
       email,
-      dob,
+      password,   //  HR set karega
       phone,
+      dob,
       jobRole,
       department,
       designation,
@@ -53,25 +67,35 @@ export const addEmployee = async (req, res) => {
       notes,
     } = req.body;
 
+    if (!password) {
+      return res.status(400).json({ message: "Password required" });
+    }
+
+    //  Check existing employee
     const exists = await Employee.findOne({
-      $or: [{ email: email?.toLowerCase() }, { phone }],
+      email: email.toLowerCase(),
       companyId: req.user.companyId,
     });
 
-    if (exists)
+    if (exists) {
       return res.status(400).json({ message: "Employee already exists" });
-
-    // Cloudinary upload
-    let avatar = "";
-    if (req.file) {
-      avatar = req.file.path || req.file.secure_url || ""; //  Cloudinary safe check
     }
 
-    const emp = await Employee.create({
+    //  Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 🖼 Avatar upload
+    let avatar = "";
+    if (req.file) {
+      avatar = req.file.path;
+    }
+
+    // 👤 Create Employee
+    const employee = await Employee.create({
       name,
       email,
-      dateOfBirth: dob,
       phone,
+      dateOfBirth: dob,
       jobRole,
       department,
       designation,
@@ -79,17 +103,28 @@ export const addEmployee = async (req, res) => {
       basicSalary: Number(basicSalary),
       status,
       notes,
-      avatar, // save Cloudinary URL
+      avatar,
       companyId: req.user.companyId,
       createdBy: req.user._id,
     });
 
+    //  Create User (LOGIN)
+    await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: "employee",
+      companyId: req.user.companyId,
+      employeeId: employee._id,
+    });
+
     res.status(201).json({
       success: true,
-      message: "Employee created successfully",
-      emp,
+      message: "Employee created with login access",
+      employee,
     });
   } catch (err) {
+    console.error("Add Employee Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
@@ -165,11 +200,12 @@ export const filterEmployees = async (req, res) => {
     if (jobRole) query.jobRole = jobRole;
     if (department) query.department = department;
 
-    if (minSalary || maxSalary) {
-      query.salary = {};
-      if (minSalary) query.salary.$gte = Number(minSalary);
-      if (maxSalary) query.salary.$lte = Number(maxSalary);
-    }
+   if (minSalary || maxSalary) {
+  query.basicSalary = {};
+  if (minSalary) query.basicSalary.$gte = Number(minSalary);
+  if (maxSalary) query.basicSalary.$lte = Number(maxSalary);
+}
+
 
     let employees = await Employee.find(query);
 
@@ -179,8 +215,9 @@ export const filterEmployees = async (req, res) => {
         a.name.localeCompare(b.name)
       );
     } else if (sort === "salary-high") {
-      employees = employees.sort((a, b) => b.salary - a.salary);
-    } else if (sort === "latest") {
+  employees = employees.sort((a, b) => b.basicSalary - a.basicSalary);
+}
+ else if (sort === "latest") {
       employees = employees.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       );

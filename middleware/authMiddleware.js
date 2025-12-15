@@ -42,3 +42,10 @@ export const ownerProtect = (req, res, next) => {
   if (req.user.role !== "owner") return res.status(403).json({ message: "Owner access required" });
   next();
 };
+
+export const employeeProtect = (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: "Not logged in" });
+  if (req.user.role !== "employee") return res.status(403).json({ message: "Employee access only" });
+  next();
+};
+
