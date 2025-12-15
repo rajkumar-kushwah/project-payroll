@@ -289,7 +289,6 @@ export const filterEmployees = async (req, res) => {
 
 export const updateEmployeeProfile = async (req, res) => {
   try {
-    // Build update object safely
     const updateData = {};
     Object.keys(req.body).forEach((key) => {
       if (req.body[key] !== undefined) updateData[key] = req.body[key];
@@ -299,7 +298,6 @@ export const updateEmployeeProfile = async (req, res) => {
       updateData.avatar = req.file.path;
     }
 
-    // Convert joinDate to Date type if present
     if (updateData.joinDate) {
       updateData.joinDate = new Date(updateData.joinDate);
     }
@@ -311,6 +309,15 @@ export const updateEmployeeProfile = async (req, res) => {
     );
 
     if (!emp) return res.status(404).json({ message: "Employee not found" });
+
+    // ----------------- PASSWORD UPDATE -----------------
+    if (updateData.password) {
+      const hashedPassword = await bcrypt.hash(updateData.password, 10);
+      await User.findOneAndUpdate(
+        { employeeId: emp._id },
+        { password: hashedPassword }
+      );
+    }
 
     res.json({ success: true, message: "Updated successfully", emp });
   } catch (err) {
