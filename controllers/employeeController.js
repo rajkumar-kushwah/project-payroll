@@ -64,31 +64,56 @@ export const addEmployee = async (req, res) => {
     if (existsEmp || existsUser) return res.status(400).json({ message: "Employee/User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    let avatar = req.file?.path || "";
+
+    // Avatar handling
+    let avatar = "";
+    if (req.file) avatar = req.file.path || req.file.filename || "";
+
+    // Date handling
+    const dateOfBirth = dob ? new Date(dob) : undefined;
+    const joiningDate = joinDate ? new Date(joinDate) : new Date();
 
     // Create Employee first
     employee = await Employee.create({
-      name, email, phone, dateOfBirth: dob, jobRole, department,
-      designation, joinDate, basicSalary: Number(basicSalary),
-      status, notes, avatar, companyId: req.user.companyId, createdBy: req.user._id
+      name,
+      email,
+      phone,
+      dateOfBirth,
+      jobRole,
+      department,
+      designation,
+      joinDate: joiningDate,
+      basicSalary: Number(basicSalary),
+      status,
+      notes,
+      avatar,
+      companyId: req.user.companyId,
+      createdBy: req.user._id,
     });
 
     // Create login User
-    await User.create({
-      name, email, password: hashedPassword,
-      role: "employee", companyId: req.user.companyId, employeeId: employee._id
-    });
+    try {
+      await User.create({
+        name,
+        email,
+        password: hashedPassword,
+        role: "employee",
+        companyId: req.user.companyId,
+        employeeId: employee._id,
+      });
+    } catch (err) {
+      // Rollback Employee if User creation fails
+      await Employee.findByIdAndDelete(employee._id);
+      throw err;
+    }
 
     res.status(201).json({ success: true, message: "Employee created with login access", employee });
   } catch (err) {
     console.error("Add Employee Error:", err);
-
-    // Rollback Employee if User creation failed
-    if (employee?._id) await Employee.findByIdAndDelete(employee._id);
-
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 
 // -------------------------------------------------------------------
