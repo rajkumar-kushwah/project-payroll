@@ -51,83 +51,45 @@ export const getEmployeeById = async (req, res) => {
 // ADD EMPLOYEE + CREATE LOGIN USER
 // ------------------------------------------------
 export const addEmployee = async (req, res) => {
+  let employee;
   try {
-    const {
-      name,
-      email,
-      password,   //  HR set karega
-      phone,
-      dob,
-      jobRole,
-      department,
-      designation,
-      joinDate,
-      status,
-      basicSalary,
-      notes,
-    } = req.body;
+    const { name, email, password, phone, dob, jobRole, department, designation, joinDate, status, basicSalary, notes } = req.body;
 
-    if (!password) {
-      return res.status(400).json({ message: "Password required" });
-    }
+    if (!password) return res.status(400).json({ message: "Password required" });
 
-    //  Check existing employee
-    const exists = await Employee.findOne({
-      email: email.toLowerCase(),
-      companyId: req.user.companyId,
-    });
+    // Check duplicate employee/email
+    const existsEmp = await Employee.findOne({ email: email.toLowerCase(), companyId: req.user.companyId });
+    const existsUser = await User.findOne({ email: email.toLowerCase() });
 
-    if (exists) {
-      return res.status(400).json({ message: "Employee already exists" });
-    }
+    if (existsEmp || existsUser) return res.status(400).json({ message: "Employee/User already exists" });
 
-    //  Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
+    let avatar = req.file?.path || "";
 
-    // 🖼 Avatar upload
-    let avatar = "";
-    if (req.file) {
-      avatar = req.file.path;
-    }
-
-    // 👤 Create Employee
-    const employee = await Employee.create({
-      name,
-      email,
-      phone,
-      dateOfBirth: dob,
-      jobRole,
-      department,
-      designation,
-      joinDate,
-      basicSalary: Number(basicSalary),
-      status,
-      notes,
-      avatar,
-      companyId: req.user.companyId,
-      createdBy: req.user._id,
+    // Create Employee first
+    employee = await Employee.create({
+      name, email, phone, dateOfBirth: dob, jobRole, department,
+      designation, joinDate, basicSalary: Number(basicSalary),
+      status, notes, avatar, companyId: req.user.companyId, createdBy: req.user._id
     });
 
-    //  Create User (LOGIN)
+    // Create login User
     await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      role: "employee",
-      companyId: req.user.companyId,
-      employeeId: employee._id,
+      name, email, password: hashedPassword,
+      role: "employee", companyId: req.user.companyId, employeeId: employee._id
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Employee created with login access",
-      employee,
-    });
+    res.status(201).json({ success: true, message: "Employee created with login access", employee });
   } catch (err) {
     console.error("Add Employee Error:", err);
+
+    // Rollback Employee if User creation failed
+    if (employee?._id) await Employee.findByIdAndDelete(employee._id);
+
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 // -------------------------------------------------------------------
 // UPDATE EMPLOYEE
@@ -289,6 +251,7 @@ export const filterEmployees = async (req, res) => {
 
 export const updateEmployeeProfile = async (req, res) => {
   try {
+    // Build update object safely
     const updateData = {};
     Object.keys(req.body).forEach((key) => {
       if (req.body[key] !== undefined) updateData[key] = req.body[key];
@@ -298,6 +261,7 @@ export const updateEmployeeProfile = async (req, res) => {
       updateData.avatar = req.file.path;
     }
 
+    // Convert joinDate to Date type if present
     if (updateData.joinDate) {
       updateData.joinDate = new Date(updateData.joinDate);
     }
@@ -309,15 +273,6 @@ export const updateEmployeeProfile = async (req, res) => {
     );
 
     if (!emp) return res.status(404).json({ message: "Employee not found" });
-
-    // ----------------- PASSWORD UPDATE -----------------
-    if (updateData.password) {
-      const hashedPassword = await bcrypt.hash(updateData.password, 10);
-      await User.findOneAndUpdate(
-        { employeeId: emp._id },
-        { password: hashedPassword }
-      );
-    }
 
     res.json({ success: true, message: "Updated successfully", emp });
   } catch (err) {
