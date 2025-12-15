@@ -7,7 +7,7 @@ import {
   getEmployeeById,
   updateEmployeeProfile,
 } from "../controllers/employeeController.js";
-import { protect, adminProtect } from "../middleware/authMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js";
 import upload from "../middleware/upload.js";
 
 const router = express.Router();
@@ -26,6 +26,6 @@ router.post("/", upload.single("avatar"), addEmployee);
 
 // DYNAMIC ROUTES LAST
 router.get("/:id", getEmployeeById);
-router.delete("/:id", adminProtect, deleteEmployee);
+router.delete("/:id", deleteEmployee);
 
 export default router;
