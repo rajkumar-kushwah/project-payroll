@@ -1,7 +1,5 @@
 import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
-import User from "../models/User.js";
 
 // -------------------------------------------------------------------
 // GET ALL EMPLOYEES
@@ -28,40 +26,22 @@ export const getEmployeeById = async (req, res) => {
       companyId: req.user.companyId,
     });
 
-    // Employee role ke liye check
-   if (req.user.role === "employee" && emp._id.toString() !== req.user.employeeId.toString()) {
-  return res.status(403).json({ message: "Access denied" });
-}
-
-
-
     if (!emp) return res.status(404).json({ message: "Employee not found" });
+
     res.json({ success: true, emp });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-
 // -------------------------------------------------------------------
 // ADD EMPLOYEE (Salary auto-generate nahi hoti)
 // -------------------------------------------------------------------
-
-// ------------------------------------------------
-// ADD EMPLOYEE + CREATE LOGIN USER
-// ------------------------------------------------
-
-
-// ADD EMPLOYEE + CREATE LOGIN USER
 export const addEmployee = async (req, res) => {
-  let employee;
-
   try {
-    // 1️ Request body destructuring
     const {
       name,
       email,
-      password,
       phone,
       dob,
       jobRole,
@@ -73,77 +53,46 @@ export const addEmployee = async (req, res) => {
       notes,
     } = req.body;
 
-    // 2️ Check if password provided
-    if (!password) return res.status(400).json({ message: "Password is required" });
+    const exists = await Employee.findOne({
+      $or: [{ email: email?.toLowerCase() }, { phone }],
+      companyId: req.user.companyId,
+    });
 
-    // 3️ Check duplicates in Employee & User
-    const existsEmp = await Employee.findOne({ email: email.toLowerCase(), companyId: req.user.companyId });
-    const existsUser = await User.findOne({ email: email.toLowerCase() });
+    if (exists)
+      return res.status(400).json({ message: "Employee already exists" });
 
-    if (existsEmp || existsUser) {
-      return res.status(400).json({ message: "Employee/User with this email already exists" });
+    // Cloudinary upload
+    let avatar = "";
+    if (req.file) {
+      avatar = req.file.path || req.file.secure_url || ""; // Cloudinary safe check
     }
 
-    // 4️ Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 5️ Avatar handling (optional)
-    let avatar = "";
-    if (req.file) avatar = req.file.path || req.file.filename || "";
-
-    // 6️ Date handling
-    const dateOfBirth = dob ? new Date(dob) : undefined;
-    const joiningDate = joinDate ? new Date(joinDate) : new Date();
-
-    // 7️ Create Employee first
-    employee = await Employee.create({
+    const emp = await Employee.create({
       name,
-      email: email.toLowerCase(),
+      email,
       phone,
-      dateOfBirth,
+      dateOfBirth: dob,
       jobRole,
       department,
       designation,
-      joinDate: joiningDate,
+      joinDate,
       basicSalary: Number(basicSalary),
       status,
       notes,
-      avatar,
+      avatar, // save Cloudinary URL
       companyId: req.user.companyId,
       createdBy: req.user._id,
     });
 
-    // 8️ Create corresponding login User
-    try {
-      await User.create({
-        name,
-        email: email.toLowerCase(),
-        password: hashedPassword,
-        role: "employee",
-        companyId: req.user.companyId,
-        employeeId: employee._id,
-      });
-    } catch (err) {
-      // Rollback Employee if User creation fails
-      await Employee.findByIdAndDelete(employee._id);
-      console.error("User creation failed, rolling back Employee:", err.message);
-      return res.status(500).json({ message: "Failed to create login for employee", error: err.message });
-    }
-
-    //  Success response
     res.status(201).json({
       success: true,
-      message: "Employee created successfully with login access",
-      employee,
+      message: "Employee created successfully",
+      emp,
     });
-
   } catch (err) {
-    console.error("Add Employee Error:", err.message);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
-
-
 
 // -------------------------------------------------------------------
 // UPDATE EMPLOYEE
@@ -216,12 +165,11 @@ export const filterEmployees = async (req, res) => {
     if (jobRole) query.jobRole = jobRole;
     if (department) query.department = department;
 
-   if (minSalary || maxSalary) {
-  query.basicSalary = {};
-  if (minSalary) query.basicSalary.$gte = Number(minSalary);
-  if (maxSalary) query.basicSalary.$lte = Number(maxSalary);
-}
-
+    if (minSalary || maxSalary) {
+      query.salary = {};
+      if (minSalary) query.salary.$gte = Number(minSalary);
+      if (maxSalary) query.salary.$lte = Number(maxSalary);
+    }
 
     let employees = await Employee.find(query);
 
@@ -231,9 +179,8 @@ export const filterEmployees = async (req, res) => {
         a.name.localeCompare(b.name)
       );
     } else if (sort === "salary-high") {
-  employees = employees.sort((a, b) => b.basicSalary - a.basicSalary);
-}
- else if (sort === "latest") {
+      employees = employees.sort((a, b) => b.salary - a.salary);
+    } else if (sort === "latest") {
       employees = employees.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       );
