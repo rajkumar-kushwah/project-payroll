@@ -1,6 +1,7 @@
 import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
-
+import User from "../models/User.js";
+import bcrypt from "bcryptjs";
 // -------------------------------------------------------------------
 // GET ALL EMPLOYEES
 // -------------------------------------------------------------------
@@ -37,11 +38,19 @@ export const getEmployeeById = async (req, res) => {
 // -------------------------------------------------------------------
 // ADD EMPLOYEE (Salary auto-generate nahi hoti)
 // -------------------------------------------------------------------
+
+
+
+// --------------------------
+// ADD EMPLOYEE + CREATE LOGIN
+// --------------------------
 export const addEmployee = async (req, res) => {
+  let employee;
   try {
     const {
       name,
       email,
+      password,
       phone,
       dob,
       jobRole,
@@ -53,46 +62,70 @@ export const addEmployee = async (req, res) => {
       notes,
     } = req.body;
 
-    const exists = await Employee.findOne({
-      $or: [{ email: email?.toLowerCase() }, { phone }],
-      companyId: req.user.companyId,
-    });
-
-    if (exists)
-      return res.status(400).json({ message: "Employee already exists" });
-
-    // Cloudinary upload
-    let avatar = "";
-    if (req.file) {
-      avatar = req.file.path || req.file.secure_url || ""; // Cloudinary safe check
+    // 🔹 Check required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email & password required" });
     }
 
-    const emp = await Employee.create({
+    // 🔹 Duplicate check
+    const existsEmp = await Employee.findOne({ email: email.toLowerCase(), companyId: req.user.companyId });
+    const existsUser = await User.findOne({ email: email.toLowerCase() });
+
+    if (existsEmp || existsUser) {
+      return res.status(400).json({ message: "Employee/User already exists" });
+    }
+
+    // 🔹 Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 🔹 Handle avatar (optional)
+    let avatar = "";
+    if (req.file) avatar = req.file.path || req.file.filename || "";
+
+    // 🔹 Create Employee
+    employee = await Employee.create({
       name,
-      email,
+      email: email.toLowerCase(),
       phone,
-      dateOfBirth: dob,
+      dateOfBirth: dob ? new Date(dob) : undefined,
       jobRole,
       department,
       designation,
-      joinDate,
-      basicSalary: Number(basicSalary),
+      joinDate: joinDate ? new Date(joinDate) : new Date(),
+      basicSalary: Number(basicSalary) || 0,
       status,
       notes,
-      avatar, // save Cloudinary URL
+      avatar,
       companyId: req.user.companyId,
       createdBy: req.user._id,
     });
 
+    // 🔹 Create User for login
+    await User.create({
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: "employee",
+      companyId: req.user.companyId,
+      employeeId: employee._id,
+    });
+
     res.status(201).json({
       success: true,
-      message: "Employee created successfully",
-      emp,
+      message: "Employee created with login access",
+      employee,
     });
+
   } catch (err) {
+    console.error("Add Employee Error:", err);
+
+    // Rollback Employee if User creation failed
+    if (employee?._id) await Employee.findByIdAndDelete(employee._id);
+
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 // -------------------------------------------------------------------
 // UPDATE EMPLOYEE
@@ -261,6 +294,11 @@ export const updateEmployeeProfile = async (req, res) => {
     if (req.file && req.file.path) {
       updateData.avatar = req.file.path;
     }
+    // Employee can only update self
+if (req.user.role === "employee") {
+  filter._id = req.user.employeeId;
+}
+
 
     // Convert joinDate to Date type if present
     if (updateData.joinDate) {
