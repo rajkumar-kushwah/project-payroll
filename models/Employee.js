@@ -14,20 +14,25 @@ const employeeSchema = new mongoose.Schema(
     department: { type: String },
     designation: { type: String },
     joinDate: { type: Date, default: Date.now },
-    status: { type: String, enum: ["active","inactive","terminated"], default: "active" },
+    status: { type: String, enum: ["active", "inactive", "terminated"], default: "active" },
     notes: { type: String },
+    password: {
+      type: String,
+      required: false,
+    },
+
     basicSalary: { type: Number, default: 0 },
   },
   { timestamps: true } // createdAt = registration date
 );
 
 // Auto Employee Code
-employeeSchema.pre("save", async function(next) {
+employeeSchema.pre("save", async function (next) {
   if (!this.employeeCode) {
     const lastEmp = await mongoose.model("Employee").findOne({ companyId: this.companyId }).sort({ createdAt: -1 });
     let nextNumber = 1;
     if (lastEmp && lastEmp.employeeCode) nextNumber = parseInt(lastEmp.employeeCode.split("-")[1]) + 1;
-    this.employeeCode = `EMP-${String(nextNumber).padStart(3,"0")}`;
+    this.employeeCode = `EMP-${String(nextNumber).padStart(3, "0")}`;
   }
   next();
 });
