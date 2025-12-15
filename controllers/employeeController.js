@@ -50,33 +50,55 @@ export const getEmployeeById = async (req, res) => {
 // ------------------------------------------------
 // ADD EMPLOYEE + CREATE LOGIN USER
 // ------------------------------------------------
+
+
+// ADD EMPLOYEE + CREATE LOGIN USER
 export const addEmployee = async (req, res) => {
   let employee;
+
   try {
-    const { name, email, password, phone, dob, jobRole, department, designation, joinDate, status, basicSalary, notes } = req.body;
+    // 1️ Request body destructuring
+    const {
+      name,
+      email,
+      password,
+      phone,
+      dob,
+      jobRole,
+      department,
+      designation,
+      joinDate,
+      status,
+      basicSalary,
+      notes,
+    } = req.body;
 
-    if (!password) return res.status(400).json({ message: "Password required" });
+    // 2️ Check if password provided
+    if (!password) return res.status(400).json({ message: "Password is required" });
 
-    // Check duplicate employee/email
+    // 3️ Check duplicates in Employee & User
     const existsEmp = await Employee.findOne({ email: email.toLowerCase(), companyId: req.user.companyId });
     const existsUser = await User.findOne({ email: email.toLowerCase() });
 
-    if (existsEmp || existsUser) return res.status(400).json({ message: "Employee/User already exists" });
+    if (existsEmp || existsUser) {
+      return res.status(400).json({ message: "Employee/User with this email already exists" });
+    }
 
+    // 4️ Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Avatar handling
+    // 5️ Avatar handling (optional)
     let avatar = "";
     if (req.file) avatar = req.file.path || req.file.filename || "";
 
-    // Date handling
+    // 6️ Date handling
     const dateOfBirth = dob ? new Date(dob) : undefined;
     const joiningDate = joinDate ? new Date(joinDate) : new Date();
 
-    // Create Employee first
+    // 7️ Create Employee first
     employee = await Employee.create({
       name,
-      email,
+      email: email.toLowerCase(),
       phone,
       dateOfBirth,
       jobRole,
@@ -91,11 +113,11 @@ export const addEmployee = async (req, res) => {
       createdBy: req.user._id,
     });
 
-    // Create login User
+    // 8️ Create corresponding login User
     try {
       await User.create({
         name,
-        email,
+        email: email.toLowerCase(),
         password: hashedPassword,
         role: "employee",
         companyId: req.user.companyId,
@@ -104,12 +126,19 @@ export const addEmployee = async (req, res) => {
     } catch (err) {
       // Rollback Employee if User creation fails
       await Employee.findByIdAndDelete(employee._id);
-      throw err;
+      console.error("User creation failed, rolling back Employee:", err.message);
+      return res.status(500).json({ message: "Failed to create login for employee", error: err.message });
     }
 
-    res.status(201).json({ success: true, message: "Employee created with login access", employee });
+    //  Success response
+    res.status(201).json({
+      success: true,
+      message: "Employee created successfully with login access",
+      employee,
+    });
+
   } catch (err) {
-    console.error("Add Employee Error:", err);
+    console.error("Add Employee Error:", err.message);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
