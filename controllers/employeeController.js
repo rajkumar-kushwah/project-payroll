@@ -42,6 +42,7 @@ export const addEmployee = async (req, res) => {
     const {
       name,
       email,
+      dob,
       phone,
       jobRole,
       department,
@@ -63,12 +64,13 @@ export const addEmployee = async (req, res) => {
     // Cloudinary upload
     let avatar = "";
     if (req.file) {
-      avatar = req.file.path || req.file.secure_url || ""; // ✅ Cloudinary safe check
+      avatar = req.file.path || req.file.secure_url || ""; //  Cloudinary safe check
     }
 
     const emp = await Employee.create({
       name,
       email,
+      dateOfBirth: dob,
       phone,
       jobRole,
       department,
