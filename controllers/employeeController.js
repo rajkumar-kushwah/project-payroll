@@ -2,8 +2,9 @@ import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
-import Company from "../models/Company.js";
-
+import Leave from "../models/Leave.js";
+import Attendance from "../models/Attendance.js";
+import Payroll from "../models/Payroll.js";
 // -------------------------------------------------------------------
 // GET ALL EMPLOYEES
 // -------------------------------------------------------------------
@@ -12,44 +13,39 @@ export const getEmployees = async (req, res) => {
     let employees;
 
     if (req.user.role === "employee") {
-      // sirf apna data
-      employees = await Employee.findOne({ userId: req.user._id })
+      // Sirf apna data
+      employees = await Employee.find({ userId: req.user._id })
         .populate("userId", "name email role phone avatar");
     } else if (["hr", "owner"].includes(req.user.role)) {
-      // company ke sab employees
+      // HR/Owner → company ke sab employees
       employees = await Employee.find({ companyId: req.user.companyId })
         .populate("userId", "name email role phone avatar")
         .sort({ createdAt: -1 });
+    } else {
+      return res.status(403).json({ message: "Unauthorized role" });
     }
 
-    // leave, attendance, salary ka data
-    let leaveData = [], attendanceData = [], salaryData = [];
+    // Har employee ke liye leave, attendance, salary attach karo
+    const formattedEmployees = await Promise.all(
+      employees.map(async (emp) => {
+        const leaveData = await Leave.find({ employeeId: emp._id });
+        const attendanceData = await Attendance.find({ employeeId: emp._id });
+        const salaryData = await Payroll.find({ employeeId: emp._id });
 
-    if (req.user.role === "employee" && employees) {
-      leaveData = await Leave.find({ employeeId: employees._id });
-      attendanceData = await Attendance.find({ employeeId: employees._id });
-      salaryData = await Payroll.find({ employeeId: employees._id });
-    } else if (["hr", "owner"].includes(req.user.role)) {
-      // sab employees ke liye fetch karna ho to mapping kar sakte ho
-      const employeeIds = employees.map(emp => emp._id);
-      leaveData = await Leave.find({ employeeId: { $in: employeeIds } });
-      attendanceData = await Attendance.find({ employeeId: { $in: employeeIds } });
-      salaryData = await Payroll.find({ employeeId: { $in: employeeIds } });
-    }
-
-    // formatted employees
-    const formattedEmployees = Array.isArray(employees)
-      ? employees.map(emp => ({ ...emp._doc, user: emp.userId || {} }))
-      : { ...employees._doc, user: employees.userId || {} };
+        return {
+          ...emp._doc,
+          user: emp.userId || {}, // populated user fields
+          leaveData,
+          attendanceData,
+          salaryData,
+        };
+      })
+    );
 
     res.json({
       success: true,
-      count: Array.isArray(employees) ? employees.length : 1,
+      count: employees.length,
       employees: formattedEmployees,
-      leaveData,
-      attendanceData,
-      salaryData,
-      profile: req.user.role === "employee" ? formattedEmployees : null,
     });
   } catch (err) {
     console.error("Get Employees Error:", err);
@@ -57,35 +53,6 @@ export const getEmployees = async (req, res) => {
   }
 };
 
-
-// export const getEmployees = async (req, res) => {
-//   try {
-//     // 1️⃣ Find logged-in user's employee record
-//     const employee = await Employee.findOne({ userId: req.user._id })
-//       .populate({
-//         path: "userId",
-//         select: "name email role phone avatar",
-//       });
-
-//     if (!employee) return res.status(404).json({ message: "Employee record not found." });
-
-//     // 2️⃣ Fetch related data for this employee only
-//     const leaveData = await Leave.find({ employeeId: employee._id });
-//     const attendanceData = await Attendance.find({ employeeId: employee._id });
-//     const salaryData = await Payroll.find({ employeeId: employee._id });
-
-//     res.json({
-//       success: true,
-//       profile: employee,
-//       leaves: leaveData,
-//       attendance: attendanceData,
-//       salary: salaryData,
-//     });
-//   } catch (err) {
-//     console.error("Get My Profile Data Error:", err);
-//     res.status(500).json({ message: "Server error", error: err.message });
-//   }
-// };
 
 
 
