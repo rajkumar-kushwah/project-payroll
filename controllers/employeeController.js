@@ -1,6 +1,7 @@
 import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import User from "../models/User.js";
 
 // -------------------------------------------------------------------
 // GET ALL EMPLOYEES
@@ -31,6 +32,8 @@ export const getEmployeeById = async (req, res) => {
 // -------------------------------------------------------------------
 // ADD EMPLOYEE
 // -------------------------------------------------------------------
+
+
 export const addEmployee = async (req, res) => {
   try {
     const {
@@ -38,23 +41,28 @@ export const addEmployee = async (req, res) => {
       designation, joinDate, status, basicSalary, notes, password
     } = req.body;
 
-    // Check duplicates
-    const exists = await Employee.findOne({
+    // Check duplicates in Employee
+    const existsEmp = await Employee.findOne({
       $or: [{ email: email?.toLowerCase() }, { phone }],
       companyId: req.user.companyId,
     });
-    if (exists) return res.status(400).json({ message: "Employee already exists" });
+    if (existsEmp) return res.status(400).json({ message: "Employee already exists" });
+
+    // Check duplicates in User (optional, but safe)
+    const existsUser = await User.findOne({ email: email?.toLowerCase(), isDeleted: false });
+    if (existsUser) return res.status(400).json({ message: "User with this email already exists" });
 
     // Avatar
     let avatar = "";
     if (req.file?.path) avatar = req.file.path;
 
-    // Inside addEmployee controller
-let hashedPassword = password;
-if (password) {
-  const salt = await bcrypt.genSalt(10);
-  hashedPassword = await bcrypt.hash(password, salt);
-}
+    // Hash password
+    let hashedPassword = password;
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      hashedPassword = await bcrypt.hash(password, salt);
+    }
+
     // Create Employee
     const emp = await Employee.create({
       name,
@@ -71,18 +79,32 @@ if (password) {
       avatar,
       companyId: req.user.companyId,
       createdBy: req.user._id,
-      password: hashedPassword, // password set by HR
+      password: hashedPassword,
+    });
+
+    // Create corresponding User for login
+    const user = await User.create({
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: "employee",
+      companyId: req.user.companyId,
+      employeeId: emp._id, // link Employee → User
     });
 
     res.status(201).json({
       success: true,
-      message: "Employee created successfully",
-      emp,
+      message: "Employee registered successfully",
+      employee: emp,
+      userLoginData: { email: user.email, password } // HR can send password to employee
     });
+
   } catch (err) {
+    console.error("Add Employee Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 // -------------------------------------------------------------------
 // UPDATE EMPLOYEE
