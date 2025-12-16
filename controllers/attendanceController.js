@@ -115,17 +115,36 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
 /* =========================================================
    GET COMPANY/EMPLOYEE SCHEDULE
 ========================================================= */
-async function getSchedule(emp, companyId) {
+export async function getSchedule(emp, companyId) {
+  // safety
+  if (!emp) {
+    return { fixedIn: "10:00", fixedOut: "18:30" };
+  }
+
+  // 1️ Employee specific schedule
   if (emp.workScheduleId) {
-    const s = await WorkSchedule.findOne({
+    const schedule = await WorkSchedule.findOne({
       _id: emp.workScheduleId,
       companyId,
       status: "active",
-    });
-    if (s) return { fixedIn: s.inTime || "10:00", fixedOut: s.outTime || "18:30" };
+    }).select("inTime outTime");
+
+    if (schedule) {
+      return {
+        fixedIn: schedule.inTime || "10:00",
+        fixedOut: schedule.outTime || "18:30",
+      };
+    }
   }
-  const company = await Company.findById(companyId).select("fixedIn fixedOut");
-  return { fixedIn: company?.fixedIn || "10:00", fixedOut: company?.fixedOut || "18:30" };
+
+  // 2️ Company default schedule
+  const company = await Company.findById(companyId)
+    .select("fixedIn fixedOut");
+
+  return {
+    fixedIn: company?.fixedIn || "10:00",
+    fixedOut: company?.fixedOut || "18:30",
+  };
 }
 
 /* =========================================================
@@ -133,30 +152,50 @@ async function getSchedule(emp, companyId) {
 ========================================================= */
 export const checkIn = async (req, res) => {
   try {
-    const targetId =
-      ["admin", "owner"].includes(req.user.role) && req.body.employeeId
-        ? req.body.employeeId
-        : req.user._id;
+    let employeeId;
+
+    // 👤 Employee → apna
+    if (req.user.role === "employee") {
+      const emp = await Employee.findOne({
+        userId: req.user._id,
+        companyId: req.user.companyId,
+      });
+
+      if (!emp) return res.status(404).json({ message: "Employee not found" });
+      employeeId = emp._id;
+    }
+
+    // 🧑‍💼 Admin / Owner → kisi ka bhi
+    if (["admin", "owner"].includes(req.user.role)) {
+      if (!req.body.employeeId)
+        return res.status(400).json({ message: "Employee ID required" });
+
+      employeeId = req.body.employeeId;
+    }
 
     const today = toDateString(new Date());
 
-    // check duplicate
+    // duplicate check
     const already = await Attendance.findOne({
-      employeeId: targetId,
+      employeeId,
       date: today,
       companyId: req.user.companyId,
     });
 
-    if (already) return res.status(400).json({ message: "Already checked in" });
+    if (already)
+      return res.status(400).json({ message: "Already checked in" });
 
-    // 🔥 FIX: Fetch employee for code
-    const emp = await Employee.findById(targetId).select("employeeCode");
+    // employee fetch
+    const emp = await Employee.findOne({
+      _id: employeeId,
+      companyId: req.user.companyId,
+    });
+
     if (!emp) return res.status(404).json({ message: "Employee not found" });
 
-    // create attendance
     const record = await Attendance.create({
-      employeeId: targetId,
-      employeeCode: emp.employeeCode,   // 👍 REQUIRED FIELD FIXED
+      employeeId: emp._id,
+      employeeCode: emp.employeeCode,
       companyId: req.user.companyId,
       date: today,
       checkIn: new Date(),
@@ -169,7 +208,6 @@ export const checkIn = async (req, res) => {
     );
 
     res.json({ success: true, data: populated });
-
   } catch (err) {
     console.error("checkIn Error:", err);
     res.status(500).json({ message: "Server error" });
@@ -177,20 +215,34 @@ export const checkIn = async (req, res) => {
 };
 
 
+
 /* =========================================================
    CHECK-OUT
 ========================================================= */
 export const checkOut = async (req, res) => {
   try {
-    const targetId =
-      ["admin", "owner"].includes(req.user.role) && req.body.employeeId
-        ? req.body.employeeId
-        : req.user._id;
+    let employeeId;
+
+    if (req.user.role === "employee") {
+      const emp = await Employee.findOne({
+        userId: req.user._id,
+        companyId: req.user.companyId,
+      });
+
+      if (!emp) return res.status(404).json({ message: "Employee not found" });
+      employeeId = emp._id;
+    }
+
+    if (["admin", "owner"].includes(req.user.role)) {
+      if (!req.body.employeeId)
+        return res.status(400).json({ message: "Employee ID required" });
+      employeeId = req.body.employeeId;
+    }
 
     const today = toDateString(new Date());
 
     const record = await Attendance.findOne({
-      employeeId: targetId,
+      employeeId,
       date: today,
       companyId: req.user.companyId,
     });
@@ -201,7 +253,7 @@ export const checkOut = async (req, res) => {
 
     record.checkOut = new Date();
 
-    const emp = await Employee.findById(targetId);
+    const emp = await Employee.findById(employeeId);
     const schedule = await getSchedule(emp, req.user.companyId);
 
     computeDerivedFields(record, emp, schedule);
@@ -219,6 +271,7 @@ export const checkOut = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /* =========================================================
    UPDATE ATTENDANCE
@@ -304,7 +357,7 @@ export const getAttendance = async (req, res) => {
 
     let query = { companyId: req.user.companyId };
 
-    // 👤 EMPLOYEE → sirf apni attendance
+    //  EMPLOYEE → sirf apni attendance
     if (req.user.role === "employee") {
       const employee = await Employee.findOne({ userId: req.user._id });
       if (!employee) {

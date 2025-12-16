@@ -10,33 +10,34 @@ import {
 import {
   protect,
   adminProtect,
-  ownerProtect,
 } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 /* ===========================
-   LOGIN REQUIRED FOR ALL
+   LOGIN REQUIRED
 =========================== */
 router.use(protect);
 
 /* ===========================
-   ADMIN / OWNER SIDE
+   CHECK-IN / CHECK-OUT
 =========================== */
-// Admin/Owner can mark check-in/out for any employee
-router.post("/check-in", adminProtect, checkIn);
-router.post("/check-out", adminProtect, checkOut);
-
-// Get attendance with full filter (employee, status, date-range, month, year, pagination)
-router.get("/", adminProtect, getAttendance);
-
-// Update / Delete attendance by ID
-router.put("/:id", adminProtect, updateAttendance);
-router.delete("/:id", adminProtect, deleteAttendance);
+// employee → apna
+//  hr/owner → kisi ka bhi
+router.post("/check-in", checkIn);
+router.post("/check-out", checkOut);
 
 /* ===========================
-   OWNER ONLY (Optional)
+   VIEW ATTENDANCE
 =========================== */
-// router.delete("/delete-all", ownerProtect, deleteAllAttendance);
+// employee → apna
+// hr/owner → sabka
+router.get("/", getAttendance);
+
+/* ===========================
+   ADMIN / HR / OWNER ONLY
+=========================== */
+router.put("/:id", adminProtect, updateAttendance);
+router.delete("/:id", adminProtect, deleteAttendance);
 
 export default router;
