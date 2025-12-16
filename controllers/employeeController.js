@@ -78,6 +78,7 @@ export const addEmployee = async (req, res) => {
       role: "employee",
       companyId: req.user.companyId,
       avatar: req.file ? req.file.path : "",
+      emailVerified: true,
     }], { session });
 
     // 2️ Create Employee
