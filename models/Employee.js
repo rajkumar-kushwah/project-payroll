@@ -22,7 +22,6 @@ const employeeSchema = new mongoose.Schema({
 
   notes: { type: String },
   basicSalary: { type: Number, default: 0 },
-  password: { type: String, required: true },
 }, { timestamps: true });
 
 
