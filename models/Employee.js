@@ -8,8 +8,8 @@ const employeeSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
   avatar: { type: String, default: "" },
-  // name: { type: String, required: true },
-  // email: { type: String, required: true, lowercase: true },
+  name: { type: String, required: true },
+  email: { type: String, required: true, lowercase: true },
   phone: { type: String, default: "" },
 
   dateOfBirth: { type: Date },
