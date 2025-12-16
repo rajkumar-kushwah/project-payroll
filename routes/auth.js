@@ -381,7 +381,7 @@ router.post("/reset-password", async (req, res) => {
 //  Example: Get Profile
 router.get('/profile', protect , async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password");
+    const user = await User.findById(req.user._id).select("-password");
     if (!user) return res.status(404).json({message: "User not found"});
     res.json(user);
   } catch (err) {
@@ -395,7 +395,7 @@ router.get('/profile', protect , async (req, res) => {
 
 router.put("/profile", protect, upload.single("avatar"), async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
     const user = await User.findById(userId);
 
     if (!user) return res.status(404).json({ message: "User not found" });
