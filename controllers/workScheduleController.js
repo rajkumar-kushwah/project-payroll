@@ -61,19 +61,49 @@ if (exists) {
 // -------------------------------------------------------------------
 export const getWorkSchedules = async (req, res) => {
   try {
-    const { employeeId } = req.query;
+    let query = { companyId: req.user.companyId };
 
-    const query = { companyId: req.user.companyId };
-    if (employeeId && mongoose.isValidObjectId(employeeId)) query.employeeId = employeeId;
+    // 👤 Employee → sirf apna schedule
+    if (req.user.role === "employee") {
+      const employee = await Employee.findOne({ userId: req.user._id });
+      if (!employee) {
+        return res.json({ success: true, count: 0, data: [] });
+      }
+      query.employeeId = employee._id;
+    }
+
+    // 🧑‍💼 HR / Owner → optional filter
+    if (
+      ["hr", "owner"].includes(req.user.role) &&
+      req.query.employeeId &&
+      mongoose.isValidObjectId(req.query.employeeId)
+    ) {
+      query.employeeId = req.query.employeeId;
+    }
 
     const schedules = await WorkSchedule.find(query)
-      .populate("employeeId", "name employeeCode department jobRole avatar")
+      .populate({
+        path: "employeeId",
+        select: "employeeCode department jobRole avatar",
+        populate: {
+          path: "userId",
+          select: "name email avatar",
+        },
+      })
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, count: schedules.length, data: schedules });
+    res.json({
+      success: true,
+      count: schedules.length,
+      data: schedules,
+    });
   } catch (err) {
     console.error("getWorkSchedules Error:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
   }
 };
 
@@ -82,19 +112,45 @@ export const getWorkSchedules = async (req, res) => {
 // -------------------------------------------------------------------
 export const getWorkScheduleById = async (req, res) => {
   try {
-    const schedule = await WorkSchedule.findOne({
+    let query = {
       _id: req.params.id,
-      companyId: req.user.companyId
-    }).populate("employeeId", "name employeeCode department jobRole avatar");
+      companyId: req.user.companyId,
+    };
 
-    if (!schedule) return res.status(404).json({ success: false, message: "Schedule not found" });
+    // 👤 Employee safety check
+    if (req.user.role === "employee") {
+      const employee = await Employee.findOne({ userId: req.user._id });
+      if (!employee) {
+        return res.status(403).json({ success: false, message: "Access denied" });
+      }
+      query.employeeId = employee._id;
+    }
+
+    const schedule = await WorkSchedule.findOne(query)
+      .populate({
+        path: "employeeId",
+        select: "employeeCode department jobRole avatar",
+        populate: {
+          path: "userId",
+          select: "name email avatar",
+        },
+      });
+
+    if (!schedule) {
+      return res.status(404).json({ success: false, message: "Schedule not found" });
+    }
 
     res.json({ success: true, data: schedule });
   } catch (err) {
     console.error("getWorkScheduleById Error:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
   }
 };
+
 
 // -------------------------------------------------------------------
 // 4️ Update Work Schedule

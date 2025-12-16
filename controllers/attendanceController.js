@@ -291,14 +291,43 @@ export const deleteAttendance = async (req, res) => {
 ========================================================= */
 export const getAttendance = async (req, res) => {
   try {
-    const { employeeId, status, startDate, endDate, month, year, page = 1, limit = 20 } = req.query;
+    const {
+      employeeId,
+      status,
+      startDate,
+      endDate,
+      month,
+      year,
+      page = 1,
+      limit = 20,
+    } = req.query;
 
-    const query = { companyId: req.user.companyId };
+    let query = { companyId: req.user.companyId };
 
-    if (employeeId) query.employeeId = employeeId;
-    if (status) query.status = status;
+    // 👤 EMPLOYEE → sirf apni attendance
+    if (req.user.role === "employee") {
+      const employee = await Employee.findOne({ userId: req.user._id });
+      if (!employee) {
+        return res.json({
+          success: true,
+          page: Number(page),
+          totalPages: 0,
+          total: 0,
+          data: [],
+        });
+      }
+      query.employeeId = employee._id;
+    }
 
-    // --- DATE FILTER FIXED FOR IST ---
+    // 🧑‍💼 HR / OWNER → filters allowed
+    if (["hr", "owner"].includes(req.user.role)) {
+      if (employeeId && mongoose.isValidObjectId(employeeId)) {
+        query.employeeId = employeeId;
+      }
+      if (status) query.status = status;
+    }
+
+    // -------- DATE FILTER (IST SAFE) --------
     if (startDate && endDate) {
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
@@ -309,10 +338,10 @@ export const getAttendance = async (req, res) => {
       query.date = { $gte: start, $lte: end };
     }
 
-    // Monthly filter
+    // -------- MONTH FILTER --------
     if (month && year) {
       const start = new Date(year, month - 1, 1);
-      const end = new Date(year, month, 0); // last day of month
+      const end = new Date(year, month, 0);
 
       start.setHours(0, 0, 0, 0);
       end.setHours(23, 59, 59, 999);
@@ -320,13 +349,20 @@ export const getAttendance = async (req, res) => {
       query.date = { $gte: start, $lte: end };
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (Number(page) - 1) * Number(limit);
 
     const data = await Attendance.find(query)
-      .populate("employeeId", "name employeeCode department jobRole avatar")
+      .populate({
+        path: "employeeId",
+        select: "employeeCode department jobRole avatar",
+        populate: {
+          path: "userId",
+          select: "name email avatar",
+        },
+      })
       .sort({ date: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(Number(limit));
 
     const total = await Attendance.countDocuments(query);
 
@@ -339,8 +375,9 @@ export const getAttendance = async (req, res) => {
     });
   } catch (err) {
     console.error("getAttendance Error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 
