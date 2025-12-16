@@ -8,8 +8,11 @@ import User from "../models/User.js";
 // -------------------------------------------------------------------
 export const getEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find({ companyId: req.user.companyId }).sort({ createdAt: -1 });
-    res.json({ success: true, employees });
+    const employees = await Employee.find({ companyId: req.user.companyId })
+      .populate("userId", "name email role")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, count: employees.length, employees });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
@@ -34,82 +37,64 @@ export const getEmployeeById = async (req, res) => {
 // -------------------------------------------------------------------
 
 
+
 export const addEmployee = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    console.log("REQ.BODY:", req.body);
-    console.log("REQ.FILE:", req.file);
-    console.log("REQ.USER:", req.user);
+    const { name, email, password, phone, department, designation, jobRole, basicSalary, dob, notes } = req.body;
 
-    const {
-      name, email, phone, dob, jobRole, department,
-      designation, joinDate, status, basicSalary, notes, password
-    } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ message: "Name, email, and password are required." });
 
-    // Check required fields
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Name, email, and password are required." });
-    }
-
-    // Check duplicates in Employee
-    const existsEmp = await Employee.findOne({
-      $or: [{ email: email.toLowerCase() }, { phone }],
-      companyId: req.user.companyId,
-    });
-    if (existsEmp) return res.status(400).json({ message: "Employee with this email or phone already exists." });
-
-    // Check duplicates in User
+    // Check duplicate email
     const existsUser = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
     if (existsUser) return res.status(400).json({ message: "User with this email already exists." });
 
-    // Handle avatar safely
-    let avatar = "";
-    if (req.file && req.file.path) avatar = req.file.path;
-// 1️⃣ Hash password
-const salt = await bcrypt.genSalt(10);
-const hashedPassword = await bcrypt.hash(password, salt);
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-// 2️⃣ Create User FIRST (login account)
-const user = await User.create({
-  name,
-  email: email.toLowerCase(),
-  password: hashedPassword,
-  role: "employee",
-  companyId: req.user.companyId,
-  emailVerified: true, // optional
-});
+    // 1️⃣ Create User
+    const user = await User.create([{
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: "employee",
+      companyId: req.user.companyId
+    }], { session });
 
-// 3️⃣ Create Employee & link userId
-const emp = await Employee.create({
-  name,
-  email: email.toLowerCase(),
-  phone,
-  dateOfBirth: dob ? new Date(dob) : undefined,
-  jobRole,
-  department,
-  designation,
-  joinDate: joinDate ? new Date(joinDate) : Date.now(),
-  basicSalary: Number(basicSalary) || 0,
-  status: status || "active",
-  notes,
-  avatar,
-  companyId: req.user.companyId,
-  createdBy: req.user._id,
-  userId: user._id,   //  LINK
-});
+    // 2️⃣ Create Employee
+    const employee = await Employee.create([{
+      userId: user[0]._id,
+      companyId: req.user.companyId,
+      createdBy: req.user._id,
+      phone,
+      department,
+      designation,
+      jobRole,
+      basicSalary: Number(basicSalary) || 0,
+      dateOfBirth: dob ? new Date(dob) : undefined,
+      notes
+    }], { session });
 
-// 4️⃣ Update user with employeeId
-user.employeeId = emp._id;
-await user.save();
+    // 3️⃣ Link back
+    user[0].employeeId = employee[0]._id;
+    await user[0].save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(201).json({
       success: true,
       message: "Employee registered successfully",
-      employee: emp,
-      userLoginData: { email: user.email, password } // Send this to employee securely
+      employee,
+      userLoginData: { email: user[0].email, password } // send securely
     });
 
   } catch (err) {
-    console.error("Add Employee Error:", err, err.stack);
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Add Employee Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };

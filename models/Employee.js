@@ -4,12 +4,12 @@ const employeeSchema = new mongoose.Schema({
   employeeCode: { type: String, unique: true },
 
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
   avatar: { type: String, default: "" },
-  name: { type: String, required: true },
-  email: { type: String, required: true, lowercase: true },
+  // name: { type: String, required: true },
+  // email: { type: String, required: true, lowercase: true },
   phone: { type: String, default: "" },
 
   dateOfBirth: { type: Date },
