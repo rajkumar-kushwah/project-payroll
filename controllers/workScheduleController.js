@@ -66,31 +66,11 @@ export const getWorkSchedules = async (req, res) => {
     // 👤 Employee → sirf apna schedule
     if (req.user.role === "employee") {
       const employee = await Employee.findOne({ userId: req.user._id });
-      if (!employee) {
-        return res.json({ success: true, count: 0, data: [] });
-      }
+      if (!employee) return res.json({ success: true, count: 0, data: [] });
       query.employeeId = employee._id;
     }
 
-    // 🧑‍💼 HR / Owner → optional filter
-    if (
-      ["hr", "owner"].includes(req.user.role) &&
-      req.query.employeeId &&
-      mongoose.isValidObjectId(req.query.employeeId)
-    ) {
-      query.employeeId = req.query.employeeId;
-    }
-
-    const schedules = await WorkSchedule.find(query)
-      .populate({
-        path: "employeeId",
-        select: "employeeCode department jobRole avatar",
-        populate: {
-          path: "userId",
-          select: "name email avatar",
-        },
-      })
-      .sort({ createdAt: -1 });
+    const schedules = await WorkSchedule.find(query).sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -107,6 +87,7 @@ export const getWorkSchedules = async (req, res) => {
   }
 };
 
+
 // -------------------------------------------------------------------
 // 3️ Get single schedule by ID
 // -------------------------------------------------------------------
@@ -120,25 +101,14 @@ export const getWorkScheduleById = async (req, res) => {
     // 👤 Employee safety check
     if (req.user.role === "employee") {
       const employee = await Employee.findOne({ userId: req.user._id });
-      if (!employee) {
-        return res.status(403).json({ success: false, message: "Access denied" });
-      }
+      if (!employee) return res.status(403).json({ success: false, message: "Access denied" });
       query.employeeId = employee._id;
     }
 
-    const schedule = await WorkSchedule.findOne(query)
-      .populate({
-        path: "employeeId",
-        select: "employeeCode department jobRole avatar",
-        populate: {
-          path: "userId",
-          select: "name email avatar",
-        },
-      });
+    const schedule = await WorkSchedule.findOne(query);
 
-    if (!schedule) {
+    if (!schedule)
       return res.status(404).json({ success: false, message: "Schedule not found" });
-    }
 
     res.json({ success: true, data: schedule });
   } catch (err) {

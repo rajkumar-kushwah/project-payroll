@@ -25,11 +25,7 @@ const WorkScheduleSchema = new mongoose.Schema({
 
   weeklyOff: { type: [String], default: ["Sunday"] },
 
-  shiftType: { 
-    type: String, 
-    enum: ["Full-day", "Half-day", "Night", "Flexible"],
-    default: "Full-day" 
-  },
+
 
   breakStart: { type: String, default: null },
   breakEnd: { type: String, default: null },
