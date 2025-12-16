@@ -2,36 +2,91 @@ import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
+import Company from "../models/Company.js";
 
 // -------------------------------------------------------------------
 // GET ALL EMPLOYEES
 // -------------------------------------------------------------------
 export const getEmployees = async (req, res) => {
   try {
-    // Find employees for the company
-    const employees = await Employee.find({ companyId: req.user.companyId })
-      .populate({
-        path: "userId",
-        select: "name email role phone avatar",  // user ke required fields
-      })
-      .sort({ createdAt: -1 });
+    let employees;
 
-    // Optional: agar userId null ho to empty object assign kar do
-    const formattedEmployees = employees.map(emp => ({
-      ...emp._doc,
-      user: emp.userId || {}, // populate ke fields user ke andar
-    }));
+    if (req.user.role === "employee") {
+      // sirf apna data
+      employees = await Employee.findOne({ userId: req.user._id })
+        .populate("userId", "name email role phone avatar");
+    } else if (["hr", "owner"].includes(req.user.role)) {
+      // company ke sab employees
+      employees = await Employee.find({ companyId: req.user.companyId })
+        .populate("userId", "name email role phone avatar")
+        .sort({ createdAt: -1 });
+    }
+
+    // leave, attendance, salary ka data
+    let leaveData = [], attendanceData = [], salaryData = [];
+
+    if (req.user.role === "employee" && employees) {
+      leaveData = await Leave.find({ employeeId: employees._id });
+      attendanceData = await Attendance.find({ employeeId: employees._id });
+      salaryData = await Payroll.find({ employeeId: employees._id });
+    } else if (["hr", "owner"].includes(req.user.role)) {
+      // sab employees ke liye fetch karna ho to mapping kar sakte ho
+      const employeeIds = employees.map(emp => emp._id);
+      leaveData = await Leave.find({ employeeId: { $in: employeeIds } });
+      attendanceData = await Attendance.find({ employeeId: { $in: employeeIds } });
+      salaryData = await Payroll.find({ employeeId: { $in: employeeIds } });
+    }
+
+    // formatted employees
+    const formattedEmployees = Array.isArray(employees)
+      ? employees.map(emp => ({ ...emp._doc, user: emp.userId || {} }))
+      : { ...employees._doc, user: employees.userId || {} };
 
     res.json({
       success: true,
-      count: employees.length,
+      count: Array.isArray(employees) ? employees.length : 1,
       employees: formattedEmployees,
+      leaveData,
+      attendanceData,
+      salaryData,
+      profile: req.user.role === "employee" ? formattedEmployees : null,
     });
   } catch (err) {
     console.error("Get Employees Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
+
+// export const getEmployees = async (req, res) => {
+//   try {
+//     // 1️⃣ Find logged-in user's employee record
+//     const employee = await Employee.findOne({ userId: req.user._id })
+//       .populate({
+//         path: "userId",
+//         select: "name email role phone avatar",
+//       });
+
+//     if (!employee) return res.status(404).json({ message: "Employee record not found." });
+
+//     // 2️⃣ Fetch related data for this employee only
+//     const leaveData = await Leave.find({ employeeId: employee._id });
+//     const attendanceData = await Attendance.find({ employeeId: employee._id });
+//     const salaryData = await Payroll.find({ employeeId: employee._id });
+
+//     res.json({
+//       success: true,
+//       profile: employee,
+//       leaves: leaveData,
+//       attendance: attendanceData,
+//       salary: salaryData,
+//     });
+//   } catch (err) {
+//     console.error("Get My Profile Data Error:", err);
+//     res.status(500).json({ message: "Server error", error: err.message });
+//   }
+// };
+
 
 
 // -------------------------------------------------------------------
