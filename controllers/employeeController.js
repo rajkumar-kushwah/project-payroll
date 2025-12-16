@@ -182,15 +182,3 @@ export const filterEmployees = async (req, res) => {
 };
 
 
-export const getMyProfile = async (req, res) => {
-  try {
-    if (!req.user.employeeId) return res.status(403).json({ message: "No employee profile linked" });
-
-    const employee = await Employee.findById(req.user.employeeId);
-    if (!employee) return res.status(404).json({ message: "Employee profile not found" });
-
-    res.json({ success: true, employee });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-};

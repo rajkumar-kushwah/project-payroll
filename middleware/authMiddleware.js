@@ -1,10 +1,10 @@
+
+
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Blacklist from "../models/Blacklist.js";
 
-// =======================
-// PROTECT ROUTES
-// =======================
+// Protect all routes
 export const protect = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -21,7 +21,7 @@ export const protect = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // DB check
+    // Optional DB check (recommended)
     const user = await User.findById(decoded.id)
       .select("_id role companyId employeeId status isDeleted");
 
@@ -29,12 +29,12 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ message: "Account inactive or deleted" });
     }
 
-    // Standardized user object for controllers
+    // 🔥 Standardized auth object
     req.user = {
       _id: user._id,
       role: user.role,
       companyId: user.companyId,
-      employeeId: user.employeeId || null,
+      employeeId: user.employeeId || null
     };
 
     next();
@@ -44,29 +44,24 @@ export const protect = async (req, res, next) => {
   }
 };
 
-// =======================
-// ROLE BASED PROTECT
-// =======================
+
+// Admin + Owner protect
 export const adminProtect = (req, res, next) => {
   if (!req.user) return res.status(401).json({ message: "Not logged in" });
-  if (!["admin", "owner"].includes(req.user.role))
-    return res.status(403).json({ message: "Admin access required" });
+  if (!["admin", "owner"].includes(req.user.role)) return res.status(403).json({ message: "Admin access required" });
   next();
 };
 
+// Owner only protect
 export const ownerProtect = (req, res, next) => {
   if (!req.user) return res.status(401).json({ message: "Not logged in" });
-  if (req.user.role !== "owner")
-    return res.status(403).json({ message: "Owner access required" });
+  if (req.user.role !== "owner") return res.status(403).json({ message: "Owner access required" });
   next();
 };
 
-// =======================
-// EMPLOYEE PROTECT
-// =======================
-export const employeeProtect = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ message: "Not logged in" });
-  if (req.user.role !== "employee")
-    return res.status(403).json({ message: "Employee access only" });
-  next();
-};
+// export const employeeProtect = (req, res, next) => {
+//   if (!req.user) return res.status(401).json({ message: "Not logged in" });
+//   if (req.user.role !== "employee") return res.status(403).json({ message: "Employee access only" });
+//   next();
+// };
+

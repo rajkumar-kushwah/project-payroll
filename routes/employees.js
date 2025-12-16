@@ -6,7 +6,6 @@ import {
   deleteEmployee,
   getEmployeeById,
   updateEmployeeProfile,
-  getMyProfile,
 } from "../controllers/employeeController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import upload from "../middleware/upload.js";
@@ -19,7 +18,6 @@ router.use(protect);
 // ======================
 // STATIC / FIXED ROUTES
 // ======================
-router.get("/me/profile", getMyProfile);
 router.get("/search", searchEmployees);
 
 // AVATAR UPDATE
