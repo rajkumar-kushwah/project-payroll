@@ -1,5 +1,6 @@
 import Employee from "../models/Employee.js";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 
 // -------------------------------------------------------------------
 // GET ALL EMPLOYEES
@@ -48,6 +49,12 @@ export const addEmployee = async (req, res) => {
     let avatar = "";
     if (req.file?.path) avatar = req.file.path;
 
+    // Inside addEmployee controller
+let hashedPassword = password;
+if (password) {
+  const salt = await bcrypt.genSalt(10);
+  hashedPassword = await bcrypt.hash(password, salt);
+}
     // Create Employee
     const emp = await Employee.create({
       name,
@@ -64,7 +71,7 @@ export const addEmployee = async (req, res) => {
       avatar,
       companyId: req.user.companyId,
       createdBy: req.user._id,
-      password, // password set by HR
+      password: hashedPassword, // password set by HR
     });
 
     res.status(201).json({
