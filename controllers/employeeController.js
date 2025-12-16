@@ -8,15 +8,31 @@ import User from "../models/User.js";
 // -------------------------------------------------------------------
 export const getEmployees = async (req, res) => {
   try {
+    // Find employees for the company
     const employees = await Employee.find({ companyId: req.user.companyId })
-      .populate("userId", "name email role phone")
+      .populate({
+        path: "userId",
+        select: "name email role phone",  // user ke required fields
+      })
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, count: employees.length, employees });
+    // Optional: agar userId null ho to empty object assign kar do
+    const formattedEmployees = employees.map(emp => ({
+      ...emp._doc,
+      user: emp.userId || {}, // populate ke fields user ke andar
+    }));
+
+    res.json({
+      success: true,
+      count: employees.length,
+      employees: formattedEmployees,
+    });
   } catch (err) {
+    console.error("Get Employees Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 // -------------------------------------------------------------------
 // GET SINGLE EMPLOYEE

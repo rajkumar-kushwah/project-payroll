@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
 
   phone: { type: String, },
   companyName: { type: String, default: "" },
-  status: { type: String, enum: ["active", "inactive", "pending"], default: "pending" },
+  status: { type: String, enum: ["active", "inactive", "pending"], default: "active" },
 
   
   avatar: { type: String, default: "" }, // Can store uploaded URL or default avatar
