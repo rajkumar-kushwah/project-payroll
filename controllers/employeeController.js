@@ -64,39 +64,42 @@ export const addEmployee = async (req, res) => {
     // Handle avatar safely
     let avatar = "";
     if (req.file && req.file.path) avatar = req.file.path;
+// 1️⃣ Hash password
+const salt = await bcrypt.genSalt(10);
+const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+// 2️⃣ Create User FIRST (login account)
+const user = await User.create({
+  name,
+  email: email.toLowerCase(),
+  password: hashedPassword,
+  role: "employee",
+  companyId: req.user.companyId,
+  emailVerified: true, // optional
+});
 
-    // Create Employee
-    const emp = await Employee.create({
-      name,
-      email: email.toLowerCase(),
-      phone,
-      dateOfBirth: dob ? new Date(dob) : undefined,
-      jobRole,
-      department,
-      designation,
-      joinDate: joinDate ? new Date(joinDate) : Date.now(),
-      basicSalary: Number(basicSalary) || 0,
-      status: status || "active",
-      notes,
-      avatar,
-      companyId: req.user.companyId,
-      createdBy: req.user._id,
-      password: hashedPassword,
-    });
+// 3️⃣ Create Employee & link userId
+const emp = await Employee.create({
+  name,
+  email: email.toLowerCase(),
+  phone,
+  dateOfBirth: dob ? new Date(dob) : undefined,
+  jobRole,
+  department,
+  designation,
+  joinDate: joinDate ? new Date(joinDate) : Date.now(),
+  basicSalary: Number(basicSalary) || 0,
+  status: status || "active",
+  notes,
+  avatar,
+  companyId: req.user.companyId,
+  createdBy: req.user._id,
+  userId: user._id,   //  LINK
+});
 
-    // Create User for login
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      role: "employee",
-      companyId: req.user.companyId,
-      employeeId: emp._id,
-    });
+// 4️⃣ Update user with employeeId
+user.employeeId = emp._id;
+await user.save();
 
     res.status(201).json({
       success: true,
