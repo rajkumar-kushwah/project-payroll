@@ -9,7 +9,7 @@ import User from "../models/User.js";
 export const getEmployees = async (req, res) => {
   try {
     const employees = await Employee.find({ companyId: req.user.companyId })
-      .populate("userId", "name email role")
+      .populate("userId", "name email role phone")
       .sort({ createdAt: -1 });
 
     res.json({ success: true, count: employees.length, employees });

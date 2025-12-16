@@ -7,10 +7,11 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
 
-  phone: { type: String, default: "" },
+  phone: { type: String, },
   companyName: { type: String, default: "" },
   status: { type: String, enum: ["active", "inactive", "pending"], default: "pending" },
 
+  
   avatar: { type: String, default: "" }, // Can store uploaded URL or default avatar
   bio: { type: String, default: "" },
   gender: { type: String, enum: ["male", "female", "other"], default: "other" },
@@ -97,5 +98,11 @@ otpExpires: {
   },
 
 }, { timestamps: true });
+
+// 🔹 Partial unique index for phone
+userSchema.index(
+  { phone: 1 },
+  { unique: true, partialFilterExpression: { phone: { $type: "string", $ne: "" } } }
+);
 
 export default mongoose.model("User", userSchema);
