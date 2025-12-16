@@ -12,26 +12,19 @@ import upload from "../middleware/upload.js";
 
 const router = express.Router();
 
-// ALL ROUTES PROTECTED
 router.use(protect);
 
-// ======================
-// STATIC / FIXED ROUTES
-// ======================
+// FIXED ROUTES FIRST
 router.get("/search", searchEmployees);
 
-// AVATAR UPDATE
+// AVATAR ROUTES – before :id
 router.put("/profile/:id", upload.single("avatar"), updateEmployeeProfile);
 
-// ======================
-// NORMAL EMPLOYEE CRUD
-// ======================
+// NORMAL EMPLOYEE ROUTES
 router.get("/", getEmployees);
 router.post("/", upload.single("avatar"), addEmployee);
 
-// ======================
 // DYNAMIC ROUTES LAST
-// ======================
 router.get("/:id", getEmployeeById);
 router.delete("/:id", deleteEmployee);
 
