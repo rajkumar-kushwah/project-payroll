@@ -12,7 +12,7 @@ export const getEmployees = async (req, res) => {
     const employees = await Employee.find({ companyId: req.user.companyId })
       .populate({
         path: "userId",
-        select: "name email role phone",  // user ke required fields
+        select: "name email role phone avatar",  // user ke required fields
       })
       .sort({ createdAt: -1 });
 
@@ -70,13 +70,14 @@ export const addEmployee = async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 1️⃣ Create User
+    // 1️ Create User
     const user = await User.create([{
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
       role: "employee",
-      companyId: req.user.companyId
+      companyId: req.user.companyId,
+      avatar: req.file ? req.file.path : "",
     }], { session });
 
     // 2️⃣ Create Employee
@@ -90,6 +91,7 @@ export const addEmployee = async (req, res) => {
       jobRole,
       basicSalary: Number(basicSalary) || 0,
       dateOfBirth: dob ? new Date(dob) : undefined,
+      avatar: req.file ? req.file.path : "",
       notes
     }], { session });
 
