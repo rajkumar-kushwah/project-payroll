@@ -80,11 +80,13 @@ export const addEmployee = async (req, res) => {
       avatar: req.file ? req.file.path : "",
     }], { session });
 
-    // 2️⃣ Create Employee
+    // 2️ Create Employee
     const employee = await Employee.create([{
       userId: user[0]._id,
       companyId: req.user.companyId,
       createdBy: req.user._id,
+      name,
+      email: email.toLowerCase(),
       phone,
       department,
       designation,
@@ -95,7 +97,7 @@ export const addEmployee = async (req, res) => {
       notes
     }], { session });
 
-    // 3️⃣ Link back
+    // 3️ Link back
     user[0].employeeId = employee[0]._id;
     await user[0].save({ session });
 
