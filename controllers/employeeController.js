@@ -6,10 +6,7 @@ import mongoose from "mongoose";
 // -------------------------------------------------------------------
 export const getEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find({
-      companyId: req.user.companyId,
-    }).sort({ createdAt: -1 });
-
+    const employees = await Employee.find({ companyId: req.user.companyId }).sort({ createdAt: -1 });
     res.json({ success: true, employees });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
@@ -21,11 +18,7 @@ export const getEmployees = async (req, res) => {
 // -------------------------------------------------------------------
 export const getEmployeeById = async (req, res) => {
   try {
-    const emp = await Employee.findOne({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    });
-
+    const emp = await Employee.findOne({ _id: req.params.id, companyId: req.user.companyId });
     if (!emp) return res.status(404).json({ message: "Employee not found" });
 
     res.json({ success: true, emp });
@@ -35,53 +28,43 @@ export const getEmployeeById = async (req, res) => {
 };
 
 // -------------------------------------------------------------------
-// ADD EMPLOYEE (Salary auto-generate nahi hoti)
+// ADD EMPLOYEE
 // -------------------------------------------------------------------
 export const addEmployee = async (req, res) => {
   try {
     const {
-      name,
-      email,
-      phone,
-      dob,
-      jobRole,
-      department,
-      designation,
-      joinDate,
-      status,
-      basicSalary,
-      notes,
+      name, email, phone, dob, jobRole, department,
+      designation, joinDate, status, basicSalary, notes, password
     } = req.body;
 
+    // Check duplicates
     const exists = await Employee.findOne({
       $or: [{ email: email?.toLowerCase() }, { phone }],
       companyId: req.user.companyId,
     });
+    if (exists) return res.status(400).json({ message: "Employee already exists" });
 
-    if (exists)
-      return res.status(400).json({ message: "Employee already exists" });
-
-    // Cloudinary upload
+    // Avatar
     let avatar = "";
-    if (req.file) {
-      avatar = req.file.path || req.file.secure_url || ""; // Cloudinary safe check
-    }
+    if (req.file?.path) avatar = req.file.path;
 
+    // Create Employee
     const emp = await Employee.create({
       name,
-      email,
+      email: email.toLowerCase(),
       phone,
-      dateOfBirth: dob,
+      dateOfBirth: dob ? new Date(dob) : undefined,
       jobRole,
       department,
       designation,
-      joinDate,
-      basicSalary: Number(basicSalary),
-      status,
+      joinDate: joinDate ? new Date(joinDate) : Date.now(),
+      basicSalary: Number(basicSalary) || 0,
+      status: status || "active",
       notes,
-      avatar, // save Cloudinary URL
+      avatar,
       companyId: req.user.companyId,
       createdBy: req.user._id,
+      password, // password set by HR
     });
 
     res.status(201).json({
@@ -97,175 +80,17 @@ export const addEmployee = async (req, res) => {
 // -------------------------------------------------------------------
 // UPDATE EMPLOYEE
 // -------------------------------------------------------------------
-
-
-// -------------------------------------------------------------------
-// DELETE EMPLOYEE
-// -------------------------------------------------------------------
-export const deleteEmployee = async (req, res) => {
-  try {
-    const emp = await Employee.findOneAndDelete({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    });
-
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
-
-    res.json({ success: true, message: "Employee deleted" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-};
-
-
-// -------------------------------------------------------------------
-// SEARCH EMPLOYEES
-// -------------------------------------------------------------------
-export const searchEmployees = async (req, res) => {
-  try {
-    const { search } = req.query;
-
-    const query = { companyId: req.user.companyId };
-
-    if (search) {
-      const regex = { $regex: search, $options: "i" };
-
-      query.$or = [
-        { name: regex },
-        { email: regex },
-        { phone: regex },
-        { department: regex },
-        { jobRole: regex },
-        { employeeCode: regex },
-        { status: regex },
-      ];
-
-      if (mongoose.isValidObjectId(search)) {
-        query.$or.push({ _id: new mongoose.Types.ObjectId(search) });
-      }
-    }
-
-    const employees = await Employee.find(query).sort({ createdAt: -1 });
-
-    res.json({ success: true, employees });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-};
-
-// -------------------------------------------------------------------
-// FILTER EMPLOYEES
-// -------------------------------------------------------------------
-export const filterEmployees = async (req, res) => {
-  try {
-    const { jobRole, department, minSalary, maxSalary, sort } = req.query;
-
-    const query = { companyId: req.user.companyId };
-
-    if (jobRole) query.jobRole = jobRole;
-    if (department) query.department = department;
-
-    if (minSalary || maxSalary) {
-      query.salary = {};
-      if (minSalary) query.salary.$gte = Number(minSalary);
-      if (maxSalary) query.salary.$lte = Number(maxSalary);
-    }
-
-    let employees = await Employee.find(query);
-
-    // SORTING
-    if (sort === "a-z") {
-      employees = employees.sort((a, b) =>
-        a.name.localeCompare(b.name)
-      );
-    } else if (sort === "salary-high") {
-      employees = employees.sort((a, b) => b.salary - a.salary);
-    } else if (sort === "latest") {
-      employees = employees.sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-      );
-    }
-
-    res.json({
-      success: true,
-      count: employees.length,
-      employees,
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-};
-
-// export const createEmployeeProfile = async (req, res) => {
-//   try {
-//     const {
-//       name,
-//       email,
-//       phone,
-//       jobRole,
-//       department,
-//       designation,
-//       joinDate,
-//       status,
-//       notes,
-//     } = req.body;
-
-//     // Check if employee already exists
-//     const exists = await Employee.findOne({
-//       $or: [{ email: email?.toLowerCase() }, { phone }],
-//       companyId: req.user.companyId,
-//     });
-
-//     if (exists)
-//       return res.status(400).json({ message: "Employee already exists" });
-
-//     // Avatar upload
-//     let avatar = "";
-//     if (req.file && req.file.path) {
-//       avatar = req.file.path; // Cloudinary URL
-//     }
-
-//     const emp = await Employee.create({
-//       name,
-//       email,
-//       phone,
-//       jobRole,
-//       department,
-//       designation,
-//       joinDate,
-//       status,
-//       notes,
-//       avatar, // save avatar URL
-//       companyId: req.user.companyId,
-//       createdBy: req.user._id,
-//     });
-
-//     res.status(201).json({
-//       success: true,
-//       message: "Employee created successfully",
-//       emp,
-//     });
-//   } catch (err) {
-//     res.status(500).json({ message: "Server error", error: err.message });
-//   }
-// };
-
 export const updateEmployeeProfile = async (req, res) => {
   try {
-    // Build update object safely
     const updateData = {};
-    Object.keys(req.body).forEach((key) => {
+    Object.keys(req.body).forEach(key => {
       if (req.body[key] !== undefined) updateData[key] = req.body[key];
     });
 
-    if (req.file && req.file.path) {
-      updateData.avatar = req.file.path;
-    }
+    if (req.file?.path) updateData.avatar = req.file.path;
 
-    // Convert joinDate to Date type if present
-    if (updateData.joinDate) {
-      updateData.joinDate = new Date(updateData.joinDate);
-    }
+    if (updateData.joinDate) updateData.joinDate = new Date(updateData.joinDate);
+    if (updateData.dob) updateData.dateOfBirth = new Date(updateData.dob);
 
     const emp = await Employee.findOneAndUpdate(
       { _id: req.params.id, companyId: req.user.companyId },
@@ -282,4 +107,90 @@ export const updateEmployeeProfile = async (req, res) => {
   }
 };
 
+// -------------------------------------------------------------------
+// DELETE EMPLOYEE
+// -------------------------------------------------------------------
+export const deleteEmployee = async (req, res) => {
+  try {
+    const emp = await Employee.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
+    if (!emp) return res.status(404).json({ message: "Employee not found" });
 
+    res.json({ success: true, message: "Employee deleted" });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+// -------------------------------------------------------------------
+// SEARCH EMPLOYEES
+// -------------------------------------------------------------------
+export const searchEmployees = async (req, res) => {
+  try {
+    const { search } = req.query;
+    const query = { companyId: req.user.companyId };
+
+    if (search) {
+      const regex = { $regex: search, $options: "i" };
+      query.$or = [
+        { name: regex },
+        { email: regex },
+        { phone: regex },
+        { department: regex },
+        { jobRole: regex },
+        { employeeCode: regex },
+        { status: regex },
+      ];
+
+      if (mongoose.isValidObjectId(search)) query.$or.push({ _id: new mongoose.Types.ObjectId(search) });
+    }
+
+    const employees = await Employee.find(query).sort({ createdAt: -1 });
+    res.json({ success: true, count: employees.length, employees });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+// -------------------------------------------------------------------
+// FILTER EMPLOYEES
+// -------------------------------------------------------------------
+export const filterEmployees = async (req, res) => {
+  try {
+    const { jobRole, department, minSalary, maxSalary, sort } = req.query;
+    const query = { companyId: req.user.companyId };
+
+    if (jobRole) query.jobRole = jobRole;
+    if (department) query.department = department;
+
+    if (minSalary || maxSalary) {
+      query.basicSalary = {};
+      if (minSalary) query.basicSalary.$gte = Number(minSalary);
+      if (maxSalary) query.basicSalary.$lte = Number(maxSalary);
+    }
+
+    let employees = await Employee.find(query);
+
+    // Sorting
+    if (sort === "a-z") employees = employees.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort === "salary-high") employees = employees.sort((a, b) => b.basicSalary - a.basicSalary);
+    else if (sort === "latest") employees = employees.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json({ success: true, count: employees.length, employees });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+
+export const getMyProfile = async (req, res) => {
+  try {
+    if (!req.user.employeeId) return res.status(403).json({ message: "No employee profile linked" });
+
+    const employee = await Employee.findById(req.user.employeeId);
+    if (!employee) return res.status(404).json({ message: "Employee profile not found" });
+
+    res.json({ success: true, employee });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};

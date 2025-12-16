@@ -240,7 +240,7 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT including companyId
     const jwtToken = jwt.sign(
-      { id: user._id, role: user.role, companyId: user.companyId },
+      { id: user._id, role: user.role, companyId: user.companyId, employeeId: user.employeeId || null   },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
     );
@@ -254,6 +254,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         role: user.role,
         companyId: user.companyId,
+        employeeId: user.employeeId || null,
         registeredAt: moment(user.createdAt).tz('Asia/Kolkata').format('DD/MM/YYYY hh:mm:ss A'),
         lastLogin: user.lastLogin ? moment(user.lastLogin).tz('Asia/Kolkata').format('DD/MM/YYYY hh:mm:ss A') : null,
       }

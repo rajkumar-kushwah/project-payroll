@@ -1,10 +1,10 @@
-
-
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Blacklist from "../models/Blacklist.js";
 
-// Protect all routes
+// =======================
+// PROTECT ROUTES
+// =======================
 export const protect = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -13,15 +13,30 @@ export const protect = async (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
+    // Check blacklist
     const blacklisted = await Blacklist.findOne({ token });
-    if (blacklisted) return res.status(401).json({ message: "Token invalid. Login again." });
+    if (blacklisted)
+      return res.status(401).json({ message: "Token invalid. Login again." });
 
+    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await User.findById(decoded.id).select("-password");
-    if (!user) return res.status(401).json({ message: "Account deleted or unauthorized" });
+    // DB check
+    const user = await User.findById(decoded.id)
+      .select("_id role companyId employeeId status isDeleted");
 
-    req.user = user;
+    if (!user || user.isDeleted || user.status !== "active") {
+      return res.status(401).json({ message: "Account inactive or deleted" });
+    }
+
+    // Standardized user object for controllers
+    req.user = {
+      _id: user._id,
+      role: user.role,
+      companyId: user.companyId,
+      employeeId: user.employeeId || null,
+    };
+
     next();
   } catch (err) {
     console.error("AuthMiddleware Error:", err.message);
@@ -29,23 +44,29 @@ export const protect = async (req, res, next) => {
   }
 };
 
-// Admin + Owner protect
+// =======================
+// ROLE BASED PROTECT
+// =======================
 export const adminProtect = (req, res, next) => {
   if (!req.user) return res.status(401).json({ message: "Not logged in" });
-  if (!["admin", "owner"].includes(req.user.role)) return res.status(403).json({ message: "Admin access required" });
+  if (!["admin", "owner"].includes(req.user.role))
+    return res.status(403).json({ message: "Admin access required" });
   next();
 };
 
-// Owner only protect
 export const ownerProtect = (req, res, next) => {
   if (!req.user) return res.status(401).json({ message: "Not logged in" });
-  if (req.user.role !== "owner") return res.status(403).json({ message: "Owner access required" });
+  if (req.user.role !== "owner")
+    return res.status(403).json({ message: "Owner access required" });
   next();
 };
 
-// export const employeeProtect = (req, res, next) => {
-//   if (!req.user) return res.status(401).json({ message: "Not logged in" });
-//   if (req.user.role !== "employee") return res.status(403).json({ message: "Employee access only" });
-//   next();
-// };
-
+// =======================
+// EMPLOYEE PROTECT
+// =======================
+export const employeeProtect = (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: "Not logged in" });
+  if (req.user.role !== "employee")
+    return res.status(403).json({ message: "Employee access only" });
+  next();
+};

@@ -1,30 +1,29 @@
 import mongoose from "mongoose";
 
-const employeeSchema = new mongoose.Schema(
-  {
-    employeeCode: { type: String, unique: true },
-    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    avatar: { type: String, default: "" },
-    name: { type: String, required: true },
-    email: { type: String, required: true },
-    dateOfBirth: { type: Date },
-    phone: { type: String },
-    jobRole: { type: String },
-    department: { type: String },
-    designation: { type: String },
-    joinDate: { type: Date, default: Date.now },
-    status: { type: String, enum: ["active", "inactive", "terminated"], default: "active" },
-    notes: { type: String },
-    password: {
-      type: String,
-      required: false,
-    },
+const employeeSchema = new mongoose.Schema({
+  employeeCode: { type: String, unique: true },
 
-    basicSalary: { type: Number, default: 0 },
-  },
-  { timestamps: true } // createdAt = registration date
-);
+  companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
+  avatar: { type: String, default: "" },
+  name: { type: String, required: true },
+  email: { type: String, required: true, lowercase: true },
+  phone: { type: String, default: "" },
+
+  dateOfBirth: { type: Date },
+  jobRole: { type: String },
+  department: { type: String },
+  designation: { type: String },
+
+  joinDate: { type: Date, default: Date.now },
+  status: { type: String, enum: ["active", "inactive", "terminated"], default: "active" },
+
+  notes: { type: String },
+  basicSalary: { type: Number, default: 0 },
+}, { timestamps: true });
+
 
 // Auto Employee Code
 employeeSchema.pre("save", async function (next) {
