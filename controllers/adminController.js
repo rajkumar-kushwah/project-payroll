@@ -2,7 +2,7 @@
 import User from "../models/User.js";
 import Company from "../models/Company.js";
 import bcrypt from "bcryptjs";
-
+import mongoose from "mongoose";
 // Add new user (Owner only)
 export const addUser = async (req, res) => {
   try {
@@ -36,42 +36,38 @@ export const addUser = async (req, res) => {
 //  Single Toggle (Promote/Demote + Activate/Deactivate)
 export const toggleUserRoleStatus = async (req, res) => {
   try {
-    const { userId, newRole } = req.body; // frontend se newRole bhejna hoga
+    const { userId, newRole } = req.body;
     const loginUser = req.user;
 
     if (loginUser.role !== "owner")
       return res.status(403).json({ message: "Only owner can modify roles" });
 
-    const user = await User.findById(userId);
+    const cleanUserId = userId.trim(); // remove extra spaces
+    if (!mongoose.Types.ObjectId.isValid(cleanUserId))
+      return res.status(400).json({ message: "Invalid user ID" });
+
+    const user = await User.findById(cleanUserId);
     if (!user) return res.status(404).json({ message: "User not found" });
+
     if (user.role === "owner")
       return res.status(400).json({ message: "Owner cannot be modified" });
 
     const company = await Company.findById(loginUser.companyId);
     if (!company) return res.status(404).json({ message: "Company not found" });
 
-    // --- Role & Status Update ---
+    // Role & status update
     if (newRole === "admin") {
       user.role = "admin";
       user.status = "active";
-
-      if (!company.admins.includes(user._id)) {
-        company.admins.push(user._id);
-      }
+      if (!company.admins.includes(user._id)) company.admins.push(user._id);
     } else if (newRole === "user") {
       user.role = "user";
-      user.status = "active";
-
-      company.admins = company.admins.filter(
-        (id) => id.toString() !== user._id.toString()
-      );
+      user.status = "inactive";
+      company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
     } else if (newRole === "employee") {
       user.role = "employee";
       user.status = "active";
-
-      company.admins = company.admins.filter(
-        (id) => id.toString() !== user._id.toString()
-      );
+      company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
     } else {
       return res.status(400).json({ message: "Invalid role" });
     }
@@ -79,18 +75,12 @@ export const toggleUserRoleStatus = async (req, res) => {
     await user.save();
     await company.save();
 
-    res.json({
-      success: true,
-      message: `User role updated to ${user.role} and status to ${user.status}`,
-      user,
-      company,
-    });
+    res.json({ success: true, message: `User role updated to ${user.role} and status to ${user.status}`, user });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 
 // Fetch all users
