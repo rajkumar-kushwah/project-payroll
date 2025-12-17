@@ -135,27 +135,34 @@ export const deleteUser = async (req, res) => {
 
 export const promoteEmployeeToAdmin = async (req, res) => {
   try {
-    if (req.user.role !== "owner")
+    // Owner check
+    if (req.user.role !== "owner") {
       return res.status(403).json({ message: "Only owner can promote" });
+    }
 
+    // Employee fetch
     const employee = await Employee.findById(req.params.employeeId);
-    if (!employee)
+    if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
+    }
 
-    if (employee.isAdmin === true)
-      return res.status(400).json({ message: "Already admin" });
-
-    if (!employee.userId)
-      return res.status(400).json({ message: "Employee has no login account" });
-
+    // User fetch
     const user = await User.findById(employee.userId);
-    if (!user)
-      return res.status(404).json({ message: "User login not found" });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-    // ✅ ONLY ROLE CHANGE (NO CREATE)
+    // Already admin?
+    if (user.role === "admin") {
+      return res.status(400).json({ message: "Already admin" });
+    }
+
+    // 🔥 UPDATE ONLY
     employee.isAdmin = true;
+
     user.role = "admin";
-    user.status = "active";
+    user.roleUpdated = true;
+    user.roleUpdatedBy = req.user._id;
 
     await employee.save();
     await user.save();
@@ -164,11 +171,13 @@ export const promoteEmployeeToAdmin = async (req, res) => {
       success: true,
       message: "Employee promoted to admin successfully",
     });
+
   } catch (err) {
-    console.error("Promote Error:", err);
+    console.error("PROMOTE ERROR 👉", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 
