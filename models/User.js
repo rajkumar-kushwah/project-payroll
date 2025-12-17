@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema({
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", default: null },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
