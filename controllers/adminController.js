@@ -96,7 +96,7 @@ export const getAdminDashboardData = async (req, res) => {
     const users = await User.find({
       companyId: req.user.companyId,
       isDeleted: false,
-      role: { $in: [ "admin", "user", ""] },
+      role: { $in: [ "admin", "user", "employee"] },
     }).select("-password");
 
      // Optionally include the owner separately
@@ -136,30 +136,25 @@ export const deleteUser = async (req, res) => {
 // 🔹 PROMOTE EMPLOYEE → ADMIN
 export const promoteEmployeeToAdmin = async (req, res) => {
   try {
-    // ✅ Only owner
     if (req.user.role !== "owner") {
       return res.status(403).json({ message: "Only owner can promote" });
     }
 
-    const { employeeId } = req.params;
-
-    // ✅ Find EMPLOYEE by EMPLOYEE _id
-    const employee = await Employee.findById(employeeId);
+    // 👇 employeeId expected
+    const employee = await Employee.findById(req.params.employeeId);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // ✅ Find USER linked with employee
     const user = await User.findById(employee.userId);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: "Linked user not found" });
     }
 
     if (user.role === "admin") {
       return res.status(400).json({ message: "Already admin" });
     }
 
-    // ✅ Update
     employee.isAdmin = true;
 
     user.role = "admin";
