@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
-import WorkSchedule from "../models/Worksechudel.js"; // spelling corrected
+import WorkSchedule from "../models/Worksechudule.js"; // spelling corrected
 import {
   hhmmToDate,
   minutesBetween,
