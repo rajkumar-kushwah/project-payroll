@@ -355,45 +355,32 @@ export const getAttendance = async (req, res) => {
       limit = 20,
     } = req.query;
 
-    const query = {
-      companyId: req.user.companyId,
-    };
+    let query = { companyId: req.user.companyId };
 
-    /* ===============================
-       👤 EMPLOYEE → ONLY SELF DATA
-    =============================== */
+    //  EMPLOYEE → sirf apni attendance
     if (req.user.role === "employee") {
-      const employee = await Employee.findOne({
-        userId: req.user._id,
-        companyId: req.user.companyId,
-      }).select("_id");
-
+      const employee = await Employee.findOne({ userId: req.user._id });
       if (!employee) {
         return res.json({
           success: true,
-          data: [],
-          total: 0,
+          page: Number(page),
           totalPages: 0,
+          total: 0,
+          data: [],
         });
       }
-
       query.employeeId = employee._id;
     }
 
-    /* ===============================
-       🧑‍💼 HR / OWNER / ADMIN
-    =============================== */
-    if (["hr", "owner", "admin"].includes(req.user.role)) {
+    //  HR / OWNER → filters allowed
+    if (["hr", "owner"].includes(req.user.role)) {
       if (employeeId && mongoose.isValidObjectId(employeeId)) {
         query.employeeId = employeeId;
       }
-
       if (status) query.status = status;
     }
 
-    /* ===============================
-       📅 DATE FILTER
-    =============================== */
+    // -------- DATE FILTER (IST SAFE) --------
     if (startDate && endDate) {
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
@@ -404,9 +391,7 @@ export const getAttendance = async (req, res) => {
       query.date = { $gte: start, $lte: end };
     }
 
-    /* ===============================
-       📆 MONTH FILTER
-    =============================== */
+    // -------- MONTH FILTER --------
     if (month && year) {
       const start = new Date(year, month - 1, 1);
       const end = new Date(year, month, 0);
@@ -417,29 +402,33 @@ export const getAttendance = async (req, res) => {
       query.date = { $gte: start, $lte: end };
     }
 
-    /* ===============================
-       📊 PAGINATION
-    =============================== */
     const skip = (Number(page) - 1) * Number(limit);
 
     const data = await Attendance.find(query)
+      .populate({
+        path: "employeeId",
+        select: "employeeCode department jobRole avatar",
+        populate: {
+          path: "userId",
+          select: "name email avatar",
+        },
+      })
       .sort({ date: -1 })
       .skip(skip)
       .limit(Number(limit));
 
     const total = await Attendance.countDocuments(query);
 
-    return res.json({
+    res.json({
       success: true,
       page: Number(page),
       totalPages: Math.ceil(total / limit),
       total,
       data,
     });
-
   } catch (err) {
-    console.error("getAttendance error:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("getAttendance Error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
