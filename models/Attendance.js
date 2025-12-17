@@ -13,6 +13,8 @@ const attendanceSchema = new mongoose.Schema({
     ref: "Company", 
     required: true 
   },
+  employeeName: String,      
+  employeeAvatar: String,  
 
   date: { type: Date, required: true },
 
