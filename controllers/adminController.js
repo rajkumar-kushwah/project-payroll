@@ -60,7 +60,7 @@ export const toggleUserRoleStatus = async (req, res) => {
       }
     } else if (newRole === "user") {
       user.role = "user";
-      user.status = "inactive";
+      user.status = "active";
 
       company.admins = company.admins.filter(
         (id) => id.toString() !== user._id.toString()
@@ -102,7 +102,7 @@ export const getAdminDashboardData = async (req, res) => {
     const users = await User.find({
       companyId: req.user.companyId,
       isDeleted: false,
-      role: { $in: [ "admin", "user"] },
+      role: { $in: [ "admin", "user", "employee"] },
     }).select("-password");
 
      // Optionally include the owner separately
