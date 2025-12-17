@@ -407,7 +407,7 @@ export const getAttendance = async (req, res) => {
     const data = await Attendance.find(query)
       .populate({
         path: "employeeId",
-        select: "employeeCode department jobRole avatar",
+        select: "name employeeCode department jobRole avatar",
         populate: {
           path: "userId",
           select: "name email avatar",
