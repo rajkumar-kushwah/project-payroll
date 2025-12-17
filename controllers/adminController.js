@@ -133,31 +133,33 @@ export const deleteUser = async (req, res) => {
   }
 };
 
+// 🔹 PROMOTE EMPLOYEE → ADMIN
 export const promoteEmployeeToAdmin = async (req, res) => {
   try {
-    // Owner check
+    // ✅ Only owner
     if (req.user.role !== "owner") {
       return res.status(403).json({ message: "Only owner can promote" });
     }
 
-    // Employee fetch
-    const employee = await Employee.findById(req.params.employeeId);
+    const { employeeId } = req.params;
+
+    // ✅ Find EMPLOYEE by EMPLOYEE _id
+    const employee = await Employee.findById(employeeId);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // User fetch
+    // ✅ Find USER linked with employee
     const user = await User.findById(employee.userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Already admin?
     if (user.role === "admin") {
       return res.status(400).json({ message: "Already admin" });
     }
 
-    // 🔥 UPDATE ONLY
+    // ✅ Update
     employee.isAdmin = true;
 
     user.role = "admin";
@@ -189,7 +191,7 @@ export const getEmployees = async (req, res) => {
       isDeleted: false,
     };
 
-    //  Admin promotion ke liye
+    // 🔹 Only non-admin employees
     if (req.query.onlyEmployees === "true") {
       query.isAdmin = false;
     }
@@ -204,3 +206,4 @@ export const getEmployees = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
