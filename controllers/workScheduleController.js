@@ -3,7 +3,7 @@ import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
 
 /* ======================================================
-   1️ ADD WORK SCHEDULE
+   1️⃣ ADD WORK SCHEDULE
 ====================================================== */
 export const addWorkSchedule = async (req, res) => {
   try {
@@ -80,7 +80,7 @@ export const addWorkSchedule = async (req, res) => {
 };
 
 /* ======================================================
-   2️ GET ALL WORK SCHEDULES
+   2️⃣ GET ALL WORK SCHEDULES
 ====================================================== */
 export const getWorkSchedules = async (req, res) => {
   try {
@@ -111,7 +111,7 @@ export const getWorkSchedules = async (req, res) => {
 };
 
 /* ======================================================
-   3️ GET SINGLE WORK SCHEDULE
+   3️⃣ GET SINGLE WORK SCHEDULE
 ====================================================== */
 export const getWorkScheduleById = async (req, res) => {
   try {
@@ -145,7 +145,7 @@ export const getWorkScheduleById = async (req, res) => {
 };
 
 /* ======================================================
-   4️ UPDATE WORK SCHEDULE
+   4️⃣ UPDATE WORK SCHEDULE
 ====================================================== */
 export const updateWorkSchedule = async (req, res) => {
   try {
@@ -171,7 +171,7 @@ export const updateWorkSchedule = async (req, res) => {
 };
 
 /* ======================================================
-   5️ DELETE WORK SCHEDULE
+   5️⃣ DELETE WORK SCHEDULE
 ====================================================== */
 export const deleteWorkSchedule = async (req, res) => {
   try {
