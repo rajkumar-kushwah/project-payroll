@@ -18,14 +18,14 @@ router.use(protect);
 // ----------------------------
 // Admin / Owner only routes
 // ----------------------------
-router.post("/add",  addWorkSchedule);
-router.put("/:id", adminProtect, updateWorkSchedule);
+router.post("/add", adminProtect, addWorkSchedule);
+router.put("/:id",  updateWorkSchedule);
 router.delete("/:id", adminProtect, deleteWorkSchedule);
 
 // ----------------------------
 // Get schedules (admin / owner can see all, others can see their own)
 // ----------------------------
-router.get("/", adminProtect, getWorkSchedules);
-router.get("/:id", adminProtect, getWorkScheduleById);
+router.get("/", getWorkSchedules);
+router.get("/:id",  getWorkScheduleById);
 
 export default router;
