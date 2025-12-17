@@ -86,11 +86,15 @@ export const addWorkSchedule = async (req, res) => {
 /* =====================================================
    2️ GET ALL WORK SCHEDULES
 ====================================================== */
+
+/* ======================================================
+   2️ GET ALL WORK SCHEDULES
+====================================================== */
 export const getWorkSchedules = async (req, res) => {
   try {
     let query = { companyId: req.user.companyId };
 
-    // Employee → sirf apna
+    // Employee → only own schedule
     if (req.user.role === "employee") {
       const employee = await Employee.findOne({ userId: req.user._id });
       if (!employee) {
@@ -100,7 +104,6 @@ export const getWorkSchedules = async (req, res) => {
     }
 
     const schedules = await WorkSchedule.find(query)
-      .populate("employeeId", "name avatar employeeCode")
       .sort({ createdAt: -1 });
 
     res.json({
@@ -132,11 +135,7 @@ export const getWorkScheduleById = async (req, res) => {
       query.employeeId = employee._id;
     }
 
-    const schedule = await WorkSchedule.findOne(query).populate(
-      "employeeId",
-      "name avatar employeeCode"
-    );
-
+    const schedule = await WorkSchedule.findOne(query);
     if (!schedule) {
       return res.status(404).json({ success: false, message: "Schedule not found" });
     }
