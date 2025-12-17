@@ -96,7 +96,7 @@ export const getAdminDashboardData = async (req, res) => {
     const users = await User.find({
       companyId: req.user.companyId,
       isDeleted: false,
-      role: { $in: [ "admin", "user", "employee"] },
+      role: { $in: [ "admin", "user", ""] },
     }).select("-password");
 
      // Optionally include the owner separately
