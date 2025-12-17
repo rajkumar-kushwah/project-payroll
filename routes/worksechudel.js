@@ -18,7 +18,7 @@ router.use(protect);
 // ----------------------------
 // Admin / Owner only routes
 // ----------------------------
-router.post("/add", adminProtect, addWorkSchedule);
+router.post("/add",  addWorkSchedule);
 router.put("/:id", adminProtect, updateWorkSchedule);
 router.delete("/:id", adminProtect, deleteWorkSchedule);
 
