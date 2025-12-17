@@ -36,7 +36,8 @@ export const addUser = async (req, res) => {
 //  Single Toggle (Promote/Demote + Activate/Deactivate)
 export const toggleUserRoleStatus = async (req, res) => {
   try {
-    const { userId, newRole } = req.body;
+    const { newRole } = req.body;
+    const { userId } = req.params;
     const loginUser = req.user;
 
     if (loginUser.role !== "owner")
