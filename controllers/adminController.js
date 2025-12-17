@@ -55,22 +55,25 @@ export const toggleUserRoleStatus = async (req, res) => {
     const company = await Company.findById(loginUser.companyId);
     if (!company) return res.status(404).json({ message: "Company not found" });
 
-    // Role & status update
-    if (newRole === "admin") {
-      user.role = "admin";
-      user.status = "active";
-      if (!company.admins.includes(user._id)) company.admins.push(user._id);
-    } else if (newRole === "user") {
-      user.role = "user";
-      user.status = "inactive";
-      company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
-    } else if (newRole === "employee") {
-      user.role = "employee";
-      user.status = "active";
-      company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
-    } else {
-      return res.status(400).json({ message: "Invalid role" });
-    }
+  // Ensure company.admins exists
+company.admins = company.admins || [];
+
+if (newRole === "admin") {
+  user.role = "admin";
+  user.status = "active";
+  if (!company.admins.includes(user._id)) company.admins.push(user._id);
+} else if (newRole === "user") {
+  user.role = "user";
+  user.status = "inactive";
+  company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
+} else if (newRole === "employee") {
+  user.role = "employee";
+  user.status = "active";
+  company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
+} else {
+  return res.status(400).json({ message: "Invalid role" });
+}
+
 
     await user.save();
     await company.save();
