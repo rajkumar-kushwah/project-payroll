@@ -19,6 +19,7 @@ const WorkScheduleSchema = new mongoose.Schema({
   employeeAvatar: { type: String, default: "/default-avatar.png" },
 
   shiftName: { type: String, required: true },
+  shiftType: { type: String, required: true },
 
   inTime: { type: String, required: true },
   outTime: { type: String, required: true },

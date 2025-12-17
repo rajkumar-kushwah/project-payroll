@@ -1,76 +1,103 @@
-// controllers/workScheduleController.js
 import WorkSchedule from "../models/Worksechudel.js";
-import Company from "../models/Company.js"; // import Company
 import Employee from "../models/Employee.js";
-import mongoose from "mongoose";
+import Company from "../models/Company.js";
 
+/* ======================================================
+   1️ ADD WORK SCHEDULE
+====================================================== */
 export const addWorkSchedule = async (req, res) => {
   try {
-    const { employeeId, inTime, outTime, shiftName, weeklyOff, shiftType, breakStart, breakEnd } = req.body;
+    const {
+      employeeId,
+      shiftName,
+      inTime,
+      outTime,
+      weeklyOff,
+      shiftType,
+      breakStart,
+      breakEnd,
+      gracePeriod,
+    } = req.body;
 
-    // Ensure employeeId exists
-    if (!employeeId) return res.status(400).json({ success: false, message: "Employee is required" });
+    if (!employeeId || !inTime || !outTime) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee, In Time & Out Time required",
+      });
+    }
 
-    // Fetch employee to get name & avatar
+    // Employee check
     const employee = await Employee.findById(employeeId);
-    if (!employee) return res.status(400).json({ success: false, message: "Employee not found" });
+    if (!employee) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
+    }
 
+    // Duplicate schedule check
     const exists = await WorkSchedule.findOne({ employeeId });
-if (exists) {
-  return res.status(400).json({ success: false, message: "Schedule for this employee already exists" });
-}
+    if (exists) {
+      return res.status(400).json({
+        success: false,
+        message: "Schedule already exists for this employee",
+      });
+    }
 
-    // Get companyId from user or fallback by employee
+    // Company Id
     let companyId = req.user.companyId;
     if (!companyId) {
       const company = await Company.findOne({ employees: employeeId });
-      if (!company) return res.status(400).json({ success: false, message: "Employee is not assigned to any company" });
+      if (!company) {
+        return res.status(400).json({
+          success: false,
+          message: "Employee not assigned to any company",
+        });
+      }
       companyId = company._id;
     }
 
-    // Create work schedule with name & avatar
-    const schedule = new WorkSchedule({
-      employeeId,
-      employeeName: employee.name,
-      employeeAvatar: employee.avatar || "/default-avatar.png",
-      employeeCode: employee.employeeCode,
+    const schedule = await WorkSchedule.create({
       companyId,
-      shiftName: shiftName || "Default Shift",
+      employeeId,
+      shiftName,
       inTime,
       outTime,
-      weeklyOff: weeklyOff || ["Sunday"],
-      shiftType: shiftType || "Full-day",
+      weeklyOff,
+      shiftType,
       breakStart,
       breakEnd,
-      effectiveFrom: new Date(),
-      createdBy: req.user._id
+      gracePeriod,
+      createdBy: req.user._id,
     });
 
-    await schedule.save();
-
-    res.status(201).json({ success: true, message: "Work schedule added", data: schedule });
+    res.status(201).json({
+      success: true,
+      message: "Work schedule added successfully",
+      data: schedule,
+    });
   } catch (err) {
     console.error("addWorkSchedule Error:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-
-// -------------------------------------------------------------------
-// 2️ Get all schedules (for company or employee)
-// -------------------------------------------------------------------
+/* ======================================================
+   2️ GET ALL WORK SCHEDULES
+====================================================== */
 export const getWorkSchedules = async (req, res) => {
   try {
     let query = { companyId: req.user.companyId };
 
-    // 👤 Employee → sirf apna schedule
+    // Employee → sirf apna
     if (req.user.role === "employee") {
       const employee = await Employee.findOne({ userId: req.user._id });
-      if (!employee) return res.json({ success: true, count: 0, data: [] });
+      if (!employee) {
+        return res.json({ success: true, count: 0, data: [] });
+      }
       query.employeeId = employee._id;
     }
 
-    const schedules = await WorkSchedule.find(query).sort({ createdAt: -1 });
+    const schedules = await WorkSchedule.find(query)
+      .populate("employeeId", "name avatar employeeCode")
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -79,18 +106,13 @@ export const getWorkSchedules = async (req, res) => {
     });
   } catch (err) {
     console.error("getWorkSchedules Error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: err.message,
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-
-// -------------------------------------------------------------------
-// 3️ Get single schedule by ID
-// -------------------------------------------------------------------
+/* ======================================================
+   3️ GET SINGLE WORK SCHEDULE
+====================================================== */
 export const getWorkScheduleById = async (req, res) => {
   try {
     let query = {
@@ -98,67 +120,73 @@ export const getWorkScheduleById = async (req, res) => {
       companyId: req.user.companyId,
     };
 
-    // 👤 Employee safety check
     if (req.user.role === "employee") {
       const employee = await Employee.findOne({ userId: req.user._id });
-      if (!employee) return res.status(403).json({ success: false, message: "Access denied" });
+      if (!employee) {
+        return res.status(403).json({ success: false, message: "Access denied" });
+      }
       query.employeeId = employee._id;
     }
 
-    const schedule = await WorkSchedule.findOne(query);
+    const schedule = await WorkSchedule.findOne(query).populate(
+      "employeeId",
+      "name avatar employeeCode"
+    );
 
-    if (!schedule)
+    if (!schedule) {
       return res.status(404).json({ success: false, message: "Schedule not found" });
+    }
 
     res.json({ success: true, data: schedule });
   } catch (err) {
     console.error("getWorkScheduleById Error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: err.message,
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-
-// -------------------------------------------------------------------
-// 4️ Update Work Schedule
-// -------------------------------------------------------------------
+/* ======================================================
+   4️ UPDATE WORK SCHEDULE
+====================================================== */
 export const updateWorkSchedule = async (req, res) => {
   try {
-    const updateData = { ...req.body };
-
     const schedule = await WorkSchedule.findOneAndUpdate(
       { _id: req.params.id, companyId: req.user.companyId },
-      updateData,
+      req.body,
       { new: true }
-    );
+    ).populate("employeeId", "name avatar employeeCode");
 
-    if (!schedule) return res.status(404).json({ success: false, message: "Schedule not found" });
+    if (!schedule) {
+      return res.status(404).json({ success: false, message: "Schedule not found" });
+    }
 
-    res.json({ success: true, message: "Schedule updated successfully", data: schedule });
+    res.json({
+      success: true,
+      message: "Schedule updated successfully",
+      data: schedule,
+    });
   } catch (err) {
     console.error("updateWorkSchedule Error:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// -------------------------------------------------------------------
-// 5️ Delete Work Schedule
-// -------------------------------------------------------------------
+/* ======================================================
+   5️ DELETE WORK SCHEDULE
+====================================================== */
 export const deleteWorkSchedule = async (req, res) => {
   try {
     const schedule = await WorkSchedule.findOneAndDelete({
       _id: req.params.id,
-      companyId: req.user.companyId
+      companyId: req.user.companyId,
     });
 
-    if (!schedule) return res.status(404).json({ success: false, message: "Schedule not found" });
+    if (!schedule) {
+      return res.status(404).json({ success: false, message: "Schedule not found" });
+    }
 
     res.json({ success: true, message: "Schedule deleted successfully" });
   } catch (err) {
     console.error("deleteWorkSchedule Error:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };

@@ -372,7 +372,7 @@ export const getAttendance = async (req, res) => {
       query.employeeId = employee._id;
     }
 
-    // 🧑‍💼 HR / OWNER → filters allowed
+    //  HR / OWNER → filters allowed
     if (["hr", "owner"].includes(req.user.role)) {
       if (employeeId && mongoose.isValidObjectId(employeeId)) {
         query.employeeId = employeeId;
