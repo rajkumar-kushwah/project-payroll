@@ -117,7 +117,8 @@ export const addEmployee = async (req, res) => {
       basicSalary: Number(basicSalary) || 0,
       dateOfBirth: dob ? new Date(dob) : undefined,
       avatar: req.file ? req.file.path : "",
-      notes
+      notes,
+      isAdmin: false,
     }], { session });
 
     // 3️ Link back

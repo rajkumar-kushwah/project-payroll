@@ -132,3 +132,62 @@ export const deleteUser = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const promoteEmployeeToAdmin = async (req, res) => {
+  try {
+    if (req.user.role !== "owner")
+      return res.status(403).json({ message: "Only owner can promote" });
+
+    const employee = await Employee.findById(req.params.employeeId);
+    if (!employee)
+      return res.status(404).json({ message: "Employee not found" });
+
+    if (employee.isAdmin)
+      return res.status(400).json({ message: "Already admin" });
+
+    const user = await User.findById(employee.userId);
+    if (!user)
+      return res.status(404).json({ message: "User login not found" });
+
+    //  Promote
+    employee.isAdmin = true;
+    user.role = "admin";
+    user.status = "active";
+
+    await employee.save();
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Employee promoted to admin successfully",
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// GET /employees
+export const getEmployees = async (req, res) => {
+  try {
+    const query = {
+      companyId: req.user.companyId,
+      isDeleted: false,
+    };
+
+    //  Admin promotion ke liye
+    if (req.query.onlyEmployees === "true") {
+      query.isAdmin = false;
+    }
+
+    const employees = await Employee.find(query);
+
+    res.json({
+      success: true,
+      employees,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
