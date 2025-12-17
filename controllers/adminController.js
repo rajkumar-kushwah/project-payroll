@@ -138,19 +138,21 @@ export const promoteEmployeeToAdmin = async (req, res) => {
     if (req.user.role !== "owner")
       return res.status(403).json({ message: "Only owner can promote" });
 
-    // ✅ req.params.employeeId use करना
     const employee = await Employee.findById(req.params.employeeId);
     if (!employee)
       return res.status(404).json({ message: "Employee not found" });
 
-    if (employee.isAdmin)
+    if (employee.isAdmin === true)
       return res.status(400).json({ message: "Already admin" });
+
+    if (!employee.userId)
+      return res.status(400).json({ message: "Employee has no login account" });
 
     const user = await User.findById(employee.userId);
     if (!user)
       return res.status(404).json({ message: "User login not found" });
 
-    // Promote
+    // ✅ ONLY ROLE CHANGE (NO CREATE)
     employee.isAdmin = true;
     user.role = "admin";
     user.status = "active";
@@ -162,12 +164,12 @@ export const promoteEmployeeToAdmin = async (req, res) => {
       success: true,
       message: "Employee promoted to admin successfully",
     });
-
   } catch (err) {
     console.error("Promote Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 // GET /employees

@@ -11,7 +11,10 @@ const employeeSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, lowercase: true },
   phone: { type: String, default: "" },
-
+  isAdmin: {
+    type: Boolean,
+    default: false,   //  IMPORTANT
+  },
   dateOfBirth: { type: Date },
   jobRole: { type: String },
   department: { type: String },
