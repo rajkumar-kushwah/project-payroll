@@ -36,41 +36,44 @@ export const addUser = async (req, res) => {
 //  Single Toggle (Promote/Demote + Activate/Deactivate)
 export const toggleUserRoleStatus = async (req, res) => {
   try {
-    const { userId } = req.params;
-
+    const { userId, newRole } = req.body; // frontend se newRole bhejna hoga
     const loginUser = req.user;
+
     if (loginUser.role !== "owner")
       return res.status(403).json({ message: "Only owner can modify roles" });
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
-
     if (user.role === "owner")
       return res.status(400).json({ message: "Owner cannot be modified" });
 
-    // Find company
     const company = await Company.findById(loginUser.companyId);
-    if (!company)
-      return res.status(404).json({ message: "Company not found" });
+    if (!company) return res.status(404).json({ message: "Company not found" });
 
-    // --- TOGGLE LOGIC ---
-    if (user.role === "admin") {
-      user.role = "user";
-      user.status = "inactive";
-
-      // Remove from company admins[]
-      company.admins = company.admins.filter(
-        (id) => id.toString() !== user._id.toString()
-      );
-
-    } else {
+    // --- Role & Status Update ---
+    if (newRole === "admin") {
       user.role = "admin";
       user.status = "active";
 
-      // Add to company admins[]
       if (!company.admins.includes(user._id)) {
         company.admins.push(user._id);
       }
+    } else if (newRole === "user") {
+      user.role = "user";
+      user.status = "inactive";
+
+      company.admins = company.admins.filter(
+        (id) => id.toString() !== user._id.toString()
+      );
+    } else if (newRole === "employee") {
+      user.role = "employee";
+      user.status = "active";
+
+      company.admins = company.admins.filter(
+        (id) => id.toString() !== user._id.toString()
+      );
+    } else {
+      return res.status(400).json({ message: "Invalid role" });
     }
 
     await user.save();
@@ -78,16 +81,16 @@ export const toggleUserRoleStatus = async (req, res) => {
 
     res.json({
       success: true,
-      message: "User role updated + Company updated",
+      message: `User role updated to ${user.role} and status to ${user.status}`,
       user,
       company,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 // Fetch all users
@@ -99,6 +102,13 @@ export const getAdminDashboardData = async (req, res) => {
     const users = await User.find({
       companyId: req.user.companyId,
       isDeleted: false,
+      role: { $in: [ "admin", "user"] },
+    }).select("-password");
+
+     // Optionally include the owner separately
+    const owner = await User.findOne({
+      companyId: req.user.companyId,
+      role: "owner",
     }).select("-password");
 
     res.json({ success: true, users });
@@ -107,6 +117,7 @@ export const getAdminDashboardData = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // Delete user
 export const deleteUser = async (req, res) => {
