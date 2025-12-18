@@ -134,4 +134,25 @@ export const getLeaves = async (req, res) => {
 };
 
 
+// controllers/leaveController.js
+export const deleteLeave = async (req, res) => {
+  try {
+    // sirf admin/owner/hr ya khud employee (optional) delete kar sake
+    const leave = await Leave.findById(req.params.id);
+    if (!leave) return res.status(404).json({ message: "Leave not found" });
 
+    // optional: agar employee khud delete kare
+    if (
+      req.user.role === "employee" &&
+      leave.employeeId.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    await leave.remove();
+    res.json({ success: true, message: "Leave deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+};

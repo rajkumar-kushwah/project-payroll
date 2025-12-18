@@ -4,6 +4,7 @@ import {
   updateLeaveStatus,
   getMyLeaves,
   getLeaves,
+  deleteLeave,
 } from "../controllers/leaveController.js";
 
 import { protect } from "../middleware/authMiddleware.js";
@@ -20,9 +21,9 @@ router.get("/my", protect, getMyLeaves);
 
 
 router.get("/", protect, getLeaves);
+// routes/leaveRoutes.js
+router.delete("/:id", protect, deleteLeave);
 
-
-/* ================= ADMIN / OWNER / HR ================= */
 
 // // Admin/Owner/HR → Pending Leaves
 // router.get("/pending", protect, getPendingLeaves);
