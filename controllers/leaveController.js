@@ -30,6 +30,8 @@ export const applyLeave = async (req, res) => {
       employeeId: employee._id,
       employeeCode: employee.employeeCode,
       companyId: employee.companyId,
+      name: employee.name,      
+      avatar: employee.avatar,
       date,
       type,
       reason,
