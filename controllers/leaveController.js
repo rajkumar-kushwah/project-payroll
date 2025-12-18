@@ -6,10 +6,15 @@ import mongoose from "mongoose";
 export const applyLeave = async (req, res) => {
   try {
     const { date, type, reason } = req.body;
+    const userId = req.user._id;
 
-    //   same date leave already applied?
+    // First, find the employee document
+    const employee = await Employee.findOne({ userId });
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
+
+    // Then check if leave already applied for this employee on the same date
     const alreadyApplied = await Leave.findOne({
-      employeeId: req.user._id,
+      employeeId: employee._id,
       date,
     });
 
@@ -19,20 +24,15 @@ export const applyLeave = async (req, res) => {
       });
     }
 
-    const userId = req.user._id;
-
-    const employee = await Employee.findOne({userId});
-    if (!employee) return res.status(404).json({ message: "Employee not found"});
-
-    //  create leave
+    // Create leave
     const leave = await Leave.create({
-      employeeId: req.user._id,
-      employeeCode: req.user.employeeCode,
-      companyId: req.user.companyId,
+      employeeId: employee._id,
+      employeeCode: employee.employeeCode,
+      companyId: employee.companyId,
       date,
       type,
       reason,
-      createdBy: req.user._id,
+      createdBy: userId,
     });
 
     res.status(201).json({
@@ -45,7 +45,6 @@ export const applyLeave = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 
  
 
