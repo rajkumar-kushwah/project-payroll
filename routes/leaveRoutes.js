@@ -1,13 +1,34 @@
 import express from "express";
-import { addLeave, getLeavesByMonth, deleteLeave, getAllEmployees } from "../controllers/leaveController.js";
-import { protect } from "../middleware/auth.js";
+import {
+  applyLeave,
+  getPendingLeaves,
+  updateLeaveStatus,
+  getMyLeaves,
+  getLeaves,
+} from "../controllers/leaveController.js";
+
+import { protect } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/", protect, addLeave);
-router.get("/:year/:month", protect, getLeavesByMonth);
-router.delete("/:id", protect, deleteLeave);
-router.get("/employees", protect, getAllEmployees);
+/* ================= EMPLOYEE ================= */
 
+// Employee → Apply Leave
+router.post("/", protect, applyLeave);
+
+// Employee → My Leaves
+router.get("/my", protect, getMyLeaves);
+
+
+router.get("/", protect, getLeaves);
+
+
+/* ================= ADMIN / OWNER / HR ================= */
+
+// // Admin/Owner/HR → Pending Leaves
+// router.get("/pending", protect, getPendingLeaves);
+
+// Admin/Owner/HR → Approve / Reject
+router.put("/:id", protect, updateLeaveStatus);
 
 export default router;

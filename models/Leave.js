@@ -1,17 +1,34 @@
-// employee-management/models/Leave.js
-
 import mongoose from "mongoose";
 
 const leaveSchema = new mongoose.Schema(
   {
-    employeeCode: { type: String, required: true },
-    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
-    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
-    avatar: { type: String},
+    employeeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
     date: { type: Date, required: true },
-    type: { type: String, enum: ["Paid", "Unpaid"], default: "Paid" },
-    reason: { type: String },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // HR
+    type: {
+      type: String,
+      enum: ["casual", "sick", "paid", "unpaid"],
+      required: true,
+    },
+    reason: String,
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true }
 );

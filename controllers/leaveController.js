@@ -1,94 +1,137 @@
-import Leave from "../models/Leave";
+import Leave from "../models/Leave.js";
+import mongoose from "mongoose";
 
+export const applyLeave = async (req, res) => {
+  try {
+    const { date, type, reason } = req.body;
 
-// ADD LEAVE
+    //   same date leave already applied?
+    const alreadyApplied = await Leave.findOne({
+      employeeId: req.user._id,
+      date,
+    });
 
-export const addLeave = async (req, res) => {
-    try {
-        const { employeeId, date, type, reason } = req.body;
-
-        const leave = await Leave.create({
-            employeeId,
-            companyId: req.user.companyId,
-            date,
-            type,
-            reason,
-            createdBy: req.user._id,
-        });
-
-        res.json({ success: true, message: "Leave added successfully", leave });
-    } catch (err) {
-        console.error("Add Leave Error:", err);
-        res.status(500).json({ message: "server error", error: err.message });
+    if (alreadyApplied) {
+      return res.status(400).json({
+        message: "Leave already applied for this date",
+      });
     }
+
+    //  create leave
+    const leave = await Leave.create({
+      employeeId: req.user._id,
+      companyId: req.user.companyId,
+      date,
+      type,
+      reason,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Leave applied successfully",
+      data: leave,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
 };
 
 
-// GET LEAVES BY MONTH
+// export const getPendingLeaves = async (req,res) => {
+//     try{
+//      // sirf admin/ owner/hr
+//       if (!["admin", "owner", "hr"].includes(req.user.role)) {
+//         return res.status(403).json({message: "Access denied"});
+//       }
 
-export const getLeavesByMonth = async (req, res) => {
-    try {
-        const { year, month } = req.params;
+//     const leaves = await Leave.find({
+//         companyId: req.user.companyId,
+//         status: "pending",
 
-        const leaves = await Leave.find({
-            companyId: req.user.companyId,
-            date: {
-                $gte: new Date(year, month - 1, 1),
-                $lte: new Date(year, month, 0, 23, 59, 59, 999),
-            },
-        }).populate("employeeId", "name email phone avatar");
+//     })       
+//       .populate("employeeId", "name email role phone avatar")
+//       .sort({ createdAt: -1});
 
-        res.json({ success: true, leaves });
-    } catch (err) {
-        console.error("Get Leaves Error:", err);
-        res.status(500).json({ message: "server error", error: err.message });
+//       res.json({
+//         success:true,
+//         count: leaves.length,
+//         data: leaves,
+//       })
+//     } catch (err) {
+//         console.error(err);
+//         res.status(500).json({message: err.message});
+//     }
+// }
+
+export const updateLeaveStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
     }
+
+    if (!["admin", "owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const leave = await Leave.findById(req.params.id);
+    if (!leave) {
+      return res.status(404).json({ message: "Leave not found" });
+    }
+
+    leave.status = status;
+    leave.approvedBy = req.user._id;
+
+    await leave.save();
+
+    res.json({
+      success: true,
+      message: `Leave status updated to ${status}`,
+      data: leave,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
 };
 
-// DELETE LEAVE
+export const getMyLeaves = async (req, res) => {
+  try {
+    const leaves = await Leave.find({
+      employeeId: req.user._id,
+    }).sort({ createdAt: -1 });
 
-export const deleteLeave = async (req, res) => {
-    try {
-        const leave = await Leave.findByIdAndDelete(req.params._id);
-
-        if (!leave) {
-            return res.status(404).json({ message: "Leave not found" });
-        }
-
-        res.json({ success: true, message: "Leave deleted successfully" });
-    } catch (err) {
-        console.error("Delete Leave Error:", err);
-        res.status(500).json({ message: "server error", error: err.message });
-    }
+    res.json({ success: true, data: leaves });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };
 
-export const updateLeave = async (req, res) => {
-    try {
-        const {employeeId, date, type, reason} = req.body;
+// GET /api/leaves?status=pending|approved|rejected
+export const getLeaves = async (req, res) => {
+  try {
+    const { status } = req.query;
 
-        const leave = await Leave.findByIdAndUpdate(req.params._id, {
-            employeeId,
-            companyId: req.user.companyId,
-            date,
-            type,
-            reason,
-        },
-        {new: true} 
-      )
-
-        if (!leave) {
-            return res.status(404).json({ message: "Leave not found" });
-        }
-
-        res.json({ success: true, message: "Leave updated successfully" });
-    } catch (err) {
-        console.error("Update Leave Error:", err);
-        res.status(500).json({ message: "server error", error: err.message });
+    // sirf admin / owner / hr
+    if (!["admin", "owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Access denied" });
     }
-}
 
-// Backend
-export const getAllEmployees = async (req, res) => {
-  const employees = await Employee.find({ companyId: req.user.companyId });
-  res.json({ success: true, employees });
+    const query = { companyId: req.user.companyId };
+    if (status) query.status = status; 
+
+    const leaves = await Leave.find(query)
+      .populate("employeeId", "name email role phone avatar")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, count: leaves.length, data: leaves });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
 };
+
+
+
