@@ -3,20 +3,74 @@ import Leave from "../models/Leave.js";
 import mongoose from "mongoose";
 
 
+// export const applyLeave = async (req, res) => {
+//   try {
+//     const { date, type, reason } = req.body;
+//     const userId = req.user._id;
+
+//     // First, find the employee document
+//     const employee = await Employee.findOne({ userId });
+//     if (!employee) return res.status(404).json({ message: "Employee not found" });
+
+    
+//     // Then check if leave already applied for this employee on the same date
+//     const alreadyApplied = await Leave.findOne({
+//       employeeId: employee._id,
+//       date,
+//     });
+
+//     if (alreadyApplied) {
+//       return res.status(400).json({
+//         message: "Leave already applied for this date",
+//       });
+//     }
+
+//     // Create leave
+//     const leave = await Leave.create({
+//       employeeId: employee._id,
+//       employeeCode: employee.employeeCode,
+//       companyId: employee.companyId,
+//       name: employee.name,      
+//       avatar: employee.avatar,
+//       date,
+//       type,
+//       reason,
+//       createdBy: userId,
+//     });
+
+//     res.status(201).json({
+//       success: true,
+//       message: "Leave applied successfully",
+//       data: leave,
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
 export const applyLeave = async (req, res) => {
   try {
     const { date, type, reason } = req.body;
     const userId = req.user._id;
 
-    // First, find the employee document
+    // Find employee
     const employee = await Employee.findOne({ userId });
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
 
-    
-    // Then check if leave already applied for this employee on the same date
+    // 🔑 Normalize date (same day only)
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // ❌ Block only SAME DATE
     const alreadyApplied = await Leave.findOne({
       employeeId: employee._id,
-      date,
+      date: { $gte: startOfDay, $lte: endOfDay },
     });
 
     if (alreadyApplied) {
@@ -25,17 +79,18 @@ export const applyLeave = async (req, res) => {
       });
     }
 
-    // Create leave
+    // ✅ Create leave (same month unlimited allowed)
     const leave = await Leave.create({
       employeeId: employee._id,
       employeeCode: employee.employeeCode,
       companyId: employee.companyId,
-      name: employee.name,      
+      name: employee.name,
       avatar: employee.avatar,
-      date,
+      date: startOfDay, // normalized
       type,
       reason,
       createdBy: userId,
+      status: "pending",
     });
 
     res.status(201).json({
@@ -44,7 +99,7 @@ export const applyLeave = async (req, res) => {
       data: leave,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Apply Leave Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
