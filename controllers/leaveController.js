@@ -20,10 +20,12 @@ export const applyLeave = async (req, res) => {
     //  create leave
     const leave = await Leave.create({
       employeeId: req.user._id,
+    employeeCode: req.user.employeeCode,
       companyId: req.user.companyId,
       date,
       type,
       reason,
+      createdBy: req.user._id,
     });
 
     res.status(201).json({
