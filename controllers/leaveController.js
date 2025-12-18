@@ -20,7 +20,7 @@ export const applyLeave = async (req, res) => {
     //  create leave
     const leave = await Leave.create({
       employeeId: req.user._id,
-    employeeCode: req.user.employeeCode,
+      employeeCode: req.user.employeeCode,
       companyId: req.user.companyId,
       date,
       type,
@@ -40,31 +40,7 @@ export const applyLeave = async (req, res) => {
 };
 
 
-// export const getPendingLeaves = async (req,res) => {
-//     try{
-//      // sirf admin/ owner/hr
-//       if (!["admin", "owner", "hr"].includes(req.user.role)) {
-//         return res.status(403).json({message: "Access denied"});
-//       }
-
-//     const leaves = await Leave.find({
-//         companyId: req.user.companyId,
-//         status: "pending",
-
-//     })       
-//       .populate("employeeId", "name email role phone avatar")
-//       .sort({ createdAt: -1});
-
-//       res.json({
-//         success:true,
-//         count: leaves.length,
-//         data: leaves,
-//       })
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).json({message: err.message});
-//     }
-// }
+ 
 
 export const updateLeaveStatus = async (req, res) => {
   try {
