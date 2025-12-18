@@ -123,7 +123,7 @@ export const getLeaves = async (req, res) => {
     if (status) query.status = status; 
 
     const leaves = await Leave.find(query)
-      .populate("employeeId", "name email role phone avatar")
+      .populate("employeeId", "name email employeeCode role phone avatar")
       .sort({ createdAt: -1 });
 
     res.json({ success: true, count: leaves.length, data: leaves });
