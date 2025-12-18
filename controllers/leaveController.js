@@ -1,5 +1,7 @@
+import Employee from "../models/Employee.js";
 import Leave from "../models/Leave.js";
 import mongoose from "mongoose";
+
 
 export const applyLeave = async (req, res) => {
   try {
@@ -16,6 +18,11 @@ export const applyLeave = async (req, res) => {
         message: "Leave already applied for this date",
       });
     }
+
+    const userId = req.user._id;
+
+    const employee = await Employee.findOne({userId});
+    if (!employee) return res.status(404).json({ message: "Employee not found"});
 
     //  create leave
     const leave = await Leave.create({
