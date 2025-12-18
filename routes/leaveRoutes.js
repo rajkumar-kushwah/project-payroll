@@ -1,13 +1,12 @@
 import express from "express";
 import {
   applyLeave,
-  getPendingLeaves,
   updateLeaveStatus,
   getMyLeaves,
   getLeaves,
 } from "../controllers/leaveController.js";
 
-import { protect } from "../middlewares/authMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
