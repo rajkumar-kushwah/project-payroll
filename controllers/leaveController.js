@@ -12,6 +12,7 @@ export const applyLeave = async (req, res) => {
     const employee = await Employee.findOne({ userId });
     if (!employee) return res.status(404).json({ message: "Employee not found" });
 
+    
     // Then check if leave already applied for this employee on the same date
     const alreadyApplied = await Leave.findOne({
       employeeId: employee._id,
@@ -83,15 +84,19 @@ export const updateLeaveStatus = async (req, res) => {
 
 export const getMyLeaves = async (req, res) => {
   try {
-    const leaves = await Leave.find({
-      employeeId: req.user._id,
-    }).sort({ createdAt: -1 });
+    const employee = await Employee.findOne({ userId: req.user._id });
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
+
+    const leaves = await Leave.find({ employeeId: employee._id })
+    .populate("employeeId", "name email employeeCode role phone avatar")
+    .sort({ createdAt: -1 });
 
     res.json({ success: true, data: leaves });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 // GET /api/leaves?status=pending|approved|rejected
 export const getLeaves = async (req, res) => {

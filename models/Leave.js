@@ -14,6 +14,9 @@ const leaveSchema = new mongoose.Schema(
     },
     employeeCode: { type: String, required: true },
 
+    name: { type: String, required: true },
+    avatar: { type: String },
+
     date: { type: Date, required: true },
     type: {
       type: String,
