@@ -13,8 +13,8 @@ const attendanceSchema = new mongoose.Schema({
     ref: "Company", 
     required: true 
   },
-  employeeName: String,      
-  employeeAvatar: String,  
+   avatar: { type: String, default: "" },
+  name: { type: String, required: true },
 
   date: { type: Date, required: true },
 
@@ -48,7 +48,7 @@ const attendanceSchema = new mongoose.Schema({
 
   logType: { 
     type: String, 
-    enum: ["manual", "self"], 
+    enum: ["manual", "self" ,"auto"], 
     default: "manual" 
   },
 

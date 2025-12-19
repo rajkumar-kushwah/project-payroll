@@ -1,3 +1,5 @@
+// controllers/attendanceController.js
+
 import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
@@ -9,57 +11,13 @@ import {
   minutesToHoursDecimal,
 } from "../utils/time.js";
 
-// const FULL_DAY_MINUTES = 8 * 60;
-// const HALF_DAY_MINUTES = 4 * 60;
+
 
 const fullDayThreshold = 8 * 60; // 480 mins
 const halfDayThreshold = 4 * 60;
 
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
-/* =========================================================
-   COMPUTE DERIVED FIELDS
-========================================================= */
-// export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => {
-//   const dateStr = toDateString(record.date);
-
-//   const fixedIn = emp.fixedIn || companyDefaults.fixedIn || "10:00";
-//   const fixedOut = emp.fixedOut || companyDefaults.fixedOut || "18:30";
-
-//   if (!record.checkIn || !record.checkOut) {
-//     record.totalMinutes = 0;
-//     record.totalHours = 0;
-//     record.missingMinutes = FULL_DAY_MINUTES;
-//     record.missingHours = FULL_DAY_MINUTES / 60;
-//     record.status = "absent";
-//     return;
-//   }
-
-//   const checkInDt = new Date(record.checkIn);
-//   const checkOutDt = new Date(record.checkOut);
-
-//   const totalMins = minutesBetween(checkInDt, checkOutDt);
-//   record.totalMinutes = totalMins;
-//   record.totalHours = minutesToHoursDecimal(totalMins);
-
-//   const fixedInDt = hhmmToDate(dateStr, fixedIn);
-//   const fixedOutDt = hhmmToDate(dateStr, fixedOut);
-
-//   record.lateMinutes = checkInDt > fixedInDt ? minutesBetween(fixedInDt, checkInDt) : 0;
-//   record.earlyLeaveMinutes =
-//     checkOutDt < fixedOutDt ? minutesBetween(checkOutDt, fixedOutDt) : 0;
-
-//   record.overtimeMinutes =
-//     checkOutDt > fixedOutDt ? minutesBetween(fixedOutDt, checkOutDt) : 0;
-
-//   record.overtimeHours = minutesToHoursDecimal(record.overtimeMinutes);
-//   record.missingMinutes = totalMins < FULL_DAY_MINUTES ? FULL_DAY_MINUTES - totalMins : 0;
-//   record.missingHours = minutesToHoursDecimal(record.missingMinutes);
-
-//   if (totalMins >= FULL_DAY_MINUTES) record.status = "present";
-//   else if (totalMins >= HALF_DAY_MINUTES) record.status = "half-day";
-//   else record.status = "absent";
-// };
 
 
 export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => {
@@ -200,6 +158,8 @@ export const checkIn = async (req, res) => {
       date: today,
       checkIn: new Date(),
       status: "present",
+      name: emp.name,
+      avatar: emp.avatar,
     });
 
     const populated = await record.populate(

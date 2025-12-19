@@ -1,5 +1,7 @@
+// leaveController.js
 import Employee from "../models/Employee.js";
 import Leave from "../models/Leave.js";
+import Attendance from "../models/Attendance.js";
 import mongoose from "mongoose";
 
 
@@ -106,6 +108,40 @@ export const applyLeave = async (req, res) => {
 
  
 
+// export const updateLeaveStatus = async (req, res) => {
+//   try {
+//     const { status } = req.body;
+
+//     if (!["approved", "rejected"].includes(status)) {
+//       return res.status(400).json({ message: "Invalid status" });
+//     }
+
+//     if (!["admin", "owner", "hr"].includes(req.user.role)) {
+//       return res.status(403).json({ message: "Access denied" });
+//     }
+
+//     const leave = await Leave.findById(req.params.id);
+//     if (!leave) {
+//       return res.status(404).json({ message: "Leave not found" });
+//     }
+
+//     leave.status = status;
+//     leave.approvedBy = req.user._id;
+
+//     await leave.save();
+
+//     res.json({
+//       success: true,
+//       message: `Leave status updated to ${status}`,
+//       data: leave,
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+
 export const updateLeaveStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -127,6 +163,42 @@ export const updateLeaveStatus = async (req, res) => {
     leave.approvedBy = req.user._id;
 
     await leave.save();
+
+    //  AUTO-CREATE / UPDATE ATTENDANCE (sirf approved leaves ke liye)
+    if (status === "approved") {
+      const emp = await Employee.findById(leave.employeeId);
+      if (emp) {
+        await Attendance.findOneAndUpdate(
+          {
+            employeeId: emp._id,
+            companyId: leave.companyId,
+            date: leave.date,
+          },
+          {
+            employeeId: emp._id,
+            employeeCode: emp.employeeCode,
+            companyId: leave.companyId,
+            date: leave.date,
+            status: "leave",
+            logType: "system",
+            isPaid: true, // ya leave.isPaid agar schema me hai
+            checkIn: null,
+            checkOut: null,
+            totalHours: 0,
+            overtimeHours: 0,
+            missingHours: 0,
+            isLate: false,
+            lateByMinutes: 0,
+            isEarlyCheckout: false,
+            earlyByMinutes: 0,
+            isOvertime: false,
+            name: emp.name,
+            avatar: emp.avatar,
+          },
+          { upsert: true, new: true } // create if not exists
+        );
+      }
+    }
 
     res.json({
       success: true,

@@ -1,3 +1,5 @@
+//salaryController.js
+
 import Salary from "../models/Salary.js";
 import Employee from "../models/Employee.js";
 
