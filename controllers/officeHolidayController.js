@@ -11,6 +11,8 @@ export const addOfficeHoliday = async (req, res) => {
   try {
     const { title, date, type, description } = req.body;
 
+    type = type.toUpperCase();
+
     const holiday = await OfficeHoliday.create({
       companyId: req.user.companyId,
       title,
