@@ -9,7 +9,7 @@ import attendanceRoutes from "./routes/attendanceRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import workScheduleRoutes from "./routes/worksechudel.js"; 
 import leaveRoutes from "./routes/leaveRoutes.js";
-
+import officeHolidayRoutes from "./routes/officeHolidayRoutes.js";
 
 
 
@@ -58,6 +58,7 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/workschedule", workScheduleRoutes);
 app.use("/api", adminRoutes); 
 app.use("/api/leaves", leaveRoutes);
+app.use("/api/holidays", officeHolidayRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
