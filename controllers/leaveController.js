@@ -56,23 +56,47 @@ export const applyLeave = async (req, res) => {
     const { date, type, reason } = req.body;
     const userId = req.user._id;
 
-    // Find employee
     const employee = await Employee.findOne({ userId });
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // 🔑 Normalize date (same day only)
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
+    // ✅ Pure date (no timezone issue)
+    const [year, month, day] = date.split("-").map(Number);
+    const leaveDate = new Date(Date.UTC(year, month - 1, day));
 
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    // ✅ Fetch active schedule
+    const schedule = await WorkSchedule.findOne({
+      employeeId: employee._id,
+      companyId: employee.companyId,
+      effectiveFrom: { $lte: leaveDate },
+      $or: [
+        { effectiveTo: null },
+        { effectiveTo: { $gte: leaveDate } },
+      ],
+    });
 
-    // ❌ Block only SAME DATE
+    if (!schedule) {
+      return res.status(400).json({
+        message: "No active work schedule found",
+      });
+    }
+
+    // ✅ Weekly off check
+    const dayName = leaveDate.toLocaleDateString("en-US", {
+      weekday: "long",
+    });
+
+    if (schedule.weeklyOff?.includes(dayName)) {
+      return res.status(400).json({
+        message: `Cannot apply leave on ${dayName}. It is already a weekly off.`,
+      });
+    }
+
+    // ✅ Same-day duplicate block
     const alreadyApplied = await Leave.findOne({
       employeeId: employee._id,
-      date: { $gte: startOfDay, $lte: endOfDay },
+      date: leaveDate,
     });
 
     if (alreadyApplied) {
@@ -81,14 +105,13 @@ export const applyLeave = async (req, res) => {
       });
     }
 
-    // ✅ Create leave (same month unlimited allowed)
     const leave = await Leave.create({
       employeeId: employee._id,
       employeeCode: employee.employeeCode,
       companyId: employee.companyId,
       name: employee.name,
       avatar: employee.avatar,
-      date: startOfDay, // normalized
+      date: leaveDate,
       type,
       reason,
       createdBy: userId,
@@ -105,6 +128,7 @@ export const applyLeave = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
  
 
