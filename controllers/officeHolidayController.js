@@ -9,7 +9,7 @@ import Attendance from "../models/Attendance.js";
 // add office holiday
 export const addOfficeHoliday = async (req, res) => {
   try {
-    const { title, date, type, description } = req.body;
+    let { title, date, type, description } = req.body;
 
     type = type.toUpperCase();
 
