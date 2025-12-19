@@ -18,6 +18,7 @@ export const addOfficeHoliday = async (req, res) => {
       title,
       date,
       type,
+      isPaid: type === "PAID",
       description,
       createdBy: req.user._id,
     });
