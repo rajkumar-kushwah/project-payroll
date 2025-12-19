@@ -199,6 +199,8 @@ export const checkIn = async (req, res) => {
       employeeId: emp._id,
       employeeCode: emp.employeeCode,
       companyId: req.user.companyId,
+      name: emp.name,
+      avatar: emp.avatar,
       date: today,
       checkIn: new Date(),
       status: "present",
