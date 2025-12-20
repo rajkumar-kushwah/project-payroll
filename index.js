@@ -10,7 +10,8 @@ import adminRoutes from "./routes/adminRoutes.js";
 import workScheduleRoutes from "./routes/worksechudel.js"; 
 import leaveRoutes from "./routes/leaveRoutes.js";
 import officeHolidayRoutes from "./routes/officeHolidayRoutes.js";
-
+import cron from "node-cron";
+import { autoCheckoutBySchedule } from "./controllers/attendanceController.js";
 
 
 
@@ -73,3 +74,12 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
+// Run every 15 minutes
+cron.schedule("*/15 * * * *", async () => {
+  try {
+    console.log("Running autoCheckoutBySchedule cron job...");
+    await autoCheckoutBySchedule();
+  } catch (err) {
+    console.error("Error in autoCheckoutBySchedule cron:", err);
+  }
+});

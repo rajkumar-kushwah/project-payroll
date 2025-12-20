@@ -10,59 +10,77 @@ import {
   minutesBetween,
   minutesToHoursDecimal,
 } from "../utils/time.js";
-
-// const FULL_DAY_MINUTES = 8 * 60;
-// const HALF_DAY_MINUTES = 4 * 60;
+import Leave from "../models/Leave.js";
 
 const fullDayThreshold = 8 * 60; // 480 mins
 const halfDayThreshold = 4 * 60;
 
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
-/* =========================================================
-   COMPUTE DERIVED FIELDS
-========================================================= */
-// export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => {
-//   const dateStr = toDateString(record.date);
 
-//   const fixedIn = emp.fixedIn || companyDefaults.fixedIn || "10:00";
-//   const fixedOut = emp.fixedOut || companyDefaults.fixedOut || "18:30";
+export const autoCheckoutBySchedule = async () => {
+  try {
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
 
-//   if (!record.checkIn || !record.checkOut) {
-//     record.totalMinutes = 0;
-//     record.totalHours = 0;
-//     record.missingMinutes = FULL_DAY_MINUTES;
-//     record.missingHours = FULL_DAY_MINUTES / 60;
-//     record.status = "absent";
-//     return;
-//   }
+    // 1️⃣ Fetch all attendances today where checkIn exists but checkOut is null
+    const records = await Attendance.find({
+      date: new Date(todayStr),
+      checkIn: { $ne: null },
+      checkOut: null,
+    });
 
-//   const checkInDt = new Date(record.checkIn);
-//   const checkOutDt = new Date(record.checkOut);
+    for (let record of records) {
+      const emp = await Employee.findById(record.employeeId);
+      if (!emp) continue;
 
-//   const totalMins = minutesBetween(checkInDt, checkOutDt);
-//   record.totalMinutes = totalMins;
-//   record.totalHours = minutesToHoursDecimal(totalMins);
+      // 2️⃣ Skip if employee is on approved leave
+      const leave = await Leave.findOne({
+        employeeId: emp._id,
+        date: record.date,
+        status: "approved",
+      });
+      if (leave) {
+        console.log(`Skipping auto-checkout for ${emp.employeeCode}, on approved leave`);
+        continue;
+      }
 
-//   const fixedInDt = hhmmToDate(dateStr, fixedIn);
-//   const fixedOutDt = hhmmToDate(dateStr, fixedOut);
+      // 3️⃣ Get employee schedule
+      const schedule = await WorkSchedule.findOne({
+        employeeId: emp._id,
+        companyId: record.companyId,
+        effectiveFrom: { $lte: record.date },
+        $or: [
+          { effectiveTo: null },
+          { effectiveTo: { $gte: record.date } },
+        ],
+      });
 
-//   record.lateMinutes = checkInDt > fixedInDt ? minutesBetween(fixedInDt, checkInDt) : 0;
-//   record.earlyLeaveMinutes =
-//     checkOutDt < fixedOutDt ? minutesBetween(checkOutDt, fixedOutDt) : 0;
+      if (!schedule) continue;
 
-//   record.overtimeMinutes =
-//     checkOutDt > fixedOutDt ? minutesBetween(fixedOutDt, checkOutDt) : 0;
+      // 4️⃣ Skip if today is weekly off
+      const dayName = new Date(record.date).toLocaleDateString("en-US", { weekday: "long" });
+      if (schedule.weeklyOff?.includes(dayName)) {
+        console.log(`Skipping auto-checkout for ${emp.employeeCode}, weekly off`);
+        continue;
+      }
 
-//   record.overtimeHours = minutesToHoursDecimal(record.overtimeMinutes);
-//   record.missingMinutes = totalMins < FULL_DAY_MINUTES ? FULL_DAY_MINUTES - totalMins : 0;
-//   record.missingHours = minutesToHoursDecimal(record.missingMinutes);
+      // 5️⃣ Scheduled outTime + grace period
+      const scheduledOut = hhmmToDate(todayStr, schedule.outTime);
+      const outWithGrace = new Date(scheduledOut.getTime() + (schedule.gracePeriod || 0) * 60000);
 
-//   if (totalMins >= FULL_DAY_MINUTES) record.status = "present";
-//   else if (totalMins >= HALF_DAY_MINUTES) record.status = "half-day";
-//   else record.status = "absent";
-// };
-
+      // 6️⃣ Auto-checkout if current time >= scheduled out + grace
+      if (now >= outWithGrace) {
+        record.checkOut = outWithGrace;
+        record.autoCheckout = true; // flag for HR info
+        await record.save();
+        console.log(`Auto checkout done for ${record.employeeCode}`);
+      }
+    }
+  } catch (err) {
+    console.error("AutoCheckout Error:", err);
+  }
+};
 
 export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => {
   const dateStr = new Date(record.date).toISOString().split("T")[0];
