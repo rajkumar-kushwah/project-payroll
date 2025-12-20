@@ -3,6 +3,7 @@ import Employee from "../models/Employee.js";
 import Leave from "../models/Leave.js";
 import Attendance from "../models/Attendance.js";
 import mongoose from "mongoose";
+import WorkSchedule from "../models/Worksechudule.js";
 
 
 // export const applyLeave = async (req, res) => {
@@ -61,11 +62,11 @@ export const applyLeave = async (req, res) => {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // ✅ Pure date (no timezone issue)
+    //  Pure date (no timezone issue)
     const [year, month, day] = date.split("-").map(Number);
     const leaveDate = new Date(Date.UTC(year, month - 1, day));
 
-    // ✅ Fetch active schedule
+    //  Fetch active schedule
     const schedule = await WorkSchedule.findOne({
       employeeId: employee._id,
       companyId: employee.companyId,
@@ -82,7 +83,7 @@ export const applyLeave = async (req, res) => {
       });
     }
 
-    // ✅ Weekly off check
+    //  Weekly off check
     const dayName = leaveDate.toLocaleDateString("en-US", {
       weekday: "long",
     });
@@ -93,7 +94,7 @@ export const applyLeave = async (req, res) => {
       });
     }
 
-    // ✅ Same-day duplicate block
+    //  Same-day duplicate block
     const alreadyApplied = await Leave.findOne({
       employeeId: employee._id,
       date: leaveDate,
