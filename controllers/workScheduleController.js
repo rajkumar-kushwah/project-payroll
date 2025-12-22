@@ -1,3 +1,5 @@
+// workScheduleController.js
+
 import WorkSchedule from "../models/Worksechudule.js";
 import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
@@ -7,6 +9,10 @@ import Company from "../models/Company.js";
 ====================================================== */
 export const addWorkSchedule = async (req, res) => {
   try {
+    if (!["admin", "owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
     const {
       employeeId,
       shiftName,
@@ -76,7 +82,19 @@ export const addWorkSchedule = async (req, res) => {
 ====================================================== */
 export const getWorkSchedules = async (req, res) => {
   try {
-    const query = { companyId: req.user.companyId };
+    let query = { companyId: req.user.companyId };
+
+    // ✅ Employee role → only own schedule
+    if (req.user.role === "employee") {
+      const employee = await Employee.findOne({
+        companyId: req.user.companyId,
+        _id: req.user.employeeId
+      });
+      if (!employee) {
+        return res.json({ success: true, count: 0, data: [] });
+      }
+      query.employeeId = employee._id;
+    }
 
     const schedules = await WorkSchedule.find(query)
       .populate("employeeId", "name avatar employeeCode")
@@ -103,6 +121,11 @@ export const getWorkScheduleById = async (req, res) => {
       companyId: req.user.companyId,
     };
 
+    // ✅ Employee role → only own schedule
+    if (req.user.role === "employee") {
+      query.employeeId = req.user.employeeId;
+    }
+
     const schedule = await WorkSchedule.findOne(query).populate(
       "employeeId",
       "name avatar employeeCode"
@@ -124,6 +147,10 @@ export const getWorkScheduleById = async (req, res) => {
 ====================================================== */
 export const updateWorkSchedule = async (req, res) => {
   try {
+    if (!["admin", "owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
     const schedule = await WorkSchedule.findOneAndUpdate(
       { _id: req.params.id, companyId: req.user.companyId },
       req.body,
@@ -150,6 +177,10 @@ export const updateWorkSchedule = async (req, res) => {
 ====================================================== */
 export const deleteWorkSchedule = async (req, res) => {
   try {
+    if (!["admin", "owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
     const schedule = await WorkSchedule.findOneAndDelete({
       _id: req.params.id,
       companyId: req.user.companyId,

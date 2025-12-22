@@ -13,7 +13,10 @@ export const applyLeave = async (req, res) => {
     const { date, type, reason } = req.body;
 
     // 1️⃣ Find employee by company + user
-    const employee = await Employee.findOne({ companyId: req.user.companyId, _id: req.body.employeeId || req.user.employeeId });
+    const employee = await Employee.findOne({
+      companyId: req.user.companyId,
+      _id: req.body.employeeId || req.user.employeeId
+    });
     if (!employee) return res.status(404).json({ message: "Employee not found" });
 
     // 2️⃣ Parse date safely (UTC)
@@ -67,8 +70,11 @@ export const updateLeaveStatus = async (req, res) => {
   try {
     const { status } = req.body;
 
-    if (!["approved", "rejected"].includes(status)) return res.status(400).json({ message: "Invalid status" });
-    if (!["admin", "owner", "hr"].includes(req.user.role)) return res.status(403).json({ message: "Access denied" });
+    if (!["approved", "rejected"].includes(status))
+      return res.status(400).json({ message: "Invalid status" });
+
+    if (!["admin", "owner", "hr"].includes(req.user.role))
+      return res.status(403).json({ message: "Access denied" });
 
     const leave = await Leave.findById(req.params.id);
     if (!leave) return res.status(404).json({ message: "Leave not found" });
@@ -77,7 +83,7 @@ export const updateLeaveStatus = async (req, res) => {
     leave.approvedBy = req.user._id;
     await leave.save();
 
-    //  ✅ AUTO CREATE / UPDATE ATTENDANCE for approved leave
+    // ✅ AUTO CREATE / UPDATE ATTENDANCE for approved leave
     if (status === "approved") {
       const emp = await Employee.findById(leave.employeeId);
       if (emp) {
@@ -122,7 +128,10 @@ export const updateLeaveStatus = async (req, res) => {
 // -------------------------------------------------------------------
 export const getMyLeaves = async (req, res) => {
   try {
-    const employee = await Employee.findOne({ companyId: req.user.companyId, _id: req.body.employeeId || req.user.employeeId });
+    const employee = await Employee.findOne({
+      companyId: req.user.companyId,
+      _id: req.body.employeeId || req.user.employeeId
+    });
     if (!employee) return res.status(404).json({ message: "Employee not found" });
 
     const leaves = await Leave.find({ employeeId: employee._id })
@@ -144,7 +153,8 @@ export const getLeaves = async (req, res) => {
   try {
     const { status } = req.query;
 
-    if (!["admin", "owner", "hr"].includes(req.user.role)) return res.status(403).json({ message: "Access denied" });
+    if (!["admin", "owner", "hr"].includes(req.user.role))
+      return res.status(403).json({ message: "Access denied" });
 
     const query = { companyId: req.user.companyId };
     if (status) query.status = status;

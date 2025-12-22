@@ -17,35 +17,56 @@ export const getEmployees = async (req, res) => {
   try {
     let employees = [];
 
-    // Employee ya HR/Owner dono → companyId se fetch
-    employees = await Employee.find({ companyId: req.user.companyId }).sort({ createdAt: -1 });
+    if (req.user.role === "employee") {
+      // Sirf apna record → employeeId se
+      const emp = await Employee.findOne({ employeeId: req.user._id });
+      if (!emp) return res.status(404).json({ message: "Employee not found" });
 
-    // Har employee ke liye leave, attendance, salary attach karo
-    const formattedEmployees = await Promise.all(
-      employees.map(async (emp) => {
-        const leaveData = await Leave.find({ employeeId: emp._id });
-        const attendanceData = await Attendance.find({ employeeId: emp._id });
-        const salaryData = await Payroll.find({ employeeId: emp._id });
+      const leaveData = await Leave.find({ employeeId: emp._id });
+      const attendanceData = await Attendance.find({ employeeId: emp._id });
+      const salaryData = await Payroll.find({ employeeId: emp._id });
 
-        return {
+      employees = [
+        {
           ...emp._doc,
           leaveData,
           attendanceData,
           salaryData,
-        };
-      })
-    );
+        },
+      ];
+    } else if (["hr", "owner"].includes(req.user.role)) {
+      // HR / Owner → company ke sab employees
+      const allEmployees = await Employee.find({ companyId: req.user.companyId }).sort({ createdAt: -1 });
+
+      employees = await Promise.all(
+        allEmployees.map(async (emp) => {
+          const leaveData = await Leave.find({ employeeId: emp._id });
+          const attendanceData = await Attendance.find({ employeeId: emp._id });
+          const salaryData = await Payroll.find({ employeeId: emp._id });
+
+          return {
+            ...emp._doc,
+            leaveData,
+            attendanceData,
+            salaryData,
+          };
+        })
+      );
+    } else {
+      return res.status(403).json({ message: "Unauthorized role" });
+    }
 
     res.json({
       success: true,
       count: employees.length,
-      employees: formattedEmployees,
+      employees,
     });
   } catch (err) {
     console.error("Get Employees Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 
 
@@ -89,62 +110,43 @@ export const addEmployee = async (req, res) => {
     } = req.body;
 
     if (!name || !email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Name, email, and password are required." });
+      return res.status(400).json({ message: "Name, email, and password are required." });
     }
 
-    // Check duplicate user email
-    const existsUser = await User.findOne({
-      email: email.toLowerCase(),
-      isDeleted: false,
-    });
-
-    if (existsUser) {
-      return res
-        .status(400)
-        .json({ message: "User with this email already exists." });
-    }
+    // Check duplicate email
+    const existsUser = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
+    if (existsUser) return res.status(400).json({ message: "User with this email already exists." });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 1️⃣ Create User (LOGIN)
-    const user = await User.create(
-      [
-        {
-          name,
-          email: email.toLowerCase(),
-          password: hashedPassword,
-          role: "employee",
-          companyId: req.user.companyId,
-          avatar: req.file ? req.file.path : "",
-          emailVerified: true,
-        },
-      ],
-      { session }
-    );
+    // 1️⃣ Create User
+    const user = await User.create([{
+      name,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      role: "employee",
+      companyId: req.user.companyId,
+      avatar: req.file ? req.file.path : "",
+      emailVerified: true,
+    }], { session });
 
-    // 2️⃣ Create Employee (COMPANY STAFF)
-    const employee = await Employee.create(
-      [
-        {
-          companyId: req.user.companyId,
-          createdBy: req.user._id,
-          name,
-          email: email.toLowerCase(),
-          phone,
-          department,
-          designation,
-          jobRole,
-          basicSalary: Number(basicSalary) || 0,
-          dateOfBirth: dob ? new Date(dob) : undefined,
-          avatar: req.file ? req.file.path : "",
-          notes,
-          isAdmin: false,
-        },
-      ],
-      { session }
-    );
+    // 2️⃣ Create Employee with reference to User
+    const employee = await Employee.create([{
+      companyId: req.user.companyId,
+      employeeId: user[0]._id, // Reference to User
+      createdBy: req.user._id,
+      name,
+      email: email.toLowerCase(),
+      phone,
+      department,
+      designation,
+      jobRole,
+      basicSalary: Number(basicSalary) || 0,
+      dateOfBirth: dob ? new Date(dob) : undefined,
+      avatar: req.file ? req.file.path : "",
+      notes,
+      isAdmin: false,
+    }], { session });
 
     await session.commitTransaction();
     session.endSession();
@@ -153,10 +155,7 @@ export const addEmployee = async (req, res) => {
       success: true,
       message: "Employee registered successfully",
       employee,
-      userLoginData: {
-        email: user[0].email,
-        password,
-      },
+      userLoginData: { email: user[0].email, password }
     });
   } catch (err) {
     await session.abortTransaction();
@@ -165,6 +164,7 @@ export const addEmployee = async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 // -------------------------------------------------------------------
 // UPDATE EMPLOYEE

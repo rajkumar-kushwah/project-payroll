@@ -1,3 +1,5 @@
+// userController.js
+
 import User from "../models/User.js";
 import Company from "../models/Company.js";
 import Employee from "../models/Employee.js";
@@ -10,7 +12,13 @@ export const addUser = async (req, res) => {
     if (req.user.role !== "owner")
       return res.status(403).json({ message: "Only owner can add users" });
 
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, employeeId } = req.body;
+
+    // ✅ If employeeId provided, ensure it's valid and belongs to company
+    if (employeeId) {
+      const emp = await Employee.findOne({ _id: employeeId, companyId: req.user.companyId });
+      if (!emp) return res.status(404).json({ message: "Employee not found" });
+    }
 
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ message: "Email already exists" });
@@ -22,6 +30,7 @@ export const addUser = async (req, res) => {
       email,
       password: hashedPassword,
       role,
+      employeeId: employeeId || null,
       companyId: req.user.companyId,
       emailVerified: true,
       status: "active",
@@ -39,9 +48,8 @@ export const toggleUserRoleStatus = async (req, res) => {
   try {
     const { newRole } = req.body;
     const { userId } = req.params;
-    const loginUser = req.user;
 
-    if (loginUser.role !== "owner")
+    if (req.user.role !== "owner")
       return res.status(403).json({ message: "Only owner can modify roles" });
 
     if (!mongoose.Types.ObjectId.isValid(userId))
@@ -53,7 +61,7 @@ export const toggleUserRoleStatus = async (req, res) => {
     if (user.role === "owner")
       return res.status(400).json({ message: "Owner cannot be modified" });
 
-    const company = await Company.findById(loginUser.companyId);
+    const company = await Company.findById(req.user.companyId);
     if (!company) return res.status(404).json({ message: "Company not found" });
 
     company.admins = company.admins || [];
@@ -118,6 +126,11 @@ export const deleteUser = async (req, res) => {
     if (user.role === "owner")
       return res.status(400).json({ message: "Owner cannot be deleted" });
 
+    // ✅ Only Admin/Owner can delete employees
+    if (req.user.role === "employee" && user.employeeId?.toString() !== req.user.employeeId?.toString()) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     await User.findByIdAndDelete(userId);
 
     res.json({ success: true, message: "User deleted successfully" });
@@ -134,10 +147,12 @@ export const promoteEmployeeToAdmin = async (req, res) => {
       return res.status(403).json({ message: "Only owner can promote" });
     }
 
-    const employee = await Employee.findById(req.params.employeeId);
+    const employee = await Employee.findOne({
+      _id: req.params.employeeId,
+      companyId: req.user.companyId
+    });
     if (!employee) return res.status(404).json({ message: "Employee not found" });
 
-    // Ab userId dependency remove kiya, direct employee reference
     employee.isAdmin = true;
 
     await employee.save();
@@ -162,6 +177,11 @@ export const getEmployees = async (req, res) => {
 
     if (req.query.onlyEmployees === "true") {
       query.isAdmin = false;
+    }
+
+    // ✅ Employee role → only self
+    if (req.user.role === "employee") {
+      query._id = req.user.employeeId;
     }
 
     const employees = await Employee.find(query);

@@ -8,6 +8,11 @@ const officeHolidaySchema = new mongoose.Schema({
             ref: "Company",
             required: true,
         },
+        employeeId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+        },
 
         date: {
             type: Date,

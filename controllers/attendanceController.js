@@ -4,11 +4,7 @@ import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
 import WorkSchedule from "../models/Worksechudule.js";
 import Leave from "../models/Leave.js";
-import {
-  hhmmToDate,
-  minutesBetween,
-  minutesToHoursDecimal,
-} from "../utils/time.js";
+import { hhmmToDate, minutesBetween, minutesToHoursDecimal } from "../utils/time.js";
 
 /* =========================================================
    HELPERS
@@ -22,6 +18,7 @@ const getEmployeeFromUser = async (user) => {
     email: user.email.toLowerCase(),
   });
 };
+
 /* =========================================================
    AUTO CHECKOUT BY SCHEDULE
 ========================================================= */
@@ -111,19 +108,9 @@ export const computeDerivedFields = (record, emp = {}, schedule = {}) => {
   const fixedInDt = hhmmToDate(dateStr, fixedIn);
   const fixedOutDt = hhmmToDate(dateStr, fixedOut);
 
-  record.lateMinutes =
-    checkInDt > fixedInDt ? minutesBetween(fixedInDt, checkInDt) : 0;
-
-  record.earlyLeaveMinutes =
-    checkOutDt < fixedOutDt
-      ? minutesBetween(checkOutDt, fixedOutDt)
-      : 0;
-
-  record.overtimeMinutes =
-    checkOutDt > fixedOutDt
-      ? minutesBetween(fixedOutDt, checkOutDt)
-      : 0;
-
+  record.lateMinutes = checkInDt > fixedInDt ? minutesBetween(fixedInDt, checkInDt) : 0;
+  record.earlyLeaveMinutes = checkOutDt < fixedOutDt ? minutesBetween(checkOutDt, fixedOutDt) : 0;
+  record.overtimeMinutes = checkOutDt > fixedOutDt ? minutesBetween(fixedOutDt, checkOutDt) : 0;
   record.overtimeHours = minutesToHoursDecimal(record.overtimeMinutes);
 
   const minFullDay = 8 * 60;
@@ -145,8 +132,7 @@ export async function getSchedule(emp, companyId) {
       status: "active",
     }).select("inTime outTime");
 
-    if (sch)
-      return { fixedIn: sch.inTime || "10:00", fixedOut: sch.outTime || "18:30" };
+    if (sch) return { fixedIn: sch.inTime || "10:00", fixedOut: sch.outTime || "18:30" };
   }
 
   const company = await Company.findById(companyId).select("fixedIn fixedOut");
@@ -167,23 +153,15 @@ export const checkIn = async (req, res) => {
       const emp = await getEmployeeFromUser(req.user);
       if (!emp) return res.status(404).json({ message: "Employee not found" });
       employeeId = emp._id;
-    }
-
-    if (["admin", "owner", "hr"].includes(req.user.role)) {
-      if (!req.body.employeeId)
-        return res.status(400).json({ message: "Employee ID required" });
+    } else if (["admin", "owner", "hr"].includes(req.user.role)) {
+      if (!req.body.employeeId) return res.status(400).json({ message: "Employee ID required" });
       employeeId = req.body.employeeId;
     }
 
     const today = toDateString(new Date());
 
-    const exists = await Attendance.findOne({
-      employeeId,
-      date: today,
-      companyId: req.user.companyId,
-    });
-    if (exists)
-      return res.status(400).json({ message: "Already checked in" });
+    const exists = await Attendance.findOne({ employeeId, date: today, companyId: req.user.companyId });
+    if (exists) return res.status(400).json({ message: "Already checked in" });
 
     const emp = await Employee.findById(employeeId);
 
@@ -216,25 +194,16 @@ export const checkOut = async (req, res) => {
       const emp = await getEmployeeFromUser(req.user);
       if (!emp) return res.status(404).json({ message: "Employee not found" });
       employeeId = emp._id;
-    }
-
-    if (["admin", "owner", "hr"].includes(req.user.role)) {
-      if (!req.body.employeeId)
-        return res.status(400).json({ message: "Employee ID required" });
+    } else if (["admin", "owner", "hr"].includes(req.user.role)) {
+      if (!req.body.employeeId) return res.status(400).json({ message: "Employee ID required" });
       employeeId = req.body.employeeId;
     }
 
     const today = toDateString(new Date());
 
-    const record = await Attendance.findOne({
-      employeeId,
-      date: today,
-      companyId: req.user.companyId,
-    });
-
+    const record = await Attendance.findOne({ employeeId, date: today, companyId: req.user.companyId });
     if (!record) return res.status(404).json({ message: "Not checked in" });
-    if (record.checkOut)
-      return res.status(400).json({ message: "Already checked out" });
+    if (record.checkOut) return res.status(400).json({ message: "Already checked out" });
 
     record.checkOut = new Date();
 
@@ -254,8 +223,6 @@ export const checkOut = async (req, res) => {
 /* =========================================================
    GET ATTENDANCE
 ========================================================= */
-
-// GET ATTENDANCE
 export const getAttendance = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -263,122 +230,69 @@ export const getAttendance = async (req, res) => {
 
     let query = { companyId: req.user.companyId };
 
-    // ✅ Employee login → only their own records
     if (req.user.role === "employee") {
       const emp = await getEmployeeFromUser(req.user);
-      if (!emp) {
-        return res.json({ success: true, total: 0, totalPages: 0, data: [] });
-      }
+      if (!emp) return res.json({ success: true, total: 0, totalPages: 0, data: [] });
       query.employeeId = emp._id;
     }
 
-    // Fetch data with pagination
     const data = await Attendance.find(query)
-      .populate({
-        path: "employeeId",
-        select: "name employeeCode avatar",
-      })
+      .populate({ path: "employeeId", select: "name employeeCode avatar department jobRole" })
       .sort({ date: -1 })
       .skip(Number(skip))
       .limit(Number(limit));
 
     const total = await Attendance.countDocuments(query);
 
-    res.json({
-      success: true,
-      total,
-      totalPages: Math.ceil(total / limit),
-      data,
-    });
+    res.json({ success: true, total, totalPages: Math.ceil(total / limit), data });
   } catch (err) {
     console.error("getAttendance Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-
 /* =========================================================
    DELETE ATTENDANCE
 ========================================================= */
 export const deleteAttendance = async (req, res) => {
   try {
-    // sirf owner / hr delete kar sakta hai
     if (!["owner", "hr"].includes(req.user.role)) {
-      return res.status(403).json({
-        message: "You are not allowed to delete attendance",
-      });
+      return res.status(403).json({ message: "You are not allowed to delete attendance" });
     }
 
-    const record = await Attendance.findOneAndDelete({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    });
+    const record = await Attendance.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
+    if (!record) return res.status(404).json({ message: "Attendance record not found" });
 
-    if (!record) {
-      return res.status(404).json({
-        message: "Attendance record not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Attendance deleted successfully",
-      deletedId: record._id,
-    });
+    res.json({ success: true, message: "Attendance deleted successfully", deletedId: record._id });
   } catch (err) {
     console.error("deleteAttendance Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 /* =========================================================
    UPDATE ATTENDANCE
 ========================================================= */
 export const updateAttendance = async (req, res) => {
   try {
-    // 🔐 Permission
     if (!["owner", "hr"].includes(req.user.role)) {
-      return res.status(403).json({
-        message: "You are not allowed to update attendance",
-      });
+      return res.status(403).json({ message: "You are not allowed to update attendance" });
     }
 
     const { checkIn, checkOut, status } = req.body;
 
-    // attendance record (company safe)
-    const record = await Attendance.findOne({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    });
+    const record = await Attendance.findOne({ _id: req.params.id, companyId: req.user.companyId });
+    if (!record) return res.status(404).json({ message: "Attendance record not found" });
 
-    if (!record) {
-      return res.status(404).json({
-        message: "Attendance record not found",
-      });
-    }
-
-    // 🔁 Update fields
     if (checkIn !== undefined) record.checkIn = checkIn ? new Date(checkIn) : null;
     if (checkOut !== undefined) record.checkOut = checkOut ? new Date(checkOut) : null;
     if (status) record.status = status;
 
-    // 👤 Employee fetch (ONLY by employeeId + companyId)
-    const emp = await Employee.findOne({
-      _id: record.employeeId,
-      companyId: req.user.companyId,
-    });
+    const emp = await Employee.findOne({ _id: record.employeeId, companyId: req.user.companyId });
+    if (!emp) return res.status(404).json({ message: "Employee not found for this attendance" });
 
-    if (!emp) {
-      return res.status(404).json({
-        message: "Employee not found for this attendance",
-      });
-    }
-
-    // 🕒 Schedule + recompute
     const schedule = await getSchedule(emp, req.user.companyId);
-
-    if (record.checkIn && record.checkOut) {
-      computeDerivedFields(record, emp, schedule);
-    }
+    if (record.checkIn && record.checkOut) computeDerivedFields(record, emp, schedule);
 
     await record.save();
 
@@ -387,17 +301,9 @@ export const updateAttendance = async (req, res) => {
       select: "name employeeCode department jobRole avatar",
     });
 
-    res.json({
-      success: true,
-      message: "Attendance updated successfully",
-      data: populated,
-    });
-
+    res.json({ success: true, message: "Attendance updated successfully", data: populated });
   } catch (err) {
     console.error("updateAttendance Error:", err);
-    res.status(500).json({
-      message: "Server error",
-      error: err.message,
-    });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };

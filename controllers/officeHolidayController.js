@@ -10,6 +10,10 @@ import Attendance from "../models/Attendance.js";
 // -------------------------------------------------------------------
 export const addOfficeHoliday = async (req, res) => {
   try {
+    if (!["admin", "owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     let { title, date, type, description } = req.body;
 
     type = type.toUpperCase();
@@ -67,7 +71,10 @@ export const addOfficeHoliday = async (req, res) => {
 // -------------------------------------------------------------------
 export const getOfficeHolidays = async (req, res) => {
   try {
-    const holidays = await OfficeHoliday.find({ companyId: req.user.companyId }).sort({ createdAt: -1 });
+    // ✅ Employee role: can only view
+    let query = { companyId: req.user.companyId };
+
+    const holidays = await OfficeHoliday.find(query).sort({ createdAt: -1 });
 
     res.json({ success: true, data: holidays });
 
@@ -82,6 +89,10 @@ export const getOfficeHolidays = async (req, res) => {
 // -------------------------------------------------------------------
 export const deleteOfficeHoliday = async (req, res) => {
   try {
+    if (!["admin", "owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     const deleted = await OfficeHoliday.findOneAndDelete({
       _id: req.params.id,
       companyId: req.user.companyId,
@@ -90,7 +101,11 @@ export const deleteOfficeHoliday = async (req, res) => {
     if (!deleted) return res.status(404).json({ message: "Holiday not found" });
 
     // 🔹 DELETE ATTENDANCE FOR THIS HOLIDAY
-    await Attendance.deleteMany({ companyId: req.user.companyId, date: deleted.date, status: "holiday" });
+    await Attendance.deleteMany({
+      companyId: req.user.companyId,
+      date: deleted.date,
+      status: "holiday"
+    });
 
     res.json({ success: true, message: "Holiday deleted successfully" });
 
@@ -105,6 +120,10 @@ export const deleteOfficeHoliday = async (req, res) => {
 // -------------------------------------------------------------------
 export const updateOfficeHoliday = async (req, res) => {
   try {
+    if (!["admin", "owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     const { title, date, type, description } = req.body;
 
     const holiday = await OfficeHoliday.findOne({
@@ -116,7 +135,11 @@ export const updateOfficeHoliday = async (req, res) => {
 
     // 🔹 DELETE OLD ATTENDANCE
     if (holiday.date) {
-      await Attendance.deleteMany({ companyId: req.user.companyId, date: holiday.date, status: "holiday" });
+      await Attendance.deleteMany({
+        companyId: req.user.companyId,
+        date: holiday.date,
+        status: "holiday"
+      });
     }
 
     // 🔹 UPDATE HOLIDAY

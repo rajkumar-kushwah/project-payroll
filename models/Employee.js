@@ -4,7 +4,7 @@ const employeeSchema = new mongoose.Schema({
   employeeCode: { type: String, unique: true },
 
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
-  // userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: true },
+  employeeId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
   avatar: { type: String, default: "" },
