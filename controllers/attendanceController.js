@@ -1,31 +1,25 @@
+// controllers/attendanceController.js
+
 import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
 import WorkSchedule from "../models/Worksechudule.js";
 import Leave from "../models/Leave.js";
-import {
-  hhmmToDate,
-  minutesBetween,
-  minutesToHoursDecimal,
-} from "../utils/time.js";
+import { hhmmToDate, minutesBetween, minutesToHoursDecimal } from "../utils/time.js";
 
 /* ======================================================
    HELPERS
 ====================================================== */
-
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
-// token se employeeId nikalna
-const getEmployeeIdFromToken = async (req) => {
-  const emp = await Employee.findOne({
-    userId: req.user._id,
+const getEmployeeFromToken = async (req) => {
+  return await Employee.findOne({
+    employeeId: req.user._id, // Correct mapping
     companyId: req.user.companyId,
+    status: "active",
   });
-  return emp || null;
 };
-
-
 
 /* ======================================================
    AUTO CHECKOUT BY WORK SCHEDULE
@@ -33,17 +27,11 @@ const getEmployeeIdFromToken = async (req) => {
 export const autoCheckoutBySchedule = async () => {
   try {
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    // 🔹 IST date only
-    const today = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
-
-    // 1️⃣ Aaj ke sab open attendance
     const attendances = await Attendance.find({
-      date: today,
+      date: { $gte: todayStart, $lte: todayEnd },
       checkIn: { $ne: null },
       checkOut: null,
     });
@@ -52,57 +40,46 @@ export const autoCheckoutBySchedule = async () => {
       const emp = await Employee.findById(record.employeeId);
       if (!emp) continue;
 
-      // 2️⃣ Approved leave check
       const leave = await Leave.findOne({
         employeeId: emp._id,
         companyId: record.companyId,
-        date: today,
+        date: { $gte: todayStart, $lte: todayEnd },
         status: "approved",
       });
-
       if (leave) continue;
 
-      // 3️⃣ Work schedule fetch
       const schedule = await WorkSchedule.findOne({
         employeeId: emp._id,
         companyId: record.companyId,
+        status: "active",
       });
+      if (!schedule) continue;
 
-      if (!schedule || !schedule.outTime) continue;
-
-      // 4️⃣ Weekly off check
-      const dayName = today.toLocaleDateString("en-US", { weekday: "long" });
+      const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
       if (schedule.weeklyOff?.includes(dayName)) continue;
 
-      // 5️⃣ Scheduled outTime + grace
-      const scheduledOut = hhmmToDate(today, schedule.outTime);
-      const graceMinutes = schedule.gracePeriod || 0;
-
+      const scheduledOut = hhmmToDate(now, schedule.outTime);
       const outWithGrace = new Date(
-        scheduledOut.getTime() + graceMinutes * 60000
+        scheduledOut.getTime() + (schedule.gracePeriod || 0) * 60000
       );
 
-      // 6️⃣ Auto checkout condition
       if (now >= outWithGrace) {
         record.checkOut = outWithGrace;
         record.autoCheckout = true;
-
         await record.save();
 
-        console.log(
-          ` Auto-checkout: ${emp.employeeCode} at ${outWithGrace.toLocaleTimeString()}`
-        );
+        console.log(`Auto-checkout: ${emp.employeeCode} at ${outWithGrace.toLocaleTimeString()}`);
       }
     }
   } catch (err) {
-    console.error(" AutoCheckout Error:", err);
+    console.error("AutoCheckout Error:", err);
   }
 };
 
 /* ======================================================
    DERIVED FIELDS CALCULATION
 ====================================================== */
-export const computeDerivedFields = (record, emp, schedule) => {
+export const computeDerivedFields = (record, schedule) => {
   if (!record.checkIn || !record.checkOut) {
     record.totalMinutes = 0;
     record.totalHours = 0;
@@ -112,23 +89,17 @@ export const computeDerivedFields = (record, emp, schedule) => {
 
   const checkIn = new Date(record.checkIn);
   const checkOut = new Date(record.checkOut);
-
   const totalMins = minutesBetween(checkIn, checkOut);
 
   record.totalMinutes = totalMins;
   record.totalHours = minutesToHoursDecimal(totalMins);
 
-  const fixedIn = hhmmToDate(record.date, schedule.fixedIn);
-  const fixedOut = hhmmToDate(record.date, schedule.fixedOut);
+  const fixedIn = hhmmToDate(record.date, schedule.inTime);
+  const fixedOut = hhmmToDate(record.date, schedule.outTime);
 
-  record.lateMinutes =
-    checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
-
-  record.earlyLeaveMinutes =
-    checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
-
-  record.overtimeMinutes =
-    checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
+  record.lateMinutes = checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
+  record.earlyLeaveMinutes = checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
+  record.overtimeMinutes = checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
 
   if (totalMins >= 480) record.status = "present";
   else if (totalMins >= 240) record.status = "half-day";
@@ -142,19 +113,15 @@ export const getSchedule = async (emp, companyId) => {
   const ws = await WorkSchedule.findOne({
     employeeId: emp._id,
     companyId,
+    status: "active",
   });
 
-  if (ws) {
-    return {
-      fixedIn: ws.inTime,
-      fixedOut: ws.outTime,
-    };
-  }
+  if (ws) return ws;
 
   const company = await Company.findById(companyId);
   return {
-    fixedIn: company?.fixedIn || "10:00",
-    fixedOut: company?.fixedOut || "18:30",
+    inTime: company?.fixedIn || "10:00",
+    outTime: company?.fixedOut || "18:30",
   };
 };
 
@@ -166,14 +133,13 @@ export const checkIn = async (req, res) => {
     let emp;
 
     if (req.user.role === "employee") {
-      emp = await getEmployeeIdFromToken(req);
+      emp = await getEmployeeFromToken(req);
       if (!emp) return res.status(404).json({ message: "Employee not found" });
     }
 
     if (["admin", "owner", "hr"].includes(req.user.role)) {
       if (!req.body.employeeId)
         return res.status(400).json({ message: "employeeId required" });
-
       emp = await Employee.findById(req.body.employeeId);
     }
 
@@ -184,7 +150,6 @@ export const checkIn = async (req, res) => {
       companyId: req.user.companyId,
       date: today,
     });
-
     if (exists)
       return res.status(400).json({ message: "Already checked in" });
 
@@ -214,7 +179,7 @@ export const checkOut = async (req, res) => {
     let emp;
 
     if (req.user.role === "employee") {
-      emp = await getEmployeeIdFromToken(req);
+      emp = await getEmployeeFromToken(req);
       if (!emp) return res.status(404).json({ message: "Employee not found" });
     }
 
@@ -241,7 +206,7 @@ export const checkOut = async (req, res) => {
     record.checkOut = new Date();
 
     const schedule = await getSchedule(emp, req.user.companyId);
-    computeDerivedFields(record, emp, schedule);
+    computeDerivedFields(record, schedule);
 
     await record.save();
     res.json({ success: true, data: record });
@@ -264,7 +229,6 @@ export const updateAttendance = async (req, res) => {
       _id: req.params.id,
       companyId: req.user.companyId,
     });
-
     if (!record)
       return res.status(404).json({ message: "Attendance not found" });
 
@@ -276,7 +240,7 @@ export const updateAttendance = async (req, res) => {
     const schedule = await getSchedule(emp, req.user.companyId);
 
     if (record.checkIn && record.checkOut) {
-      computeDerivedFields(record, emp, schedule);
+      computeDerivedFields(record, schedule);
     }
 
     await record.save();
@@ -318,17 +282,14 @@ export const getAttendance = async (req, res) => {
   try {
     let query = { companyId: req.user.companyId };
 
-    // 👤 Employee → sirf apni
     if (req.user.role === "employee") {
-      const emp = await getEmployeeIdFromToken(req);
+      const emp = await getEmployeeFromToken(req);
       if (!emp) return res.json({ success: true, data: [] });
       query.employeeId = emp._id;
     }
 
-    // 👨‍💼 HR / Owner
     if (["admin", "owner", "hr"].includes(req.user.role)) {
-      if (req.query.employeeId)
-        query.employeeId = req.query.employeeId;
+      if (req.query.employeeId) query.employeeId = req.query.employeeId;
       if (req.query.status) query.status = req.query.status;
     }
 
