@@ -164,10 +164,9 @@ export const updateLeaveStatus = async (req, res) => {
 // -------------------------------------------------------------------
 export const getMyLeaves = async (req, res) => {
   try {
-    // Employee ko companyId + email se find karo
     const employee = await Employee.findOne({
+      _id: req.user._id,
       companyId: req.user.companyId,
-      email: req.user.email,
       status: "active",
     });
 
