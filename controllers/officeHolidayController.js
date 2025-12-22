@@ -1,5 +1,3 @@
-// officeHolidayController.js
-
 import mongoose from "mongoose";
 import OfficeHoliday from "../models/OfficeHoliday.js";
 import Employee from "../models/Employee.js";
@@ -15,7 +13,6 @@ export const addOfficeHoliday = async (req, res) => {
     }
 
     let { title, date, type, description } = req.body;
-
     type = type.toUpperCase();
 
     const holiday = await OfficeHoliday.create({
@@ -26,6 +23,7 @@ export const addOfficeHoliday = async (req, res) => {
       isPaid: type === "PAID",
       description,
       createdBy: req.user._id,
+      // employeeId optional, not needed for company-wide holiday
     });
 
     // 🔹 AUTO CREATE ATTENDANCE FOR HOLIDAY
@@ -71,13 +69,9 @@ export const addOfficeHoliday = async (req, res) => {
 // -------------------------------------------------------------------
 export const getOfficeHolidays = async (req, res) => {
   try {
-    // ✅ Employee role: can only view
-    let query = { companyId: req.user.companyId };
-
+    const query = { companyId: req.user.companyId };
     const holidays = await OfficeHoliday.find(query).sort({ createdAt: -1 });
-
     res.json({ success: true, data: holidays });
-
   } catch (err) {
     console.error("Get Office Holidays Error:", err);
     res.status(500).json({ message: err.message });

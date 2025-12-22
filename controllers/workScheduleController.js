@@ -1,4 +1,4 @@
-// workScheduleController.js
+// controllers/workScheduleController.js
 
 import WorkSchedule from "../models/Worksechudule.js";
 import Employee from "../models/Employee.js";
@@ -86,14 +86,10 @@ export const getWorkSchedules = async (req, res) => {
 
     // ✅ Employee role → only own schedule
     if (req.user.role === "employee") {
-      const employee = await Employee.findOne({
-        companyId: req.user.companyId,
-        _id: req.user.employeeId
-      });
-      if (!employee) {
+      if (!req.user.employeeId) {
         return res.json({ success: true, count: 0, data: [] });
       }
-      query.employeeId = employee._id;
+      query.employeeId = req.user.employeeId;
     }
 
     const schedules = await WorkSchedule.find(query)
@@ -121,8 +117,10 @@ export const getWorkScheduleById = async (req, res) => {
       companyId: req.user.companyId,
     };
 
-    // ✅ Employee role → only own schedule
     if (req.user.role === "employee") {
+      if (!req.user.employeeId) {
+        return res.status(404).json({ success: false, message: "Schedule not found" });
+      }
       query.employeeId = req.user.employeeId;
     }
 

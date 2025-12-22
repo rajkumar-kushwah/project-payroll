@@ -12,12 +12,12 @@ import { hhmmToDate, minutesBetween, minutesToHoursDecimal } from "../utils/time
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
 const getEmployeeFromUser = async (user) => {
-  if (!user.email) return null;
+  if (!user.employeeId) return null;
   return await Employee.findOne({
+    _id: user.employeeId,
     companyId: user.companyId,
-    email: user.email.toLowerCase(),
   });
-};
+}
 
 /* =========================================================
    AUTO CHECKOUT BY SCHEDULE
@@ -233,8 +233,9 @@ export const getAttendance = async (req, res) => {
     if (req.user.role === "employee") {
       const emp = await getEmployeeFromUser(req.user);
       if (!emp) return res.json({ success: true, total: 0, totalPages: 0, data: [] });
-      query.employeeId = emp._id;
+      query.employeeId = emp._id; // ab guaranteed sahi employeeId
     }
+
 
     const data = await Attendance.find(query)
       .populate({ path: "employeeId", select: "name employeeCode avatar department jobRole" })
