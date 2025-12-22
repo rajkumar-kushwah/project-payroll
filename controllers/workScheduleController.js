@@ -1,8 +1,8 @@
 // controllers/workScheduleController.js
 
+import mongoose from "mongoose";
 import WorkSchedule from "../models/Worksechudule.js";
 import Employee from "../models/Employee.js";
-import Company from "../models/Company.js";
 
 /* ======================================================
    1️⃣ ADD WORK SCHEDULE
@@ -10,7 +10,7 @@ import Company from "../models/Company.js";
 export const addWorkSchedule = async (req, res) => {
   try {
     if (!["admin", "owner", "hr"].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: "Access denied" });
+      return res.status(403).json({ message: "Access denied" });
     }
 
     const {
@@ -18,43 +18,52 @@ export const addWorkSchedule = async (req, res) => {
       shiftName,
       inTime,
       outTime,
-      weeklyOff,
-      shiftType,
+      weeklyOff = [],
+      shiftType = "fixed",
       breakStart,
       breakEnd,
-      gracePeriod,
+      gracePeriod = 0,
     } = req.body;
 
     if (!employeeId || !inTime || !outTime) {
       return res.status(400).json({
-        success: false,
-        message: "Employee, In Time & Out Time required",
+        message: "employeeId, inTime and outTime are required",
       });
     }
 
-    // Employee check
-    const employee = await Employee.findById(employeeId);
-    if (!employee) {
-      return res.status(404).json({ success: false, message: "Employee not found" });
+    if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+      return res.status(400).json({ message: "Invalid employeeId" });
     }
 
-    // Duplicate schedule check
-    const exists = await WorkSchedule.findOne({ employeeId });
+    // ✅ Employee must belong to same company
+    const employee = await Employee.findOne({
+      _id: employeeId,
+      companyId: req.user.companyId,
+      isDeleted: false,
+    });
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    // ✅ Only ONE active schedule per employee
+    const exists = await WorkSchedule.findOne({
+      employeeId,
+      companyId: req.user.companyId,
+    });
+
     if (exists) {
       return res.status(400).json({
-        success: false,
-        message: "Schedule already exists for this employee",
+        message: "Work schedule already exists for this employee",
       });
     }
 
-    const companyId = req.user.companyId;
-
     const schedule = await WorkSchedule.create({
-      companyId,
+      companyId: req.user.companyId,
       employeeId,
       employeeName: employee.name,
-      employeeAvatar: employee.avatar || "",
       employeeCode: employee.employeeCode,
+      employeeAvatar: employee.avatar || "",
       shiftName,
       inTime,
       outTime,
@@ -63,6 +72,7 @@ export const addWorkSchedule = async (req, res) => {
       breakStart,
       breakEnd,
       gracePeriod,
+      status: "active",
       createdBy: req.user._id,
     });
 
@@ -73,18 +83,20 @@ export const addWorkSchedule = async (req, res) => {
     });
   } catch (err) {
     console.error("addWorkSchedule Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
 /* ======================================================
-   2️⃣ GET ALL WORK SCHEDULES
+   2️⃣ GET WORK SCHEDULES
 ====================================================== */
 export const getWorkSchedules = async (req, res) => {
   try {
-    let query = { companyId: req.user.companyId };
+    let query = {
+      companyId: req.user.companyId,
+    };
 
-    // ✅ Employee role → only own schedule
+    // ✅ Employee → only own schedule
     if (req.user.role === "employee") {
       if (!req.user.employeeId) {
         return res.json({ success: true, count: 0, data: [] });
@@ -103,7 +115,7 @@ export const getWorkSchedules = async (req, res) => {
     });
   } catch (err) {
     console.error("getWorkSchedules Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -112,6 +124,10 @@ export const getWorkSchedules = async (req, res) => {
 ====================================================== */
 export const getWorkScheduleById = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid schedule ID" });
+    }
+
     const query = {
       _id: req.params.id,
       companyId: req.user.companyId,
@@ -119,7 +135,7 @@ export const getWorkScheduleById = async (req, res) => {
 
     if (req.user.role === "employee") {
       if (!req.user.employeeId) {
-        return res.status(404).json({ success: false, message: "Schedule not found" });
+        return res.status(404).json({ message: "Schedule not found" });
       }
       query.employeeId = req.user.employeeId;
     }
@@ -130,13 +146,13 @@ export const getWorkScheduleById = async (req, res) => {
     );
 
     if (!schedule) {
-      return res.status(404).json({ success: false, message: "Schedule not found" });
+      return res.status(404).json({ message: "Schedule not found" });
     }
 
     res.json({ success: true, data: schedule });
   } catch (err) {
     console.error("getWorkScheduleById Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -146,27 +162,48 @@ export const getWorkScheduleById = async (req, res) => {
 export const updateWorkSchedule = async (req, res) => {
   try {
     if (!["admin", "owner", "hr"].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: "Access denied" });
+      return res.status(403).json({ message: "Access denied" });
     }
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid schedule ID" });
+    }
+
+    const allowedFields = [
+      "shiftName",
+      "inTime",
+      "outTime",
+      "weeklyOff",
+      "shiftType",
+      "breakStart",
+      "breakEnd",
+      "gracePeriod",
+      "status",
+    ];
+
+    const updates = {};
+    allowedFields.forEach((key) => {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    });
 
     const schedule = await WorkSchedule.findOneAndUpdate(
       { _id: req.params.id, companyId: req.user.companyId },
-      req.body,
+      { $set: updates },
       { new: true }
     ).populate("employeeId", "name avatar employeeCode");
 
     if (!schedule) {
-      return res.status(404).json({ success: false, message: "Schedule not found" });
+      return res.status(404).json({ message: "Schedule not found" });
     }
 
     res.json({
       success: true,
-      message: "Schedule updated successfully",
+      message: "Work schedule updated successfully",
       data: schedule,
     });
   } catch (err) {
     console.error("updateWorkSchedule Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -176,7 +213,11 @@ export const updateWorkSchedule = async (req, res) => {
 export const deleteWorkSchedule = async (req, res) => {
   try {
     if (!["admin", "owner", "hr"].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: "Access denied" });
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid schedule ID" });
     }
 
     const schedule = await WorkSchedule.findOneAndDelete({
@@ -185,12 +226,15 @@ export const deleteWorkSchedule = async (req, res) => {
     });
 
     if (!schedule) {
-      return res.status(404).json({ success: false, message: "Schedule not found" });
+      return res.status(404).json({ message: "Schedule not found" });
     }
 
-    res.json({ success: true, message: "Schedule deleted successfully" });
+    res.json({
+      success: true,
+      message: "Work schedule deleted successfully",
+    });
   } catch (err) {
     console.error("deleteWorkSchedule Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ message: "Server error" });
   }
 };
