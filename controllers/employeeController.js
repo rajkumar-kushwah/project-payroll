@@ -16,48 +16,64 @@ export const getEmployees = async (req, res) => {
   try {
     let employees;
 
-    // Employee → sirf apna record
     if (req.user.role === "employee") {
-      employees = await Employee.find({
-        email: req.user.email,
+      // ✅ Employee sirf apna record
+      const emp = await Employee.findOne({
+        email: req.user.email.toLowerCase(),
         companyId: req.user.companyId,
       });
-    }
 
-    // HR / Owner → company ke saare employees
-    else if (["hr", "owner"].includes(req.user.role)) {
-      employees = await Employee.find({
-        companyId: req.user.companyId,
-      }).sort({ createdAt: -1 });
-    } else {
-      return res.status(403).json({ message: "Unauthorized role" });
-    }
+      if (!emp) return res.status(404).json({ message: "Employee not found" });
 
-    const formattedEmployees = await Promise.all(
-      employees.map(async (emp) => {
-        const leaveData = await Leave.find({ employeeId: emp._id });
-        const attendanceData = await Attendance.find({ employeeId: emp._id });
-        const salaryData = await Payroll.find({ employeeId: emp._id });
+      const leaveData = await Leave.find({ employeeId: emp._id });
+      const attendanceData = await Attendance.find({ employeeId: emp._id });
+      const salaryData = await Payroll.find({ employeeId: emp._id });
 
-        return {
+      employees = [
+        {
           ...emp._doc,
           leaveData,
           attendanceData,
           salaryData,
-        };
-      })
-    );
+        },
+      ];
+    }
+
+    else if (["hr", "owner"].includes(req.user.role)) {
+      // HR / Owner → company ke saare employees
+      const allEmployees = await Employee.find({
+        companyId: req.user.companyId,
+      }).sort({ createdAt: -1 });
+
+      employees = await Promise.all(
+        allEmployees.map(async (emp) => {
+          const leaveData = await Leave.find({ employeeId: emp._id });
+          const attendanceData = await Attendance.find({ employeeId: emp._id });
+          const salaryData = await Payroll.find({ employeeId: emp._id });
+
+          return {
+            ...emp._doc,
+            leaveData,
+            attendanceData,
+            salaryData,
+          };
+        })
+      );
+    } else {
+      return res.status(403).json({ message: "Unauthorized role" });
+    }
 
     res.json({
       success: true,
       count: employees.length,
-      employees: formattedEmployees,
+      employees,
     });
   } catch (err) {
     console.error("Get Employees Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 // -------------------------------------------------------------------
 // GET SINGLE EMPLOYEE

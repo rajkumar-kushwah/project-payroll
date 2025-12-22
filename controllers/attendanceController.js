@@ -269,6 +269,7 @@ export const getAttendance = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const data = await Attendance.find(query)
+      .populate({ path: "employeeId", select: "name employeeCode avatar" })
       .sort({ date: -1 })
       .skip(skip)
       .limit(Number(limit));
@@ -286,6 +287,7 @@ export const getAttendance = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /* =========================================================
    DELETE ATTENDANCE
