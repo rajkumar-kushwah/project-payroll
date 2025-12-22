@@ -1,111 +1,44 @@
 // leaveController.js
+import mongoose from "mongoose";
 import Employee from "../models/Employee.js";
 import Leave from "../models/Leave.js";
 import Attendance from "../models/Attendance.js";
-import mongoose from "mongoose";
 import WorkSchedule from "../models/Worksechudule.js";
 
-
-// export const applyLeave = async (req, res) => {
-//   try {
-//     const { date, type, reason } = req.body;
-//     const userId = req.user._id;
-
-//     // First, find the employee document
-//     const employee = await Employee.findOne({ userId });
-//     if (!employee) return res.status(404).json({ message: "Employee not found" });
-
-    
-//     // Then check if leave already applied for this employee on the same date
-//     const alreadyApplied = await Leave.findOne({
-//       employeeId: employee._id,
-//       date,
-//     });
-
-//     if (alreadyApplied) {
-//       return res.status(400).json({
-//         message: "Leave already applied for this date",
-//       });
-//     }
-
-//     // Create leave
-//     const leave = await Leave.create({
-//       employeeId: employee._id,
-//       employeeCode: employee.employeeCode,
-//       companyId: employee.companyId,
-//       name: employee.name,      
-//       avatar: employee.avatar,
-//       date,
-//       type,
-//       reason,
-//       createdBy: userId,
-//     });
-
-//     res.status(201).json({
-//       success: true,
-//       message: "Leave applied successfully",
-//       data: leave,
-//     });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: err.message });
-//   }
-// };
-
+// -------------------------------------------------------------------
+// APPLY LEAVE
+// -------------------------------------------------------------------
 export const applyLeave = async (req, res) => {
   try {
     const { date, type, reason } = req.body;
-    const userId = req.user._id;
 
-    const employee = await Employee.findOne({ userId });
-    if (!employee) {
-      return res.status(404).json({ message: "Employee not found" });
-    }
+    // 1️⃣ Find employee by company + user
+    const employee = await Employee.findOne({ companyId: req.user.companyId, _id: req.body.employeeId || req.user.employeeId });
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
-    //  Pure date (no timezone issue)
+    // 2️⃣ Parse date safely (UTC)
     const [year, month, day] = date.split("-").map(Number);
     const leaveDate = new Date(Date.UTC(year, month - 1, day));
 
-    //  Fetch active schedule
+    // 3️⃣ Fetch active schedule
     const schedule = await WorkSchedule.findOne({
       employeeId: employee._id,
       companyId: employee.companyId,
       effectiveFrom: { $lte: leaveDate },
-      $or: [
-        { effectiveTo: null },
-        { effectiveTo: { $gte: leaveDate } },
-      ],
+      $or: [{ effectiveTo: null }, { effectiveTo: { $gte: leaveDate } }],
     });
 
-    if (!schedule) {
-      return res.status(400).json({
-        message: "No active work schedule found",
-      });
+    // 4️⃣ Weekly off check
+    const dayName = leaveDate.toLocaleDateString("en-US", { weekday: "long" });
+    if (schedule?.weeklyOff?.includes(dayName)) {
+      return res.status(400).json({ message: `Cannot apply leave on ${dayName}. It is already a weekly off.` });
     }
 
-    //  Weekly off check
-    const dayName = leaveDate.toLocaleDateString("en-US", {
-      weekday: "long",
-    });
+    // 5️⃣ Duplicate leave check
+    const alreadyApplied = await Leave.findOne({ employeeId: employee._id, date: leaveDate });
+    if (alreadyApplied) return res.status(400).json({ message: "Leave already applied for this date" });
 
-    if (schedule.weeklyOff?.includes(dayName)) {
-      return res.status(400).json({
-        message: `Cannot apply leave on ${dayName}. It is already a weekly off.`,
-      });
-    }
-
-    //  Same-day duplicate block
-    const alreadyApplied = await Leave.findOne({
-      employeeId: employee._id,
-      date: leaveDate,
-    });
-
-    if (alreadyApplied) {
-      return res.status(400).json({
-        message: "Leave already applied for this date",
-      });
-    }
-
+    // 6️⃣ Create leave
     const leave = await Leave.create({
       employeeId: employee._id,
       employeeCode: employee.employeeCode,
@@ -115,90 +48,41 @@ export const applyLeave = async (req, res) => {
       date: leaveDate,
       type,
       reason,
-      createdBy: userId,
+      createdBy: req.user._id,
       status: "pending",
     });
 
-    res.status(201).json({
-      success: true,
-      message: "Leave applied successfully",
-      data: leave,
-    });
+    res.status(201).json({ success: true, message: "Leave applied successfully", data: leave });
+
   } catch (err) {
     console.error("Apply Leave Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-
- 
-
-// export const updateLeaveStatus = async (req, res) => {
-//   try {
-//     const { status } = req.body;
-
-//     if (!["approved", "rejected"].includes(status)) {
-//       return res.status(400).json({ message: "Invalid status" });
-//     }
-
-//     if (!["admin", "owner", "hr"].includes(req.user.role)) {
-//       return res.status(403).json({ message: "Access denied" });
-//     }
-
-//     const leave = await Leave.findById(req.params.id);
-//     if (!leave) {
-//       return res.status(404).json({ message: "Leave not found" });
-//     }
-
-//     leave.status = status;
-//     leave.approvedBy = req.user._id;
-
-//     await leave.save();
-
-//     res.json({
-//       success: true,
-//       message: `Leave status updated to ${status}`,
-//       data: leave,
-//     });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: err.message });
-//   }
-// };
-
-
+// -------------------------------------------------------------------
+// UPDATE LEAVE STATUS (APPROVE / REJECT)
+// -------------------------------------------------------------------
 export const updateLeaveStatus = async (req, res) => {
   try {
     const { status } = req.body;
 
-    if (!["approved", "rejected"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
-    }
-
-    if (!["admin", "owner", "hr"].includes(req.user.role)) {
-      return res.status(403).json({ message: "Access denied" });
-    }
+    if (!["approved", "rejected"].includes(status)) return res.status(400).json({ message: "Invalid status" });
+    if (!["admin", "owner", "hr"].includes(req.user.role)) return res.status(403).json({ message: "Access denied" });
 
     const leave = await Leave.findById(req.params.id);
-    if (!leave) {
-      return res.status(404).json({ message: "Leave not found" });
-    }
+    if (!leave) return res.status(404).json({ message: "Leave not found" });
 
     leave.status = status;
     leave.approvedBy = req.user._id;
-
     await leave.save();
 
-    //  AUTO-CREATE / UPDATE ATTENDANCE (sirf approved leaves ke liye)
+    //  ✅ AUTO CREATE / UPDATE ATTENDANCE for approved leave
     if (status === "approved") {
       const emp = await Employee.findById(leave.employeeId);
       if (emp) {
         await Attendance.findOneAndUpdate(
-          {
-            employeeId: emp._id,
-            companyId: leave.companyId,
-            date: leave.date,
-          },
+          { employeeId: emp._id, companyId: leave.companyId, date: leave.date },
           {
             employeeId: emp._id,
             employeeCode: emp.employeeCode,
@@ -206,7 +90,7 @@ export const updateLeaveStatus = async (req, res) => {
             date: leave.date,
             status: "leave",
             logType: "system",
-            isPaid: true, // ya leave.isPaid agar schema me hai
+            isPaid: true,
             checkIn: null,
             checkOut: null,
             totalHours: 0,
@@ -220,82 +104,82 @@ export const updateLeaveStatus = async (req, res) => {
             name: emp.name,
             avatar: emp.avatar,
           },
-          { upsert: true, new: true } // create if not exists
+          { upsert: true, new: true }
         );
       }
     }
 
-    res.json({
-      success: true,
-      message: `Leave status updated to ${status}`,
-      data: leave,
-    });
+    res.json({ success: true, message: `Leave status updated to ${status}`, data: leave });
+
   } catch (err) {
-    console.error(err);
+    console.error("Update Leave Status Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
+// -------------------------------------------------------------------
+// GET MY LEAVES (EMPLOYEE)
+// -------------------------------------------------------------------
 export const getMyLeaves = async (req, res) => {
   try {
-    const employee = await Employee.findOne({ userId: req.user._id });
+    const employee = await Employee.findOne({ companyId: req.user.companyId, _id: req.body.employeeId || req.user.employeeId });
     if (!employee) return res.status(404).json({ message: "Employee not found" });
 
     const leaves = await Leave.find({ employeeId: employee._id })
-    .populate("employeeId", "name email employeeCode role phone avatar")
-    .sort({ createdAt: -1 });
+      .populate("employeeId", "name email employeeCode role phone avatar")
+      .sort({ createdAt: -1 });
 
     res.json({ success: true, data: leaves });
+
   } catch (err) {
+    console.error("Get My Leaves Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-
-// GET /api/leaves?status=pending|approved|rejected
+// -------------------------------------------------------------------
+// GET ALL LEAVES (ADMIN / HR / OWNER)
+// -------------------------------------------------------------------
 export const getLeaves = async (req, res) => {
   try {
     const { status } = req.query;
 
-    // sirf admin / owner / hr
-    if (!["admin", "owner", "hr"].includes(req.user.role)) {
-      return res.status(403).json({ message: "Access denied" });
-    }
+    if (!["admin", "owner", "hr"].includes(req.user.role)) return res.status(403).json({ message: "Access denied" });
 
     const query = { companyId: req.user.companyId };
-    if (status) query.status = status; 
+    if (status) query.status = status;
 
     const leaves = await Leave.find(query)
       .populate("employeeId", "name email employeeCode role phone avatar")
       .sort({ createdAt: -1 });
 
     res.json({ success: true, count: leaves.length, data: leaves });
+
   } catch (err) {
-    console.error(err);
+    console.error("Get Leaves Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-
-// controllers/leaveController.js
+// -------------------------------------------------------------------
+// DELETE LEAVE
+// -------------------------------------------------------------------
 export const deleteLeave = async (req, res) => {
   try {
     const leave = await Leave.findById(req.params.id);
     if (!leave) return res.status(404).json({ message: "Leave not found" });
 
-    if (
-      req.user.role === "employee" &&
-      leave.employeeId.toString() !== req.user._id.toString()
-    ) {
+    // Only employee (self) or HR / Owner can delete
+    if (req.user.role === "employee" && leave.employeeId.toString() !== (req.body.employeeId || req.user.employeeId).toString()) {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    // Use deleteOne instead of remove
     await leave.deleteOne();
 
     res.json({ success: true, message: "Leave deleted successfully" });
+
   } catch (err) {
-    console.error(err);
+    console.error("Delete Leave Error:", err);
     res.status(500).json({ message: err.message });
   }
 };

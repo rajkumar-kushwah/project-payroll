@@ -3,7 +3,7 @@ import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
 
 /* ======================================================
-   1️ ADD WORK SCHEDULE
+   1️⃣ ADD WORK SCHEDULE
 ====================================================== */
 export const addWorkSchedule = async (req, res) => {
   try {
@@ -41,18 +41,7 @@ export const addWorkSchedule = async (req, res) => {
       });
     }
 
-    // Company Id
-    let companyId = req.user.companyId;
-    if (!companyId) {
-      const company = await Company.findOne({ employees: employeeId });
-      if (!company) {
-        return res.status(400).json({
-          success: false,
-          message: "Employee not assigned to any company",
-        });
-      }
-      companyId = company._id;
-    }
+    const companyId = req.user.companyId;
 
     const schedule = await WorkSchedule.create({
       companyId,
@@ -71,7 +60,6 @@ export const addWorkSchedule = async (req, res) => {
       createdBy: req.user._id,
     });
 
-
     res.status(201).json({
       success: true,
       message: "Work schedule added successfully",
@@ -83,21 +71,12 @@ export const addWorkSchedule = async (req, res) => {
   }
 };
 
-/* =====================================================
-   2️ GET ALL WORK SCHEDULES
+/* ======================================================
+   2️⃣ GET ALL WORK SCHEDULES
 ====================================================== */
 export const getWorkSchedules = async (req, res) => {
   try {
-    let query = { companyId: req.user.companyId };
-
-    // Employee → sirf apna
-    if (req.user.role === "employee") {
-      const employee = await Employee.findOne({ userId: req.user._id });
-      if (!employee) {
-        return res.json({ success: true, count: 0, data: [] });
-      }
-      query.employeeId = employee._id;
-    }
+    const query = { companyId: req.user.companyId };
 
     const schedules = await WorkSchedule.find(query)
       .populate("employeeId", "name avatar employeeCode")
@@ -115,22 +94,14 @@ export const getWorkSchedules = async (req, res) => {
 };
 
 /* ======================================================
-   3️ GET SINGLE WORK SCHEDULE
+   3️⃣ GET SINGLE WORK SCHEDULE
 ====================================================== */
 export const getWorkScheduleById = async (req, res) => {
   try {
-    let query = {
+    const query = {
       _id: req.params.id,
       companyId: req.user.companyId,
     };
-
-    if (req.user.role === "employee") {
-      const employee = await Employee.findOne({ userId: req.user._id });
-      if (!employee) {
-        return res.status(403).json({ success: false, message: "Access denied" });
-      }
-      query.employeeId = employee._id;
-    }
 
     const schedule = await WorkSchedule.findOne(query).populate(
       "employeeId",
@@ -149,7 +120,7 @@ export const getWorkScheduleById = async (req, res) => {
 };
 
 /* ======================================================
-   4️ UPDATE WORK SCHEDULE
+   4️⃣ UPDATE WORK SCHEDULE
 ====================================================== */
 export const updateWorkSchedule = async (req, res) => {
   try {
@@ -175,7 +146,7 @@ export const updateWorkSchedule = async (req, res) => {
 };
 
 /* ======================================================
-   5️ DELETE WORK SCHEDULE
+   5️⃣ DELETE WORK SCHEDULE
 ====================================================== */
 export const deleteWorkSchedule = async (req, res) => {
   try {

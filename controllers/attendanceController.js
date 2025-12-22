@@ -1,31 +1,37 @@
-
-
 import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
-import WorkSchedule from "../models/Worksechudule.js"; // spelling corrected
+import WorkSchedule from "../models/Worksechudule.js";
+import Leave from "../models/Leave.js";
 import {
   hhmmToDate,
   minutesBetween,
   minutesToHoursDecimal,
 } from "../utils/time.js";
-import Leave from "../models/Leave.js";
 
-const fullDayThreshold = 8 * 60; // 480 mins
-const halfDayThreshold = 4 * 60;
-
+/* =========================================================
+   HELPERS
+========================================================= */
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
+const getEmployeeFromUser = async (user) => {
+  return await Employee.findOne({
+    companyId: user.companyId,
+    email: user.email,
+  });
+};
 
+/* =========================================================
+   AUTO CHECKOUT BY SCHEDULE
+========================================================= */
 export const autoCheckoutBySchedule = async () => {
   try {
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = toDateString(now);
 
-    // 1️⃣ Fetch all attendances today where checkIn exists but checkOut is null
     const records = await Attendance.find({
-      date: new Date(todayStr),
+      date: todayStr,
       checkIn: { $ne: null },
       checkOut: null,
     });
@@ -34,47 +40,36 @@ export const autoCheckoutBySchedule = async () => {
       const emp = await Employee.findById(record.employeeId);
       if (!emp) continue;
 
-      // 2️⃣ Skip if employee is on approved leave
       const leave = await Leave.findOne({
         employeeId: emp._id,
         date: record.date,
         status: "approved",
       });
-      if (leave) {
-        console.log(`Skipping auto-checkout for ${emp.employeeCode}, on approved leave`);
-        continue;
-      }
+      if (leave) continue;
 
-      // 3️⃣ Get employee schedule
       const schedule = await WorkSchedule.findOne({
         employeeId: emp._id,
         companyId: record.companyId,
         effectiveFrom: { $lte: record.date },
-        $or: [
-          { effectiveTo: null },
-          { effectiveTo: { $gte: record.date } },
-        ],
+        $or: [{ effectiveTo: null }, { effectiveTo: { $gte: record.date } }],
       });
 
       if (!schedule) continue;
 
-      // 4️⃣ Skip if today is weekly off
-      const dayName = new Date(record.date).toLocaleDateString("en-US", { weekday: "long" });
-      if (schedule.weeklyOff?.includes(dayName)) {
-        console.log(`Skipping auto-checkout for ${emp.employeeCode}, weekly off`);
-        continue;
-      }
+      const dayName = new Date(record.date).toLocaleDateString("en-US", {
+        weekday: "long",
+      });
+      if (schedule.weeklyOff?.includes(dayName)) continue;
 
-      // 5️⃣ Scheduled outTime + grace period
       const scheduledOut = hhmmToDate(todayStr, schedule.outTime);
-      const outWithGrace = new Date(scheduledOut.getTime() + (schedule.gracePeriod || 0) * 60000);
+      const outWithGrace = new Date(
+        scheduledOut.getTime() + (schedule.gracePeriod || 0) * 60000
+      );
 
-      // 6️⃣ Auto-checkout if current time >= scheduled out + grace
       if (now >= outWithGrace) {
         record.checkOut = outWithGrace;
-        record.autoCheckout = true; // flag for HR info
+        record.autoCheckout = true;
         await record.save();
-        console.log(`Auto checkout done for ${record.employeeCode}`);
       }
     }
   } catch (err) {
@@ -82,11 +77,12 @@ export const autoCheckoutBySchedule = async () => {
   }
 };
 
-export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => {
-  const dateStr = new Date(record.date).toISOString().split("T")[0];
-
-  const fixedIn = emp.fixedIn || companyDefaults.fixedIn || "10:00";
-  const fixedOut = emp.fixedOut || companyDefaults.fixedOut || "18:30";
+/* =========================================================
+   DERIVED FIELDS
+========================================================= */
+export const computeDerivedFields = (record, emp = {}, schedule = {}) => {
+  const fixedIn = schedule.fixedIn || "10:00";
+  const fixedOut = schedule.fixedOut || "18:30";
 
   if (!record.checkIn || !record.checkOut) {
     record.totalMinutes = 0;
@@ -104,7 +100,6 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
   const checkInDt = new Date(record.checkIn);
   const checkOutDt = new Date(record.checkOut);
 
-  // India time adjust
   checkInDt.setMinutes(checkInDt.getMinutes() + 330);
   checkOutDt.setMinutes(checkOutDt.getMinutes() + 330);
 
@@ -112,55 +107,49 @@ export const computeDerivedFields = (record, emp = {}, companyDefaults = {}) => 
   record.totalMinutes = totalMins;
   record.totalHours = minutesToHoursDecimal(totalMins);
 
+  const dateStr = toDateString(record.date);
   const fixedInDt = hhmmToDate(dateStr, fixedIn);
   const fixedOutDt = hhmmToDate(dateStr, fixedOut);
 
-  record.lateMinutes = checkInDt > fixedInDt ? minutesBetween(fixedInDt, checkInDt) : 0;
-  record.earlyLeaveMinutes = checkOutDt < fixedOutDt ? minutesBetween(checkOutDt, fixedOutDt) : 0;
+  record.lateMinutes =
+    checkInDt > fixedInDt ? minutesBetween(fixedInDt, checkInDt) : 0;
 
-  record.overtimeMinutes = checkOutDt > fixedOutDt ? minutesBetween(fixedOutDt, checkOutDt) : 0;
+  record.earlyLeaveMinutes =
+    checkOutDt < fixedOutDt
+      ? minutesBetween(checkOutDt, fixedOutDt)
+      : 0;
+
+  record.overtimeMinutes =
+    checkOutDt > fixedOutDt
+      ? minutesBetween(fixedOutDt, checkOutDt)
+      : 0;
+
   record.overtimeHours = minutesToHoursDecimal(record.overtimeMinutes);
 
-  const scheduleMinutes = minutesBetween(fixedInDt, fixedOutDt);
-  const halfDayThreshold = 4 * 60; // 4 hours
-  const minFullDayMinutes = 8 * 60; // 8 hours minimum for full day
+  const minFullDay = 8 * 60;
+  const halfDay = 4 * 60;
 
-  record.missingMinutes = totalMins < scheduleMinutes ? scheduleMinutes - totalMins : 0;
-  record.missingHours = minutesToHoursDecimal(record.missingMinutes);
-
-  if (totalMins >= minFullDayMinutes) record.status = "present";
-  else if (totalMins >= halfDayThreshold) record.status = "half-day";
+  if (totalMins >= minFullDay) record.status = "present";
+  else if (totalMins >= halfDay) record.status = "half-day";
   else record.status = "absent";
 };
+
 /* =========================================================
-   GET COMPANY/EMPLOYEE SCHEDULE
+   GET SCHEDULE
 ========================================================= */
 export async function getSchedule(emp, companyId) {
-  // safety
-  if (!emp) {
-    return { fixedIn: "10:00", fixedOut: "18:30" };
-  }
-
-  // 1️ Employee specific schedule
-  if (emp.workScheduleId) {
-    const schedule = await WorkSchedule.findOne({
+  if (emp?.workScheduleId) {
+    const sch = await WorkSchedule.findOne({
       _id: emp.workScheduleId,
       companyId,
       status: "active",
     }).select("inTime outTime");
 
-    if (schedule) {
-      return {
-        fixedIn: schedule.inTime || "10:00",
-        fixedOut: schedule.outTime || "18:30",
-      };
-    }
+    if (sch)
+      return { fixedIn: sch.inTime || "10:00", fixedOut: sch.outTime || "18:30" };
   }
 
-  // 2️ Company default schedule
-  const company = await Company.findById(companyId)
-    .select("fixedIn fixedOut");
-
+  const company = await Company.findById(companyId).select("fixedIn fixedOut");
   return {
     fixedIn: company?.fixedIn || "10:00",
     fixedOut: company?.fixedOut || "18:30",
@@ -174,44 +163,29 @@ export const checkIn = async (req, res) => {
   try {
     let employeeId;
 
-    // 👤 Employee → apna
     if (req.user.role === "employee") {
-      const emp = await Employee.findOne({
-        userId: req.user._id,
-        companyId: req.user.companyId,
-      });
-
+      const emp = await getEmployeeFromUser(req.user);
       if (!emp) return res.status(404).json({ message: "Employee not found" });
       employeeId = emp._id;
     }
 
-    // 🧑‍💼 Admin / Owner → kisi ka bhi
-    if (["admin", "owner"].includes(req.user.role)) {
+    if (["admin", "owner", "hr"].includes(req.user.role)) {
       if (!req.body.employeeId)
         return res.status(400).json({ message: "Employee ID required" });
-
       employeeId = req.body.employeeId;
     }
 
     const today = toDateString(new Date());
 
-    // duplicate check
-    const already = await Attendance.findOne({
+    const exists = await Attendance.findOne({
       employeeId,
       date: today,
       companyId: req.user.companyId,
     });
-
-    if (already)
+    if (exists)
       return res.status(400).json({ message: "Already checked in" });
 
-    // employee fetch
-    const emp = await Employee.findOne({
-      _id: employeeId,
-      companyId: req.user.companyId,
-    });
-
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    const emp = await Employee.findById(employeeId);
 
     const record = await Attendance.create({
       employeeId: emp._id,
@@ -224,19 +198,12 @@ export const checkIn = async (req, res) => {
       status: "present",
     });
 
-    const populated = await record.populate(
-      "employeeId",
-      "name employeeCode department jobRole avatar"
-    );
-
-    res.json({ success: true, data: populated });
+    res.json({ success: true, data: record });
   } catch (err) {
     console.error("checkIn Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
-
-
 
 /* =========================================================
    CHECK-OUT
@@ -246,16 +213,12 @@ export const checkOut = async (req, res) => {
     let employeeId;
 
     if (req.user.role === "employee") {
-      const emp = await Employee.findOne({
-        userId: req.user._id,
-        companyId: req.user.companyId,
-      });
-
+      const emp = await getEmployeeFromUser(req.user);
       if (!emp) return res.status(404).json({ message: "Employee not found" });
       employeeId = emp._id;
     }
 
-    if (["admin", "owner"].includes(req.user.role)) {
+    if (["admin", "owner", "hr"].includes(req.user.role)) {
       if (!req.body.employeeId)
         return res.status(400).json({ message: "Employee ID required" });
       employeeId = req.body.employeeId;
@@ -279,162 +242,33 @@ export const checkOut = async (req, res) => {
     const schedule = await getSchedule(emp, req.user.companyId);
 
     computeDerivedFields(record, emp, schedule);
-
     await record.save();
 
-    const populated = await record.populate(
-      "employeeId",
-      "name employeeCode department jobRole avatar"
-    );
-
-    res.json({ success: true, data: populated });
+    res.json({ success: true, data: record });
   } catch (err) {
     console.error("checkOut Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-
 /* =========================================================
-   UPDATE ATTENDANCE
-========================================================= */
-export const updateAttendance = async (req, res) => {
-  try {
-    const rec = await Attendance.findOne({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    });
-
-    if (!rec) return res.status(404).json({ message: "Attendance not found" });
-
-    const { checkIn, checkOut, status } = req.body;
-
-    // Update status
-    if (status) rec.status = status;
-
-    // Direct ISO time update (no string concatenation)
-    rec.checkIn = checkIn || null;
-    rec.checkOut = checkOut || null;
-
-    // Fetch employee + schedule
-    const emp = await Employee.findById(rec.employeeId);
-    const schedule = await getSchedule(emp, req.user.companyId);
-
-    // Recompute totals if both exist
-    if (rec.checkIn && rec.checkOut) {
-      computeDerivedFields(rec, emp, schedule);
-    }
-
-    await rec.save();
-
-    const populated = await rec.populate(
-      "employeeId",
-      "name employeeCode department jobRole avatar"
-    );
-
-    return res.json({ success: true, data: populated });
-
-  } catch (err) {
-    console.error("updateAttendance Error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-
-
-/* =========================================================
-   DELETE ATTENDANCE
-========================================================= */
-export const deleteAttendance = async (req, res) => {
-  try {
-    const deleted = await Attendance.findOneAndDelete({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    });
-
-    if (!deleted) return res.status(404).json({ message: "Record not found" });
-
-    res.json({ success: true, message: "Deleted successfully" });
-  } catch (err) {
-    console.error("deleteAttendance Error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-/* =========================================================
-   GET ATTENDANCE LIST
+   GET ATTENDANCE
 ========================================================= */
 export const getAttendance = async (req, res) => {
   try {
-    const {
-      employeeId,
-      status,
-      startDate,
-      endDate,
-      month,
-      year,
-      page = 1,
-      limit = 20,
-    } = req.query;
-
+    const { page = 1, limit = 20 } = req.query;
     let query = { companyId: req.user.companyId };
 
-    //  EMPLOYEE → sirf apni attendance
     if (req.user.role === "employee") {
-      const employee = await Employee.findOne({ userId: req.user._id });
-      if (!employee) {
-        return res.json({
-          success: true,
-          page: Number(page),
-          totalPages: 0,
-          total: 0,
-          data: [],
-        });
-      }
-      query.employeeId = employee._id;
+      const emp = await getEmployeeFromUser(req.user);
+      if (!emp)
+        return res.json({ success: true, total: 0, data: [] });
+      query.employeeId = emp._id;
     }
 
-    //  HR / OWNER → filters allowed
-    if (["hr", "owner"].includes(req.user.role)) {
-      if (employeeId && mongoose.isValidObjectId(employeeId)) {
-        query.employeeId = employeeId;
-      }
-      if (status) query.status = status;
-    }
-
-    // -------- DATE FILTER (IST SAFE) --------
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-
-      query.date = { $gte: start, $lte: end };
-    }
-
-    // -------- MONTH FILTER --------
-    if (month && year) {
-      const start = new Date(year, month - 1, 1);
-      const end = new Date(year, month, 0);
-
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
-
-      query.date = { $gte: start, $lte: end };
-    }
-
-    const skip = (Number(page) - 1) * Number(limit);
+    const skip = (page - 1) * limit;
 
     const data = await Attendance.find(query)
-      .populate({
-        path: "employeeId",
-        select: "name employeeCode department jobRole avatar",
-        populate: {
-          path: "userId",
-          select: "name email avatar",
-        },
-      })
       .sort({ date: -1 })
       .skip(skip)
       .limit(Number(limit));
@@ -443,16 +277,117 @@ export const getAttendance = async (req, res) => {
 
     res.json({
       success: true,
-      page: Number(page),
-      totalPages: Math.ceil(total / limit),
       total,
+      totalPages: Math.ceil(total / limit),
       data,
     });
   } catch (err) {
     console.error("getAttendance Error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
+/* =========================================================
+   DELETE ATTENDANCE
+========================================================= */
+export const deleteAttendance = async (req, res) => {
+  try {
+    // sirf owner / hr delete kar sakta hai
+    if (!["owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({
+        message: "You are not allowed to delete attendance",
+      });
+    }
 
+    const record = await Attendance.findOneAndDelete({
+      _id: req.params.id,
+      companyId: req.user.companyId,
+    });
 
+    if (!record) {
+      return res.status(404).json({
+        message: "Attendance record not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Attendance deleted successfully",
+      deletedId: record._id,
+    });
+  } catch (err) {
+    console.error("deleteAttendance Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+/* =========================================================
+   UPDATE ATTENDANCE
+========================================================= */
+export const updateAttendance = async (req, res) => {
+  try {
+    // 🔐 Permission
+    if (!["owner", "hr"].includes(req.user.role)) {
+      return res.status(403).json({
+        message: "You are not allowed to update attendance",
+      });
+    }
+
+    const { checkIn, checkOut, status } = req.body;
+
+    // attendance record (company safe)
+    const record = await Attendance.findOne({
+      _id: req.params.id,
+      companyId: req.user.companyId,
+    });
+
+    if (!record) {
+      return res.status(404).json({
+        message: "Attendance record not found",
+      });
+    }
+
+    // 🔁 Update fields
+    if (checkIn !== undefined) record.checkIn = checkIn ? new Date(checkIn) : null;
+    if (checkOut !== undefined) record.checkOut = checkOut ? new Date(checkOut) : null;
+    if (status) record.status = status;
+
+    // 👤 Employee fetch (ONLY by employeeId + companyId)
+    const emp = await Employee.findOne({
+      _id: record.employeeId,
+      companyId: req.user.companyId,
+    });
+
+    if (!emp) {
+      return res.status(404).json({
+        message: "Employee not found for this attendance",
+      });
+    }
+
+    // 🕒 Schedule + recompute
+    const schedule = await getSchedule(emp, req.user.companyId);
+
+    if (record.checkIn && record.checkOut) {
+      computeDerivedFields(record, emp, schedule);
+    }
+
+    await record.save();
+
+    const populated = await record.populate({
+      path: "employeeId",
+      select: "name employeeCode department jobRole avatar",
+    });
+
+    res.json({
+      success: true,
+      message: "Attendance updated successfully",
+      data: populated,
+    });
+
+  } catch (err) {
+    console.error("updateAttendance Error:", err);
+    res.status(500).json({
+      message: "Server error",
+      error: err.message,
+    });
+  }
+};

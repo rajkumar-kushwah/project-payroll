@@ -1,9 +1,10 @@
-
 import User from "../models/User.js";
 import Company from "../models/Company.js";
+import Employee from "../models/Employee.js";
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
-// Add new user (Owner only)
+
+// 🔹 Add new user (Owner only)
 export const addUser = async (req, res) => {
   try {
     if (req.user.role !== "owner")
@@ -33,7 +34,7 @@ export const addUser = async (req, res) => {
   }
 };
 
-//  Single Toggle (Promote/Demote + Activate/Deactivate)
+// 🔹 Toggle User Role / Status (Owner only)
 export const toggleUserRoleStatus = async (req, res) => {
   try {
     const { newRole } = req.body;
@@ -43,11 +44,10 @@ export const toggleUserRoleStatus = async (req, res) => {
     if (loginUser.role !== "owner")
       return res.status(403).json({ message: "Only owner can modify roles" });
 
-    const cleanUserId = userId.trim(); // remove extra spaces
-    if (!mongoose.Types.ObjectId.isValid(cleanUserId))
+    if (!mongoose.Types.ObjectId.isValid(userId))
       return res.status(400).json({ message: "Invalid user ID" });
 
-    const user = await User.findById(cleanUserId);
+    const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.role === "owner")
@@ -56,38 +56,39 @@ export const toggleUserRoleStatus = async (req, res) => {
     const company = await Company.findById(loginUser.companyId);
     if (!company) return res.status(404).json({ message: "Company not found" });
 
-  // Ensure company.admins exists
-company.admins = company.admins || [];
+    company.admins = company.admins || [];
 
-if (newRole === "admin") {
-  user.role = "admin";
-  user.status = "active";
-  if (!company.admins.includes(user._id)) company.admins.push(user._id);
-} else if (newRole === "user") {
-  user.role = "user";
-  user.status = "inactive";
-  company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
-} else if (newRole === "employee") {
-  user.role = "employee";
-  user.status = "active";
-  company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
-} else {
-  return res.status(400).json({ message: "Invalid role" });
-}
-
+    if (newRole === "admin") {
+      user.role = "admin";
+      user.status = "active";
+      if (!company.admins.includes(user._id)) company.admins.push(user._id);
+    } else if (newRole === "user") {
+      user.role = "user";
+      user.status = "inactive";
+      company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
+    } else if (newRole === "employee") {
+      user.role = "employee";
+      user.status = "active";
+      company.admins = company.admins.filter(id => id.toString() !== user._id.toString());
+    } else {
+      return res.status(400).json({ message: "Invalid role" });
+    }
 
     await user.save();
     await company.save();
 
-    res.json({ success: true, message: `User role updated to ${user.role} and status to ${user.status}`, user });
+    res.json({
+      success: true,
+      message: `User role updated to ${user.role} and status to ${user.status}`,
+      user,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-
-// Fetch all users
+// 🔹 Fetch all users (Admin / Owner)
 export const getAdminDashboardData = async (req, res) => {
   try {
     if (!["owner", "admin"].includes(req.user.role))
@@ -96,13 +97,7 @@ export const getAdminDashboardData = async (req, res) => {
     const users = await User.find({
       companyId: req.user.companyId,
       isDeleted: false,
-      role: { $in: [ "admin", "user", "employee"] },
-    }).select("-password");
-
-     // Optionally include the owner separately
-    const owner = await User.findOne({
-      companyId: req.user.companyId,
-      role: "owner",
+      role: { $in: ["admin", "user", "employee"] },
     }).select("-password");
 
     res.json({ success: true, users });
@@ -112,8 +107,7 @@ export const getAdminDashboardData = async (req, res) => {
   }
 };
 
-
-// Delete user
+// 🔹 Delete User
 export const deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -133,52 +127,32 @@ export const deleteUser = async (req, res) => {
   }
 };
 
-// 🔹 PROMOTE EMPLOYEE → ADMIN
+// 🔹 Promote Employee → Admin
 export const promoteEmployeeToAdmin = async (req, res) => {
   try {
     if (req.user.role !== "owner") {
       return res.status(403).json({ message: "Only owner can promote" });
     }
 
-    // 👇 employeeId expected
     const employee = await Employee.findById(req.params.employeeId);
-    if (!employee) {
-      return res.status(404).json({ message: "Employee not found" });
-    }
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
-    const user = await User.findById(employee.userId);
-    if (!user) {
-      return res.status(404).json({ message: "Linked user not found" });
-    }
-
-    if (user.role === "admin") {
-      return res.status(400).json({ message: "Already admin" });
-    }
-
+    // Ab userId dependency remove kiya, direct employee reference
     employee.isAdmin = true;
 
-    user.role = "admin";
-    user.roleUpdated = true;
-    user.roleUpdatedBy = req.user._id;
-
     await employee.save();
-    await user.save();
 
     res.json({
       success: true,
       message: "Employee promoted to admin successfully",
     });
-
   } catch (err) {
     console.error("PROMOTE ERROR 👉", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-
-
-
-// GET /employees
+// 🔹 Get Employees List
 export const getEmployees = async (req, res) => {
   try {
     const query = {
@@ -186,7 +160,6 @@ export const getEmployees = async (req, res) => {
       isDeleted: false,
     };
 
-    // 🔹 Only non-admin employees
     if (req.query.onlyEmployees === "true") {
       query.isAdmin = false;
     }
@@ -198,7 +171,7 @@ export const getEmployees = async (req, res) => {
       employees,
     });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
-
