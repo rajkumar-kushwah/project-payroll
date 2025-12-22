@@ -164,12 +164,15 @@ export const updateLeaveStatus = async (req, res) => {
 // -------------------------------------------------------------------
 export const getMyLeaves = async (req, res) => {
   try {
+    // Employee ko companyId + email se find karo
     const employee = await Employee.findOne({
-      _id: req.user._id,
       companyId: req.user.companyId,
+      email: req.user.email,
       status: "active",
     });
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+
+    if (!employee)
+      return res.status(404).json({ message: "Employee not found" });
 
     const leaves = await Leave.find({ employeeId: employee._id })
       .populate("employeeId", "name email employeeCode jobRole phone avatar")
@@ -181,6 +184,7 @@ export const getMyLeaves = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 // -------------------------------------------------------------------
 // GET ALL LEAVES (Admin/HR/Owner)
