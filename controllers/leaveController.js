@@ -12,23 +12,33 @@ export const applyLeave = async (req, res) => {
   try {
     const { date, type, reason } = req.body;
 
-    // ✅ Determine employeeId safely
-    const employeeId = req.user.employeeId || req.body.employeeId;
+    let employeeId;
+
+    // 👤 Employee role → lookup by employeeCode or Employee._id
+    if (req.user.role === "employee") {
+      // Employee के लिए req.user._id == Employee._id
+      employeeId = req.user._id; // user._id ही Employee._id है
+    } else {
+      // Admin / HR / Owner
+      employeeId = req.body.employeeId;
+    }
+
     if (!employeeId) return res.status(400).json({ message: "Employee ID missing" });
 
-    // ✅ Find employee in this company
+    // ✅ Find employee
     const employee = await Employee.findOne({
-      companyId: req.user.companyId,
       _id: employeeId,
+      companyId: req.user.companyId,
       status: "active",
     });
+
     if (!employee) return res.status(404).json({ message: "Employee not found" });
 
-    // ✅ Parse leave date safely (UTC)
+    // ✅ Parse leave date
     const [year, month, day] = date.split("-").map(Number);
     const leaveDate = new Date(Date.UTC(year, month - 1, day));
 
-    // ✅ Check weekly off from schedule
+    // ✅ Check weekly off
     const schedule = await WorkSchedule.findOne({
       employeeId: employee._id,
       companyId: employee.companyId,
@@ -41,7 +51,7 @@ export const applyLeave = async (req, res) => {
       return res.status(400).json({ message: `Cannot apply leave on ${dayName}. It is already a weekly off.` });
     }
 
-    // ✅ Check if leave already exists
+    // ✅ Check existing leave
     const existingLeave = await Leave.findOne({
       employeeId: employee._id,
       date: leaveDate,
@@ -67,6 +77,7 @@ export const applyLeave = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 /* ======================================================
    UPDATE LEAVE STATUS (APPROVE / REJECT)
