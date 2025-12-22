@@ -16,12 +16,12 @@ import {
 const toDateString = (d) => new Date(d).toISOString().split("T")[0];
 
 const getEmployeeFromUser = async (user) => {
+  if (!user.email) return null;
   return await Employee.findOne({
     companyId: user.companyId,
-    email: user.email,
+    email: user.email.toLowerCase(),
   });
 };
-
 /* =========================================================
    AUTO CHECKOUT BY SCHEDULE
 ========================================================= */
@@ -254,24 +254,32 @@ export const checkOut = async (req, res) => {
 /* =========================================================
    GET ATTENDANCE
 ========================================================= */
+
+// GET ATTENDANCE
 export const getAttendance = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
+    const skip = (page - 1) * limit;
+
     let query = { companyId: req.user.companyId };
 
+    // ✅ Employee login → only their own records
     if (req.user.role === "employee") {
       const emp = await getEmployeeFromUser(req.user);
-      if (!emp)
-        return res.json({ success: true, total: 0, data: [] });
+      if (!emp) {
+        return res.json({ success: true, total: 0, totalPages: 0, data: [] });
+      }
       query.employeeId = emp._id;
     }
 
-    const skip = (page - 1) * limit;
-
+    // Fetch data with pagination
     const data = await Attendance.find(query)
-      .populate({ path: "employeeId", select: "name employeeCode avatar" })
+      .populate({
+        path: "employeeId",
+        select: "name employeeCode avatar",
+      })
       .sort({ date: -1 })
-      .skip(skip)
+      .skip(Number(skip))
       .limit(Number(limit));
 
     const total = await Attendance.countDocuments(query);
@@ -284,7 +292,7 @@ export const getAttendance = async (req, res) => {
     });
   } catch (err) {
     console.error("getAttendance Error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 

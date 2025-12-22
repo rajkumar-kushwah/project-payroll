@@ -14,17 +14,23 @@ import Company from "../models/Company.js";
 // -------------------------------------------------------------------
 export const getEmployees = async (req, res) => {
   try {
-    let employees;
+    let employees = [];
 
+    // ✅ Employee login → sirf apna record
     if (req.user.role === "employee") {
-      // ✅ Employee sirf apna record
+      const userEmail = req.user.email ? req.user.email.toLowerCase() : null;
+      if (!userEmail) {
+        return res.status(400).json({ message: "Email missing in token" });
+      }
+
       const emp = await Employee.findOne({
-        email: req.user.email.toLowerCase(),
+        email: userEmail,
         companyId: req.user.companyId,
       });
 
       if (!emp) return res.status(404).json({ message: "Employee not found" });
 
+      // Populate leave, attendance, payroll
       const leaveData = await Leave.find({ employeeId: emp._id });
       const attendanceData = await Attendance.find({ employeeId: emp._id });
       const salaryData = await Payroll.find({ employeeId: emp._id });
@@ -37,10 +43,10 @@ export const getEmployees = async (req, res) => {
           salaryData,
         },
       ];
-    }
+    } 
 
+    // ✅ HR / Owner → company ke saare employees
     else if (["hr", "owner"].includes(req.user.role)) {
-      // HR / Owner → company ke saare employees
       const allEmployees = await Employee.find({
         companyId: req.user.companyId,
       }).sort({ createdAt: -1 });
@@ -59,7 +65,10 @@ export const getEmployees = async (req, res) => {
           };
         })
       );
-    } else {
+    } 
+
+    // Unauthorized roles
+    else {
       return res.status(403).json({ message: "Unauthorized role" });
     }
 
