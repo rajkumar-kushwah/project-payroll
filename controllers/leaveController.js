@@ -17,7 +17,7 @@ export const applyLeave = async (req, res) => {
     // Employee role → get Employee document using employeeId
     if (req.user.role === "employee") {
       employee = await Employee.findOne({
-        employeeId: req.user.id, // link to User _id
+        employeeId: req.user._id, // link to User _id
         companyId: req.user.companyId,
         status: "active",
       });
@@ -165,7 +165,7 @@ export const updateLeaveStatus = async (req, res) => {
 export const getMyLeaves = async (req, res) => {
   try {
     const employee = await Employee.findOne({
-      employeeId: req.user.id,       // link to User _id
+      employeeId: req.user._id,       // link to User _id
       companyId: req.user.companyId,
       status: "active",
     });
@@ -219,7 +219,7 @@ export const deleteLeave = async (req, res) => {
     // Employee can delete only their own leave
     if (req.user.role === "employee") {
       const employee = await Employee.findOne({
-        employeeId: req.user.id,
+        employeeId: req.user._id,
         companyId: req.user.companyId,
       });
       if (!employee || leave.employeeId.toString() !== employee._id.toString()) {
