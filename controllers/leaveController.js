@@ -14,20 +14,20 @@ export const applyLeave = async (req, res) => {
 
     let employee;
 
-    // Employee role → get employeeId from request context
+    // Employee role → get Employee document using employeeId
     if (req.user.role === "employee") {
       employee = await Employee.findOne({
-        _id: req.user._id,
+        employeeId: req.user.id, // link to User _id
         companyId: req.user.companyId,
         status: "active",
       });
     } else {
-      // Admin/HR/Owner → use employeeId from body
+      // Admin/HR/Owner → use employeeId from request body
       if (!bodyEmployeeId)
         return res.status(400).json({ message: "Employee ID missing" });
 
       employee = await Employee.findOne({
-        _id: bodyEmployeeId,
+        _id: bodyEmployeeId, // Employee _id
         companyId: req.user.companyId,
         status: "active",
       });
@@ -67,7 +67,7 @@ export const applyLeave = async (req, res) => {
     }
 
     const leave = await Leave.create({
-      employeeId: employee._id,
+      employeeId: employee._id,       // Employee _id
       employeeCode: employee.employeeCode,
       companyId: employee.companyId,
       name: employee.name,
@@ -76,7 +76,7 @@ export const applyLeave = async (req, res) => {
       type,
       reason,
       status: "pending",
-      createdBy: req.user._id,
+      createdBy: req.user.id,
     });
 
     res.status(201).json({
@@ -109,7 +109,7 @@ export const updateLeaveStatus = async (req, res) => {
     if (!leave) return res.status(404).json({ message: "Leave not found" });
 
     leave.status = status;
-    leave.approvedBy = req.user._id;
+    leave.approvedBy = req.user.id;
     await leave.save();
 
     // Auto-create/update attendance for approved leave
@@ -165,7 +165,7 @@ export const updateLeaveStatus = async (req, res) => {
 export const getMyLeaves = async (req, res) => {
   try {
     const employee = await Employee.findOne({
-      _id: req.user._id,
+      employeeId: req.user.id,       // link to User _id
       companyId: req.user.companyId,
       status: "active",
     });
@@ -183,7 +183,6 @@ export const getMyLeaves = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 
 // -------------------------------------------------------------------
 // GET ALL LEAVES (Admin/HR/Owner)
@@ -218,8 +217,14 @@ export const deleteLeave = async (req, res) => {
     if (!leave) return res.status(404).json({ message: "Leave not found" });
 
     // Employee can delete only their own leave
-    if (req.user.role === "employee" && leave.employeeId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Access denied" });
+    if (req.user.role === "employee") {
+      const employee = await Employee.findOne({
+        employeeId: req.user.id,
+        companyId: req.user.companyId,
+      });
+      if (!employee || leave.employeeId.toString() !== employee._id.toString()) {
+        return res.status(403).json({ message: "Access denied" });
+      }
     }
 
     await leave.deleteOne();
