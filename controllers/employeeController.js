@@ -9,6 +9,7 @@ import Attendance from "../models/Attendance.js";
 import Payroll from "../models/Payroll.js";
 import Company from "../models/Company.js";
 
+
 // -------------------------------------------------------------------
 // GET ALL EMPLOYEES
 // -------------------------------------------------------------------
@@ -16,72 +17,36 @@ export const getEmployees = async (req, res) => {
   try {
     let employees = [];
 
-    // ✅ Employee login → sirf apna record
-    if (req.user.role === "employee") {
-      const userEmail = req.user.email ? req.user.email.toLowerCase() : null;
-      if (!userEmail) {
-        return res.status(400).json({ message: "Email missing in token" });
-      }
+    // Employee ya HR/Owner dono → companyId se fetch
+    employees = await Employee.find({ companyId: req.user.companyId }).sort({ createdAt: -1 });
 
-      const emp = await Employee.findOne({
-        email: userEmail,
-        companyId: req.user.companyId,
-      });
+    // Har employee ke liye leave, attendance, salary attach karo
+    const formattedEmployees = await Promise.all(
+      employees.map(async (emp) => {
+        const leaveData = await Leave.find({ employeeId: emp._id });
+        const attendanceData = await Attendance.find({ employeeId: emp._id });
+        const salaryData = await Payroll.find({ employeeId: emp._id });
 
-      if (!emp) return res.status(404).json({ message: "Employee not found" });
-
-      // Populate leave, attendance, payroll
-      const leaveData = await Leave.find({ employeeId: emp._id });
-      const attendanceData = await Attendance.find({ employeeId: emp._id });
-      const salaryData = await Payroll.find({ employeeId: emp._id });
-
-      employees = [
-        {
+        return {
           ...emp._doc,
           leaveData,
           attendanceData,
           salaryData,
-        },
-      ];
-    } 
-
-    // ✅ HR / Owner → company ke saare employees
-    else if (["hr", "owner"].includes(req.user.role)) {
-      const allEmployees = await Employee.find({
-        companyId: req.user.companyId,
-      }).sort({ createdAt: -1 });
-
-      employees = await Promise.all(
-        allEmployees.map(async (emp) => {
-          const leaveData = await Leave.find({ employeeId: emp._id });
-          const attendanceData = await Attendance.find({ employeeId: emp._id });
-          const salaryData = await Payroll.find({ employeeId: emp._id });
-
-          return {
-            ...emp._doc,
-            leaveData,
-            attendanceData,
-            salaryData,
-          };
-        })
-      );
-    } 
-
-    // Unauthorized roles
-    else {
-      return res.status(403).json({ message: "Unauthorized role" });
-    }
+        };
+      })
+    );
 
     res.json({
       success: true,
       count: employees.length,
-      employees,
+      employees: formattedEmployees,
     });
   } catch (err) {
     console.error("Get Employees Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 
 // -------------------------------------------------------------------
