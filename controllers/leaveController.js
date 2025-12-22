@@ -1,13 +1,13 @@
-// leaveController.js
+// controllers/leaveController.js
 import mongoose from "mongoose";
 import Employee from "../models/Employee.js";
 import Leave from "../models/Leave.js";
 import Attendance from "../models/Attendance.js";
 import WorkSchedule from "../models/Worksechudule.js";
 
-// -------------------------------------------------------------------
-// APPLY LEAVE
-// -------------------------------------------------------------------
+/* ======================================================
+   APPLY LEAVE
+====================================================== */
 export const applyLeave = async (req, res) => {
   try {
     const { date, type, reason } = req.body;
@@ -19,7 +19,8 @@ export const applyLeave = async (req, res) => {
     // ✅ Find employee in this company
     const employee = await Employee.findOne({
       companyId: req.user.companyId,
-      _id: employeeId
+      _id: employeeId,
+      status: "active",
     });
     if (!employee) return res.status(404).json({ message: "Employee not found" });
 
@@ -27,7 +28,7 @@ export const applyLeave = async (req, res) => {
     const [year, month, day] = date.split("-").map(Number);
     const leaveDate = new Date(Date.UTC(year, month - 1, day));
 
-    // ✅ Check active schedule for weekly off
+    // ✅ Check weekly off from schedule
     const schedule = await WorkSchedule.findOne({
       employeeId: employee._id,
       companyId: employee.companyId,
@@ -41,8 +42,11 @@ export const applyLeave = async (req, res) => {
     }
 
     // ✅ Check if leave already exists
-    const alreadyApplied = await Leave.findOne({ employeeId: employee._id, date: leaveDate });
-    if (alreadyApplied) return res.status(400).json({ message: "Leave already applied for this date" });
+    const existingLeave = await Leave.findOne({
+      employeeId: employee._id,
+      date: leaveDate,
+    });
+    if (existingLeave) return res.status(400).json({ message: "Leave already applied for this date" });
 
     // ✅ Create leave
     const leave = await Leave.create({
@@ -58,16 +62,15 @@ export const applyLeave = async (req, res) => {
     });
 
     res.status(201).json({ success: true, message: "Leave applied successfully", data: leave });
-
   } catch (err) {
     console.error("Apply Leave Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-// -------------------------------------------------------------------
-// UPDATE LEAVE STATUS (APPROVE / REJECT)
-// -------------------------------------------------------------------
+/* ======================================================
+   UPDATE LEAVE STATUS (APPROVE / REJECT)
+====================================================== */
 export const updateLeaveStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -85,7 +88,7 @@ export const updateLeaveStatus = async (req, res) => {
     leave.approvedBy = req.user._id;
     await leave.save();
 
-    // ✅ Auto create/update attendance for approved leave
+    // ✅ Auto-create/update attendance for approved leave
     if (status === "approved") {
       const emp = await Employee.findById(leave.employeeId);
       if (emp) {
@@ -118,16 +121,15 @@ export const updateLeaveStatus = async (req, res) => {
     }
 
     res.json({ success: true, message: `Leave status updated to ${status}`, data: leave });
-
   } catch (err) {
     console.error("Update Leave Status Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-// -------------------------------------------------------------------
-// GET MY LEAVES (EMPLOYEE)
-// -------------------------------------------------------------------
+/* ======================================================
+   GET MY LEAVES (EMPLOYEE)
+====================================================== */
 export const getMyLeaves = async (req, res) => {
   try {
     const employeeId = req.user.employeeId || req.body.employeeId;
@@ -141,16 +143,15 @@ export const getMyLeaves = async (req, res) => {
       .sort({ createdAt: -1 });
 
     res.json({ success: true, data: leaves });
-
   } catch (err) {
     console.error("Get My Leaves Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-// -------------------------------------------------------------------
-// GET ALL LEAVES (ADMIN / HR / OWNER)
-// -------------------------------------------------------------------
+/* ======================================================
+   GET ALL LEAVES (ADMIN / HR / OWNER)
+====================================================== */
 export const getLeaves = async (req, res) => {
   try {
     if (!["admin", "owner", "hr"].includes(req.user.role))
@@ -165,16 +166,15 @@ export const getLeaves = async (req, res) => {
       .sort({ createdAt: -1 });
 
     res.json({ success: true, count: leaves.length, data: leaves });
-
   } catch (err) {
     console.error("Get Leaves Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-// -------------------------------------------------------------------
-// DELETE LEAVE
-// -------------------------------------------------------------------
+/* ======================================================
+   DELETE LEAVE
+====================================================== */
 export const deleteLeave = async (req, res) => {
   try {
     const leave = await Leave.findById(req.params.id);
@@ -188,7 +188,6 @@ export const deleteLeave = async (req, res) => {
 
     await leave.deleteOne();
     res.json({ success: true, message: "Leave deleted successfully" });
-
   } catch (err) {
     console.error("Delete Leave Error:", err);
     res.status(500).json({ message: err.message });
