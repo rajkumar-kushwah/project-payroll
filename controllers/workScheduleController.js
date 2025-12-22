@@ -5,7 +5,7 @@ import WorkSchedule from "../models/Worksechudule.js";
 import Employee from "../models/Employee.js";
 
 /* ======================================================
-   1️⃣ ADD WORK SCHEDULE
+   1️⃣ ADD WORK SCHEDULE (OWNER / HR)
 ====================================================== */
 export const addWorkSchedule = async (req, res) => {
   try {
@@ -14,7 +14,7 @@ export const addWorkSchedule = async (req, res) => {
     }
 
     const {
-      employeeId,
+      employeeId, // 👈 Employee._id
       shiftName,
       inTime,
       outTime,
@@ -35,21 +35,22 @@ export const addWorkSchedule = async (req, res) => {
       return res.status(400).json({ message: "Invalid employeeId" });
     }
 
-    // ✅ Employee must belong to same company
+    // ✅ EMPLOYEE CHECK
     const employee = await Employee.findOne({
       _id: employeeId,
       companyId: req.user.companyId,
-      isDeleted: false,
+      status: "active",
     });
 
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // ✅ Only ONE active schedule per employee
+    // ✅ ONE ACTIVE SCHEDULE
     const exists = await WorkSchedule.findOne({
-      employeeId,
+      employeeId: employee._id,
       companyId: req.user.companyId,
+      status: "active",
     });
 
     if (exists) {
@@ -60,7 +61,7 @@ export const addWorkSchedule = async (req, res) => {
 
     const schedule = await WorkSchedule.create({
       companyId: req.user.companyId,
-      employeeId,
+      employeeId: employee._id,
       employeeName: employee.name,
       employeeCode: employee.employeeCode,
       employeeAvatar: employee.avatar || "",
@@ -87,6 +88,7 @@ export const addWorkSchedule = async (req, res) => {
   }
 };
 
+
 /* ======================================================
    2️⃣ GET WORK SCHEDULES
 ====================================================== */
@@ -96,12 +98,25 @@ export const getWorkSchedules = async (req, res) => {
       companyId: req.user.companyId,
     };
 
-    // ✅ Employee → only own schedule
+    // 👤 EMPLOYEE → ONLY OWN SCHEDULE
     if (req.user.role === "employee") {
-      if (!req.user.employeeId) {
-        return res.json({ success: true, count: 0, data: [] });
+      // 🔥 User → Employee mapping
+      const employee = await Employee.findOne({
+        employeeId: req.user._id, // ✅ User._id
+        companyId: req.user.companyId,
+        status: "active",
+      });
+
+      if (!employee) {
+        return res.json({
+          success: true,
+          count: 0,
+          data: [],
+        });
       }
-      query.employeeId = req.user.employeeId;
+
+      // 🔥 WorkSchedule uses Employee._id
+      query.employeeId = employee._id;
     }
 
     const schedules = await WorkSchedule.find(query)
@@ -119,6 +134,7 @@ export const getWorkSchedules = async (req, res) => {
   }
 };
 
+
 /* ======================================================
    3️⃣ GET SINGLE WORK SCHEDULE
 ====================================================== */
@@ -128,16 +144,23 @@ export const getWorkScheduleById = async (req, res) => {
       return res.status(400).json({ message: "Invalid schedule ID" });
     }
 
-    const query = {
+    let query = {
       _id: req.params.id,
       companyId: req.user.companyId,
     };
 
     if (req.user.role === "employee") {
-      if (!req.user.employeeId) {
+      const employee = await Employee.findOne({
+        employeeId: req.user._id,
+        companyId: req.user.companyId,
+        status: "active",
+      });
+
+      if (!employee) {
         return res.status(404).json({ message: "Schedule not found" });
       }
-      query.employeeId = req.user.employeeId;
+
+      query.employeeId = employee._id;
     }
 
     const schedule = await WorkSchedule.findOne(query).populate(
@@ -155,6 +178,7 @@ export const getWorkScheduleById = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /* ======================================================
    4️⃣ UPDATE WORK SCHEDULE
@@ -238,3 +262,4 @@ export const deleteWorkSchedule = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
