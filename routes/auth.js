@@ -9,7 +9,6 @@ import upload from '../middleware/upload.js';
 import { sendOtpEmail } from '../utils/sendEmail.js';
 import {sendInfoEmail,sendLoginEmail  } from '../utils/sendEmail.js';
 
-// ,sendLoginEmail ,sendLogoutEmail,sendDeleteEmail
 import moment from "moment-timezone";
 import axios from 'axios';
 import Employee from '../models/Employee.js';
@@ -24,8 +23,6 @@ const router = express.Router();
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 const hashData = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
-// Email validators
-// const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
 const strictEmailRule = (email) => /^[A-Za-z]+[0-9]+@[A-Za-z0-9]+\.[A-Za-z]{2,}$/.test(email);
 
 // Generate random token
@@ -146,66 +143,7 @@ router.post('/register', async (req, res) => {
 });
 
 
-// ===== LOGIN =====
-// router.post("/login", async (req, res) => {
-//   try {
-//     const { email, password, captchaToken } = req.body;
 
-//     if (!email || !password || !captchaToken)
-//       return res.status(400).json({ message: "Email, password and captcha required." });
-
-//     // Check user
-//     const user = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
-//     if (!user) return res.status(404).json({ message: "Account not registered." });
-//     if (!user.emailVerified) return res.status(400).json({ message: "Email not verified." });
-
-//     // Check password
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) return res.status(400).json({ message: "Incorrect password." });
-
-//     // Verify reCAPTCHA
-//     const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captchaToken}`;
-//     const { data: captchaData } = await axios.post(verifyUrl, null, {
-//       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-//     });
-//     if (!captchaData.success) return res.status(400).json({ message: "reCAPTCHA failed." });
-
-//     // Send login email
-//     const ip = req.headers["x-forwarded-for"]?.split(",").shift() || req.socket?.remoteAddress || "Unknown";
-//     sendLoginEmail(user.name, user.email, ip, req.headers["user-agent"])
-//       .then(() => console.log("Login email sent"))
-//       .catch(err => console.error(err.message));
-
-//     // Update last login
-//     user.lastLogin = new Date();
-//     await user.save();
-
-//     // Generate JWT
-//     const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "1d" });
-
-//     const registeredAt = moment(user.createdAt).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A");
-//     const lastLoginIST = user.lastLogin ? moment(user.lastLogin).tz("Asia/Kolkata").format("DD/MM/YYYY hh:mm:ss A") : null;
-
-//     res.status(200).json({
-//       message: "Login successful",
-//       token: jwtToken,
-//       user: {
-//         id: user._id,
-//         name: user.name,
-//         email: user.email,
-//         role: user.role,
-//         companyName: user.companyName,
-//         companyId: user.companyId,
-//         registeredAt,
-//         lastLogin: lastLoginIST
-//       }
-//     });
-
-//   } catch (err) {
-//     console.error("Login error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
 
 // ===== LOGIN =====
 router.post('/login', async (req, res) => {
@@ -353,7 +291,6 @@ router.post("/verify-otp", async (req, res) => {
 });
 
 
-//  Reset Password
 // Reset Password
 router.post("/reset-password", async (req, res) => {
   const { email, newPassword, resetToken } = req.body;
@@ -452,52 +389,6 @@ router.put("/profile", protect, upload.single("avatar"), async (req, res) => {
 
 
 //===================== DELETE USER ======================
-
-// DELETE account
-// router.delete("/delete-account", protect , async (req, res) => {
-//   try {
-//     const user = req.user;
-//     if (!user) return res.status(401).json({ message: "Unauthorized" });
-
-//     // IP capture
-//     const ip =
-//       req.headers["x-forwarded-for"]?.split(",").shift() ||
-//       req.socket?.remoteAddress ||
-//       req.connection?.remoteAddress ||
-//       "Unknown";
-//     // User Agent
-//     const userAgent = req.headers["user-agent"] || "Unknown Device";
-
-//     // find all employee and this users
-//     const employees = await Employee.find({createdBy: user._id});
-//       // delete all employee salaries
-//     for (const emp of employees) {
-//       await Salary.deleteMany({employeeId: emp._id});
-//     }
-//       // delete all employees created by user
-//     await Employee.deleteMany({createdBy: user._id});
-
-   
-
-//     // Delete user first
-//     const deletedUser = await User.findByIdAndDelete(user._id);
-//     if (!deletedUser) {
-//       return res.status(404).json({ message: "User not found or already deleted" });
-//     }
-
-//     // Email send after deletion (non-blocking)
-//     try {
-//       await sendDeleteEmail(deletedUser.name, deletedUser.email, ip, userAgent);
-//     } catch (err) {
-//       console.error("Delete Email Error:", err.message);
-//     }
-
-//     return res.json({ message: "Account deleted successfully and confirmation email sent" });
-//   } catch (err) {
-//     console.error("Delete Account Error:", err);
-//     return res.status(500).json({ message: "Server error" });
-//   }
-// });
 
 
 router.delete("/delete-account", protect, async (req, res) => {
@@ -608,88 +499,6 @@ router.put("/update-password", protect , async (req, res) => {
 
 
 
-// Owner can remove an admin (downgrade to user)
-// // =======================
-// router.delete("/admin/:adminId", protect, async (req, res) => {
-//   try {
-//     const owner = req.user; // Must be the company owner
-//     const { adminId } = req.params;
-
-//     const company = await Company.findById(owner.companyId);
-//     if (!company) return res.status(404).json({ message: "Company not found" });
-
-//     // Only owner can remove admins
-//     if (company.ownerId.toString() !== owner._id.toString())
-//       return res.status(403).json({ message: "Only owner can remove admins" });
-
-//     // Admin exists in company?
-//     if (!company.admins.includes(adminId))
-//       return res.status(400).json({ message: "Admin not found in your company" });
-
-//     const admin = await User.findById(adminId);
-//     if (!admin) return res.status(404).json({ message: "Admin not found" });
-
-//     // Downgrade role to user
-//     admin.role = "user";
-//     await admin.save();
-
-//     // Remove from company admins array
-//     company.admins = company.admins.filter(a => a.toString() !== adminId);
-//     await company.save();
-
-//     // Optional: send email notification to the user
-//     // await sendInfoEmail(admin.email, "Role Update", "Your admin access has been revoked.");
-
-//     res.json({ message: "Admin downgraded to user successfully" });
-//   } catch (err) {
-//     console.error("Remove Admin Error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
-
-// // =======================
-// // Owner can promote a user to admin
-// // =======================
-// router.post("/admin/:userId", protect, async (req, res) => {
-//   try {
-//     const owner = req.user; // Must be the company owner
-//     const { userId } = req.params;
-
-//     const company = await Company.findById(owner.companyId);
-//     if (!company) return res.status(404).json({ message: "Company not found" });
-
-//     // Only owner can add admins
-//     if (company.ownerId.toString() !== owner._id.toString())
-//       return res.status(403).json({ message: "Only owner can add admins" });
-
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(404).json({ message: "User not found" });
-
-//     // Check if user belongs to same company
-//     if (user.companyId?.toString() !== company._id.toString())
-//       return res.status(400).json({ message: "User does not belong to your company" });
-
-//     // Already admin?
-//     if (company.admins.includes(userId))
-//       return res.status(400).json({ message: "User is already an admin" });
-
-//     // Add to company admins
-//     company.admins.push(userId);
-//     await company.save();
-
-//     // Update user role
-//     user.role = "admin";
-//     await user.save();
-
-//     // Optional: send email notification to the user
-//     // await sendInfoEmail(user.email, "Role Update", "You have been promoted to admin.");
-
-//     res.status(200).json({ message: "User promoted to admin successfully", userId: user._id });
-//   } catch (err) {
-//     console.error("Add Admin Error:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
 
 
 export default router;
