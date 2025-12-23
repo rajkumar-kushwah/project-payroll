@@ -27,27 +27,32 @@ const getEmployeeFromToken = async (req) => {
 export const autoCheckoutBySchedule = async () => {
   try {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
 
+    // 🔹 Attendances with checkIn but no checkOut
     const attendances = await Attendance.find({
-      date: { $gte: todayStart, $lte: todayEnd },
+      date: todayStr,
       checkIn: { $ne: null },
       checkOut: null,
     });
+
+    console.log("Attendances to process:", attendances.length);
 
     for (const record of attendances) {
       const emp = await Employee.findById(record.employeeId);
       if (!emp) continue;
 
+      // 🔹 Skip if employee has approved leave
       const leave = await Leave.findOne({
         employeeId: emp._id,
         companyId: record.companyId,
-        date: { $gte: todayStart, $lte: todayEnd },
+        startDate: { $lte: new Date(todayStr) },
+        endDate: { $gte: new Date(todayStr) },
         status: "approved",
       });
       if (leave) continue;
 
+      // 🔹 Get active work schedule
       const schedule = await WorkSchedule.findOne({
         employeeId: emp._id,
         companyId: record.companyId,
@@ -55,26 +60,35 @@ export const autoCheckoutBySchedule = async () => {
       });
       if (!schedule) continue;
 
-      const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
+      // 🔹 Skip if weekly off
+      const dayName = new Date(todayStr).toLocaleDateString("en-US", { weekday: "long" });
       if (schedule.weeklyOff?.includes(dayName)) continue;
 
-      const scheduledOut = hhmmToDate(now, schedule.outTime);
-      const outWithGrace = new Date(
-        scheduledOut.getTime() + (schedule.gracePeriod || 0) * 60000
-      );
+      // 🔹 Scheduled out and grace
+      const scheduledOut = hhmmToDate(todayStr, schedule.outTime); 
+      const outWithGrace = new Date(scheduledOut.getTime() + (schedule.gracePeriod || 0) * 60000);
 
+      // 🔹 Only auto-checkout if time passed and checkout missing
       if (now >= outWithGrace) {
-        record.checkOut = outWithGrace;
+        // ✅ Use current time, not fixed outTime
+        record.checkOut = now;
         record.autoCheckout = true;
-        await record.save();
 
-        console.log(`Auto-checkout: ${emp.employeeCode} at ${outWithGrace.toLocaleTimeString()}`);
+        // Recalculate totalHours, status, etc.
+        const { computeDerivedFields } = require("./attendanceController"); // ya apne import hisaab se
+        computeDerivedFields(record, schedule);
+
+        await record.save();
+        console.log(`Auto-checkout: ${emp.employeeCode} at ${now.toLocaleTimeString()}`);
+      } else {
+        console.log(`Not yet time for auto-checkout: ${emp.employeeCode}`);
       }
     }
   } catch (err) {
     console.error("AutoCheckout Error:", err);
   }
 };
+
 
 /* ======================================================
    DERIVED FIELDS CALCULATION

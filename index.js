@@ -75,7 +75,7 @@ app.listen(PORT, () => {
 });
 
 // Run every 15 minutes
-cron.schedule("*/15 * * * *", async () => {
+cron.schedule("*/1 * * * *", async () => {
   try {
     console.log("Running autoCheckoutBySchedule cron job...");
     await autoCheckoutBySchedule();
