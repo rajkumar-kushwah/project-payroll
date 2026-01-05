@@ -19,7 +19,7 @@ const getMonthRange = (month) => {
 // ---------------------------------------------
 // Utility: Calculate Payroll Summary
 // ---------------------------------------------
-const calculatePayroll = async (employee, month) => {
+export const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
 
   const attendances = await Attendance.find({
@@ -40,7 +40,7 @@ const calculatePayroll = async (employee, month) => {
   });
 
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
-  const weeklyOffs = schedule?.weeklyOffs || ["Sunday"];
+  const weeklyOffs = schedule?.weeklyOff || ["Sunday"];
 
   let totalDays = 0;
   let present = 0;
@@ -73,7 +73,7 @@ const calculatePayroll = async (employee, month) => {
     );
 
     if (isHoliday) {
-      officeHolidays++; // count company holiday
+      officeHolidays++;
     } else if (leave) {
       leave.type === "paid" ? paidLeaves++ : unpaidLeaves++;
     } else if (attendance) {
@@ -87,7 +87,7 @@ const calculatePayroll = async (employee, month) => {
           overtimeHours += attendance.overtimeHours || 0;
           break;
         case "leave":
-          paidLeaves++; // treat attendance "leave" as paid
+          paidLeaves++;
           break;
         case "absent":
           absent++;
@@ -122,10 +122,8 @@ const calculatePayroll = async (employee, month) => {
 export const generatePayroll = async (req, res) => {
   try {
     const { employeeId, month, notes } = req.body;
-
     const employee = await Employee.findById(employeeId);
-    if (!employee)
-      return res.status(404).json({ message: "Employee not found" });
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
     const summary = await calculatePayroll(employee, month);
 
@@ -142,11 +140,7 @@ export const generatePayroll = async (req, res) => {
 
     let payroll = await Payroll.findOne({ employeeId, month });
     if (payroll) {
-      payroll = await Payroll.findOneAndUpdate(
-        { employeeId, month },
-        payload,
-        { new: true }
-      );
+      payroll = await Payroll.findOneAndUpdate({ employeeId, month }, payload, { new: true });
     } else {
       payroll = await Payroll.create(payload);
     }
@@ -158,23 +152,42 @@ export const generatePayroll = async (req, res) => {
 };
 
 // ---------------------------------------------
-// 2️ Payroll List (FILTERS)
+// 2️ Get all payroll summaries (auto-generate if not exist)
 // ---------------------------------------------
 export const getPayrolls = async (req, res) => {
   try {
     const { month, employeeId, department } = req.query;
 
-    let filter = {};
-    if (month) filter.month = month;
-    if (employeeId) filter.employeeId = employeeId;
-
-    let payrolls = await Payroll.find(filter);
-
-    if (department) {
-      const employees = await Employee.find({ department }).select("_id");
-      const ids = employees.map((e) => e._id.toString());
-      payrolls = payrolls.filter((p) => ids.includes(p.employeeId.toString()));
+    let employees = [];
+    if (employeeId) {
+      const emp = await Employee.findById(employeeId);
+      if (emp) employees = [emp];
+    } else if (department) {
+      employees = await Employee.find({ department });
+    } else {
+      employees = await Employee.find({});
     }
+
+    // For each employee, calculate payroll on the fly
+    const payrolls = await Promise.all(
+      employees.map(async (emp) => {
+        let payroll = await Payroll.findOne({ employeeId: emp._id, month });
+        if (!payroll) {
+          const summary = await calculatePayroll(emp, month);
+          payroll = {
+            employeeId: emp._id,
+            employeeCode: emp.employeeCode,
+            companyId: emp.companyId,
+            name: emp.name,
+            avatar: emp.avatar,
+            month,
+            ...summary,
+            notes: "Auto calculated (not saved)",
+          };
+        }
+        return payroll;
+      })
+    );
 
     res.status(200).json(payrolls);
   } catch (error) {
@@ -189,9 +202,23 @@ export const getEmployeePayroll = async (req, res) => {
   try {
     const { employeeId, month } = req.query;
 
-    const payroll = await Payroll.findOne({ employeeId, month });
-    if (!payroll)
-      return res.status(404).json({ message: "Payroll not found" });
+    const employee = await Employee.findById(employeeId);
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
+
+    let payroll = await Payroll.findOne({ employeeId, month });
+    if (!payroll) {
+      const summary = await calculatePayroll(employee, month);
+      payroll = {
+        employeeId: employee._id,
+        employeeCode: employee.employeeCode,
+        companyId: employee.companyId,
+        name: employee.name,
+        avatar: employee.avatar,
+        month,
+        ...summary,
+        notes: "Auto calculated (not saved)",
+      };
+    }
 
     res.status(200).json(payroll);
   } catch (error) {
