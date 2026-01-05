@@ -12,7 +12,7 @@ import leaveRoutes from "./routes/leaveRoutes.js";
 import officeHolidayRoutes from "./routes/officeHolidayRoutes.js";
 import cron from "node-cron";
 import { autoCheckoutBySchedule } from "./controllers/attendanceController.js";
-
+import payrollRoutes from "./routes/payroll.js";
 
 
 dotenv.config();
@@ -60,6 +60,7 @@ app.use("/api/workschedule", workScheduleRoutes);
 app.use("/api", adminRoutes); 
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/holidays", officeHolidayRoutes);
+app.use("/api/payroll", payrollRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)

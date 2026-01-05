@@ -4,55 +4,54 @@ import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
-const payrollSchema = new Schema(
+const payrollSummarySchema = new Schema(
   {
     employee: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",      // assume employees are stored in User model
+      ref: "Employee",
       required: true,
     },
-    payPeriodStart: {
-      type: Date,
-      required: true,
-    },
-    payPeriodEnd: {
-      type: Date,
-      required: true,
-    },
-    basicSalary: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    allowances: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    deductions: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    grossPay: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    netPay: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    status: {
+    name:{
       type: String,
-      enum: ["pending", "paid", "cancelled"],
-      default: "pending",
+      required: true
     },
-    paidDate: {
-      type: Date,
+    avater:{
+      type: String,
+      default: "",
     },
-    // optional comments or notes
+    month: {
+      type: String, // e.g., "Jan 2026"
+      required: true,
+    },
+    totalDays: {
+      type: Number,
+      default: 30,
+    },
+    present: {
+      type: Number,
+      default: 0,
+    },
+    absent: {
+      type: Number,
+      default: 0,
+    },
+    paidLeaves: {
+      type: Number,
+      default: 0,
+    },
+    unpaidLeaves: {
+      type: Number,
+      default: 0,
+    },
+    officeHolidays: {
+      type: Number,
+      default: 0,
+    },
+    overtimeHours: {
+      type: Number,
+      default: 0,
+    },
+    // optional: notes or remarks
     notes: {
       type: String,
     },
@@ -60,6 +59,6 @@ const payrollSchema = new Schema(
   { timestamps: true }
 );
 
-const Payroll = mongoose.model("Payroll", payrollSchema);
+const PayrollSummary = mongoose.model("PayrollSummary", payrollSummarySchema);
 
-export default Payroll;
+export default PayrollSummary;

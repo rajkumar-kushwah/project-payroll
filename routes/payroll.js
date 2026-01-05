@@ -1,57 +1,22 @@
 import express from "express";
-import Payroll from "../models/Payroll.js";
+import {
+  savePayrollSummary,
+  getPayrollSummaries,
+  getPayrollSummaryByEmployee
+} from "../controllers/payrollSummaryController.js";
+import { adminProtect, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// GET all payrolls
-router.get("/", async (req, res) => {
-  try {
-    const payrolls = await Payroll.find().populate("employee", "name email");
-    res.json(payrolls);
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
+router.use(protect);
 
-// CREATE payroll
-router.post("/", async (req, res) => {
-  try {
-    const { employee, basicSalary, bonus, deductions } = req.body;
-    const netPay = basicSalary + (bonus || 0) - (deductions || 0);
+//  1️ Generate or Update Payroll (auto from attendance)
+router.post("/generate", savePayrollSummary);
 
-    const payroll = new Payroll({
-      employee,
-      basicSalary,
-      bonus,
-      deductions,
-      netPay,
-    });
+//  2️ Get all payroll summaries for a month (Payroll Page table)
+router.get("/list", getPayrollSummaries);
 
-    await payroll.save();
-    res.json(payroll);
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// UPDATE payroll status (Paid / Pending)
-router.put("/:id", async (req, res) => {
-  try {
-    const payroll = await Payroll.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(payroll);
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// DELETE payroll
-router.delete("/:id", async (req, res) => {
-  try {
-    await Payroll.findByIdAndDelete(req.params.id);
-    res.json({ message: "Payroll deleted" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
+//  3️ Get single employee payroll (for payslip)
+router.get("/single", getPayrollSummaryByEmployee);
 
 export default router;
