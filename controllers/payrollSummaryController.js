@@ -1,5 +1,3 @@
-// src/controllers/payrollController.js
-
 import Employee from "../models/Employee.js";
 import Payroll from "../models/Payroll.js";
 import Attendance from "../models/Attendance.js";
@@ -49,7 +47,7 @@ const calculatePayroll = async (employee, month) => {
   let absent = 0;
   let paidLeaves = 0;
   let unpaidLeaves = 0;
-  let officeHolidays = holidays.length;
+  let officeHolidays = 0;
   let weeklyOffCount = 0;
   let overtimeHours = 0;
 
@@ -57,11 +55,10 @@ const calculatePayroll = async (employee, month) => {
 
   while (cursor <= end) {
     totalDays++;
-
     const dateStr = cursor.toDateString();
     const dayName = cursor.toLocaleString("en-US", { weekday: "long" });
 
-    const isHoliday = holidays.find(
+    const isHoliday = holidays.some(
       (h) => new Date(h.date).toDateString() === dateStr
     );
 
@@ -76,15 +73,27 @@ const calculatePayroll = async (employee, month) => {
     );
 
     if (isHoliday) {
-      officeHolidays++;
+      officeHolidays++; // count company holiday
     } else if (leave) {
       leave.type === "paid" ? paidLeaves++ : unpaidLeaves++;
     } else if (attendance) {
-      if (attendance.status === "present") {
-        present++;
-        overtimeHours += attendance.overtimeHours || 0;
-      } else {
-        absent++;
+      switch (attendance.status) {
+        case "present":
+          present++;
+          overtimeHours += attendance.overtimeHours || 0;
+          break;
+        case "half-day":
+          present += 0.5;
+          overtimeHours += attendance.overtimeHours || 0;
+          break;
+        case "leave":
+          paidLeaves++; // treat attendance "leave" as paid
+          break;
+        case "absent":
+          absent++;
+          break;
+        default:
+          absent++;
       }
     } else if (weeklyOffs.includes(dayName)) {
       weeklyOffCount++;
@@ -115,7 +124,8 @@ export const generatePayroll = async (req, res) => {
     const { employeeId, month, notes } = req.body;
 
     const employee = await Employee.findById(employeeId);
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+    if (!employee)
+      return res.status(404).json({ message: "Employee not found" });
 
     const summary = await calculatePayroll(employee, month);
 
@@ -132,7 +142,11 @@ export const generatePayroll = async (req, res) => {
 
     let payroll = await Payroll.findOne({ employeeId, month });
     if (payroll) {
-      payroll = await Payroll.findOneAndUpdate({ employeeId, month }, payload, { new: true });
+      payroll = await Payroll.findOneAndUpdate(
+        { employeeId, month },
+        payload,
+        { new: true }
+      );
     } else {
       payroll = await Payroll.create(payload);
     }
@@ -176,7 +190,8 @@ export const getEmployeePayroll = async (req, res) => {
     const { employeeId, month } = req.query;
 
     const payroll = await Payroll.findOne({ employeeId, month });
-    if (!payroll) return res.status(404).json({ message: "Payroll not found" });
+    if (!payroll)
+      return res.status(404).json({ message: "Payroll not found" });
 
     res.status(200).json(payroll);
   } catch (error) {
