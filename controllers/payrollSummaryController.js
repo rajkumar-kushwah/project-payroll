@@ -1,11 +1,14 @@
+// src/controllers/payrollController.js
+
 import Employee from "../models/Employee.js";
 import Payroll from "../models/Payroll.js";
 import Attendance from "../models/Attendance.js";
 import Leave from "../models/Leave.js";
 import OfficeHoliday from "../models/OfficeHoliday.js";
+import WorkSchedule from "../models/Worksechudule.js";
 
 // ---------------------------------------------
-// Utility: Month range
+// Utility: Get Month Start & End
 // ---------------------------------------------
 const getMonthRange = (month) => {
   const [monthName, year] = month.split(" ");
@@ -38,13 +41,16 @@ const calculatePayroll = async (employee, month) => {
     date: { $gte: start, $lte: end },
   });
 
+  const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
+  const weeklyOffs = schedule?.weeklyOffs || ["Sunday"];
+
   let totalDays = 0;
   let present = 0;
   let absent = 0;
   let paidLeaves = 0;
   let unpaidLeaves = 0;
   let officeHolidays = holidays.length;
-  let sundays = 0;
+  let weeklyOffCount = 0;
   let overtimeHours = 0;
 
   const cursor = new Date(start);
@@ -52,8 +58,11 @@ const calculatePayroll = async (employee, month) => {
   while (cursor <= end) {
     totalDays++;
 
-    const attendance = attendances.find(
-      (a) => new Date(a.date).toDateString() === cursor.toDateString()
+    const dateStr = cursor.toDateString();
+    const dayName = cursor.toLocaleString("en-US", { weekday: "long" });
+
+    const isHoliday = holidays.find(
+      (h) => new Date(h.date).toDateString() === dateStr
     );
 
     const leave = leaves.find(
@@ -62,19 +71,23 @@ const calculatePayroll = async (employee, month) => {
         cursor <= new Date(l.endDate)
     );
 
-    if (attendance) {
+    const attendance = attendances.find(
+      (a) => new Date(a.date).toDateString() === dateStr
+    );
+
+    if (isHoliday) {
+      officeHolidays++;
+    } else if (leave) {
+      leave.type === "paid" ? paidLeaves++ : unpaidLeaves++;
+    } else if (attendance) {
       if (attendance.status === "present") {
         present++;
         overtimeHours += attendance.overtimeHours || 0;
-      } else if (attendance.status === "absent") {
+      } else {
         absent++;
-      } else if (attendance.status === "holiday") {
-        // already counted in office holiday
       }
-    } else if (leave) {
-      leave.type === "paid" ? paidLeaves++ : unpaidLeaves++;
-    } else if (cursor.getDay() === 0) {
-      sundays++;
+    } else if (weeklyOffs.includes(dayName)) {
+      weeklyOffCount++;
     } else {
       absent++;
     }
@@ -89,7 +102,7 @@ const calculatePayroll = async (employee, month) => {
     paidLeaves,
     unpaidLeaves,
     officeHolidays,
-    sundays,
+    weeklyOffCount,
     overtimeHours,
   };
 };
@@ -102,9 +115,7 @@ export const generatePayroll = async (req, res) => {
     const { employeeId, month, notes } = req.body;
 
     const employee = await Employee.findById(employeeId);
-    if (!employee) {
-      return res.status(404).json({ message: "Employee not found" });
-    }
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
     const summary = await calculatePayroll(employee, month);
 
@@ -112,23 +123,16 @@ export const generatePayroll = async (req, res) => {
       employeeId: employee._id,
       employeeCode: employee.employeeCode,
       companyId: employee.companyId,
-
       name: employee.name,
       avatar: employee.avatar,
-
       month,
       ...summary,
       notes: notes || "Auto generated payroll",
     };
 
     let payroll = await Payroll.findOne({ employeeId, month });
-
     if (payroll) {
-      payroll = await Payroll.findOneAndUpdate(
-        { employeeId, month },
-        payload,
-        { new: true }
-      );
+      payroll = await Payroll.findOneAndUpdate({ employeeId, month }, payload, { new: true });
     } else {
       payroll = await Payroll.create(payload);
     }
@@ -139,15 +143,14 @@ export const generatePayroll = async (req, res) => {
   }
 };
 
-
 // ---------------------------------------------
 // 2️ Payroll List (FILTERS)
 // ---------------------------------------------
 export const getPayrolls = async (req, res) => {
   try {
     const { month, employeeId, department } = req.query;
-    let filter = {};
 
+    let filter = {};
     if (month) filter.month = month;
     if (employeeId) filter.employeeId = employeeId;
 
@@ -155,11 +158,8 @@ export const getPayrolls = async (req, res) => {
 
     if (department) {
       const employees = await Employee.find({ department }).select("_id");
-      const ids = employees.map(e => e._id.toString());
-
-      payrolls = payrolls.filter(p =>
-        ids.includes(p.employeeId.toString())
-      );
+      const ids = employees.map((e) => e._id.toString());
+      payrolls = payrolls.filter((p) => ids.includes(p.employeeId.toString()));
     }
 
     res.status(200).json(payrolls);
@@ -167,7 +167,6 @@ export const getPayrolls = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // ---------------------------------------------
 // 3️ Single Employee Payslip
@@ -177,14 +176,10 @@ export const getEmployeePayroll = async (req, res) => {
     const { employeeId, month } = req.query;
 
     const payroll = await Payroll.findOne({ employeeId, month });
-
-    if (!payroll) {
-      return res.status(404).json({ message: "Payroll not found" });
-    }
+    if (!payroll) return res.status(404).json({ message: "Payroll not found" });
 
     res.status(200).json(payroll);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
