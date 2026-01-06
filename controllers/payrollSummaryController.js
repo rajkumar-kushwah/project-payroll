@@ -25,27 +25,26 @@ const getMonthRange = (month) => {
 ---------------------------------- */
 const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
-
-  const monthStart = normalize(start);
-  const monthEnd = normalize(end);
+  const today = new Date();
+  const effectiveEnd = end > today ? today : end;
 
   /* ---------- DATA ---------- */
   const attendances = await Attendance.find({
     employeeId: employee._id,
-    date: { $gte: monthStart, $lte: monthEnd },
+    date: { $gte: start, $lte: effectiveEnd },
   });
 
   const leaves = await Leave.find({
     employeeId: employee._id,
     status: "approved",
-    startDate: { $lte: monthEnd },
-    endDate: { $gte: monthStart },
+    startDate: { $lte: effectiveEnd },
+    endDate: { $gte: start },
   });
 
   const holidays = await OfficeHoliday.find({
     companyId: employee.companyId,
-    startDate: { $lte: monthEnd },
-    endDate: { $gte: monthStart },
+    startDate: { $lte: effectiveEnd },
+    endDate: { $gte: start },
   });
 
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
@@ -54,14 +53,13 @@ const calculatePayroll = async (employee, month) => {
   /* ---------- MAPS ---------- */
   const attendanceMap = {};
   attendances.forEach(a => {
-    attendanceMap[normalize(a.date).toDateString()] = a;
+    attendanceMap[new Date(a.date).toDateString()] = a;
   });
 
   const holidaySet = new Set();
   holidays.forEach(h => {
-    let d = normalize(h.startDate);
-    const hEnd = normalize(h.endDate);
-    while (d <= hEnd) {
+    let d = new Date(h.startDate);
+    while (d <= h.endDate && d <= effectiveEnd) {
       holidaySet.add(d.toDateString());
       d.setDate(d.getDate() + 1);
     }
@@ -77,27 +75,27 @@ const calculatePayroll = async (employee, month) => {
   let overtimeHours = 0;
 
   const payrollData = [];
-  const cursor = new Date(monthStart);
+  const cursor = new Date(start);
 
   /* ---------- DAY BY DAY LOOP ---------- */
-  while (cursor <= monthEnd) {
+  while (cursor <= effectiveEnd) {
     const dateStr = cursor.toDateString();
     const dayName = cursor.toLocaleString("en-US", { weekday: "long" });
 
     const attendance = attendanceMap[dateStr];
     const isHoliday = holidaySet.has(dateStr);
 
-    const leave = leaves.find(l => {
-      const ls = normalize(l.startDate);
-      const le = normalize(l.endDate);
-      return cursor >= ls && cursor <= le;
-    });
+    const leave = leaves.find(
+      l => cursor >= new Date(l.startDate) && cursor <= new Date(l.endDate)
+    );
 
     let status = "missing";
     let checkIn = "";
     let checkOut = "";
     let totalHours = 0;
     let dayOT = 0;
+
+    /* ---- PRIORITY LOGIC ---- */
 
     // 1️⃣ Office Holiday
     if (isHoliday) {
@@ -107,7 +105,7 @@ const calculatePayroll = async (employee, month) => {
 
     // 2️⃣ Leave
     else if (leave) {
-      if ((leave.type || "").toUpperCase() === "PAID") {
+      if (leave.type === "PAID") {
         status = "paid leave";
         paidLeaves++;
       } else {
@@ -174,6 +172,7 @@ const calculatePayroll = async (employee, month) => {
     payrollData,
   };
 };
+
 
 
 /* ---------------------------------
