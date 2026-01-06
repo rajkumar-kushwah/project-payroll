@@ -25,8 +25,8 @@ const getMonthRange = (month) => {
 ---------------------------------- */
 const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
-  const today = new Date();
-  const effectiveEnd = end > today ? today : end;
+  const today = normalizeDate(new Date());
+  const effectiveEnd = normalizeDate(end > today ? today : end);
 
   /* ---------- DATA ---------- */
   const attendances = await Attendance.find({
@@ -53,13 +53,15 @@ const calculatePayroll = async (employee, month) => {
   /* ---------- MAPS ---------- */
   const attendanceMap = {};
   attendances.forEach(a => {
-    attendanceMap[new Date(a.date).toDateString()] = a;
+    attendanceMap[normalizeDate(a.date).toDateString()] = a;
   });
 
   const holidaySet = new Set();
   holidays.forEach(h => {
-    let d = new Date(h.startDate);
-    while (d <= h.endDate && d <= effectiveEnd) {
+    let d = normalizeDate(h.startDate);
+    const hEnd = normalizeDate(h.endDate);
+
+    while (d <= hEnd && d <= effectiveEnd) {
       holidaySet.add(d.toDateString());
       d.setDate(d.getDate() + 1);
     }
@@ -75,7 +77,7 @@ const calculatePayroll = async (employee, month) => {
   let overtimeHours = 0;
 
   const payrollData = [];
-  const cursor = new Date(start);
+  const cursor = normalizeDate(start);
 
   /* ---------- DAY BY DAY LOOP ---------- */
   while (cursor <= effectiveEnd) {
@@ -85,9 +87,11 @@ const calculatePayroll = async (employee, month) => {
     const attendance = attendanceMap[dateStr];
     const isHoliday = holidaySet.has(dateStr);
 
-    const leave = leaves.find(
-      l => cursor >= new Date(l.startDate) && cursor <= new Date(l.endDate)
-    );
+    const leave = leaves.find(l => {
+      const ls = normalizeDate(l.startDate);
+      const le = normalizeDate(l.endDate);
+      return cursor >= ls && cursor <= le;
+    });
 
     let status = "missing";
     let checkIn = "";
@@ -105,7 +109,7 @@ const calculatePayroll = async (employee, month) => {
 
     // 2️⃣ Leave
     else if (leave) {
-      if (leave.type === "PAID") {
+      if (leave.type?.toLowerCase() === "paid") {
         status = "paid leave";
         paidLeaves++;
       } else {
@@ -171,6 +175,13 @@ const calculatePayroll = async (employee, month) => {
     },
     payrollData,
   };
+};
+
+
+const normalizeDate = (date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
 };
 
 
