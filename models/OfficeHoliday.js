@@ -33,9 +33,10 @@ const officeHolidaySchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["NATIONAL", "FESTIVAL", "COMPANY", "PAID", "UNPAID", "paid", "unpaid"],
+      enum: ["NATIONAL", "FESTIVAL", "COMPANY"],
       required: true,
     },
+
 
     isPaid: {
       type: Boolean,

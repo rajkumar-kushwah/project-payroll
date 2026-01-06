@@ -109,6 +109,9 @@ const calculatePayroll = async (employee, month) => {
     if (holiday) {
       status = "office holiday";
       officeHolidays++;
+       if (holiday.isPaid) {
+    paidLeaves++; // office holiday counted as paid leave
+  }
     }
 
     // 2️⃣ Leave (working day only)
