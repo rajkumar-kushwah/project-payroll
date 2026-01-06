@@ -8,34 +8,32 @@ import { Parser } from "json2csv";
 import puppeteer from "puppeteer";
 
 /* ---------------------------------
-   Helper: Month Start / End
+   Month Range
 ---------------------------------- */
 const getMonthRange = (month) => {
   const [monthName, year] = month.split(" ");
   const monthIndex = new Date(`${monthName} 1`).getMonth();
-  if (isNaN(monthIndex)) throw new Error("Invalid month");
 
-  const start = new Date(Number(year), monthIndex, 1);
-  const end = new Date(Number(year), monthIndex + 1, 0, 23, 59, 59);
+  const start = new Date(year, monthIndex, 1);
+  const end = new Date(year, monthIndex + 1, 0, 23, 59, 59);
 
   return { start, end };
 };
 
 /* ---------------------------------
-   1️ Calculate Payroll (Core Logic)
+   Core Payroll Calculation
 ---------------------------------- */
 const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
   const today = new Date();
   const effectiveEnd = end > today ? today : end;
 
-  // Attendance
+  /* ---------- DATA ---------- */
   const attendances = await Attendance.find({
     employeeId: employee._id,
     date: { $gte: start, $lte: effectiveEnd },
   });
 
-  // Approved Leaves
   const leaves = await Leave.find({
     employeeId: employee._id,
     status: "approved",
@@ -43,34 +41,31 @@ const calculatePayroll = async (employee, month) => {
     endDate: { $gte: start },
   });
 
-  // Office Holidays
   const holidays = await OfficeHoliday.find({
     companyId: employee.companyId,
     startDate: { $lte: effectiveEnd },
     endDate: { $gte: start },
   });
 
-  // Work schedule for weekly offs
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
   const weeklyOffs = schedule?.weeklyOff || ["Sunday"];
 
-  // Maps for fast lookup
+  /* ---------- MAPS ---------- */
   const attendanceMap = {};
-  attendances.forEach(a => attendanceMap[new Date(a.date).toDateString()] = a);
+  attendances.forEach(a => {
+    attendanceMap[new Date(a.date).toDateString()] = a;
+  });
 
   const holidaySet = new Set();
   holidays.forEach(h => {
-    if (h.type?.toUpperCase() !== "PAID") return; // sirf paid holidays
-    const startH = new Date(h.startDate);
-    const endH = new Date(h.endDate);
-    for (let d = new Date(startH); d <= endH; d.setDate(d.getDate() + 1)) {
-      if (d > effectiveEnd) break; // future date skip
+    let d = new Date(h.startDate);
+    while (d <= h.endDate && d <= effectiveEnd) {
       holidaySet.add(d.toDateString());
+      d.setDate(d.getDate() + 1);
     }
   });
 
-  // Counters
-  let totalDays = Math.ceil((effectiveEnd - start) / (1000 * 60 * 60 * 24)) + 1;
+  /* ---------- COUNTERS ---------- */
   let present = 0;
   let paidLeaves = 0;
   let unpaidLeaves = 0;
@@ -80,8 +75,9 @@ const calculatePayroll = async (employee, month) => {
   let overtimeHours = 0;
 
   const payrollData = [];
-
   const cursor = new Date(start);
+
+  /* ---------- DAY BY DAY LOOP ---------- */
   while (cursor <= effectiveEnd) {
     const dateStr = cursor.toDateString();
     const dayName = cursor.toLocaleString("en-US", { weekday: "long" });
@@ -89,7 +85,6 @@ const calculatePayroll = async (employee, month) => {
     const attendance = attendanceMap[dateStr];
     const isHoliday = holidaySet.has(dateStr);
 
-    // Approved Leave for this day
     const leave = leaves.find(
       l => cursor >= new Date(l.startDate) && cursor <= new Date(l.endDate)
     );
@@ -98,32 +93,49 @@ const calculatePayroll = async (employee, month) => {
     let checkIn = "";
     let checkOut = "";
     let totalHours = 0;
-    let dayOvertime = 0;
+    let dayOT = 0;
 
+    /* ---- PRIORITY LOGIC ---- */
+
+    // 1️⃣ Office Holiday
     if (isHoliday) {
-      status = "holiday";
+      status = "office holiday";
       officeHolidays++;
-    } else if (leave) {
-      const leaveType = leave.type?.toUpperCase();
-      status = leaveType === "PAID" ? "paid leave" : "unpaid leave";
+    }
 
-      if (leaveType === "PAID") paidLeaves++;
-      else unpaidLeaves++;
-    } else if (weeklyOffs.includes(dayName) && !attendance) {
+    // 2️⃣ Leave
+    else if (leave) {
+      if (leave.type === "PAID") {
+        status = "paid leave";
+        paidLeaves++;
+      } else {
+        status = "unpaid leave";
+        unpaidLeaves++;
+      }
+    }
+
+    // 3️⃣ Weekly Off
+    else if (weeklyOffs.includes(dayName) && !attendance) {
       status = "weekly off";
       weeklyOffCount++;
-    } else if (attendance) {
+    }
+
+    // 4️⃣ Attendance
+    else if (attendance) {
       status = attendance.status;
       checkIn = attendance.checkIn || "";
       checkOut = attendance.checkOut || "";
       totalHours = attendance.totalHours || 0;
-      dayOvertime = attendance.overtimeHours || 0;
+      dayOT = attendance.overtimeHours || 0;
 
       if (status === "present") present++;
       if (status === "half-day") present += 0.5;
 
-      overtimeHours += dayOvertime;
-    } else {
+      overtimeHours += dayOT;
+    }
+
+    // 5️⃣ Missing
+    else {
       missingDays++;
     }
 
@@ -136,15 +148,19 @@ const calculatePayroll = async (employee, month) => {
       CheckIn: checkIn,
       CheckOut: checkOut,
       TotalHours: totalHours,
-      OvertimeHours: dayOvertime,
+      OvertimeHours: dayOT,
     });
 
     cursor.setDate(cursor.getDate() + 1);
   }
 
+  /* ---------- FINAL TOTAL ---------- */
+  const totalWorking =
+    present + paidLeaves + officeHolidays + weeklyOffCount;
+
   return {
     summary: {
-      totalDays,
+      totalWorking,
       present,
       paidLeaves,
       unpaidLeaves,
@@ -158,39 +174,34 @@ const calculatePayroll = async (employee, month) => {
 };
 
 
+
 /* ---------------------------------
-   2️ Generate / Save Payroll
+   Generate Payroll
 ---------------------------------- */
 export const generatePayroll = async (req, res) => {
   try {
     const { employeeId, month, notes } = req.body;
-
     const employee = await Employee.findById(employeeId);
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
     const { summary } = await calculatePayroll(employee, month);
 
-    const payload = {
-      employeeId: employee._id,
-      employeeCode: employee.employeeCode,
-      companyId: employee.companyId,
-      name: employee.name,
-      avatar: employee.avatar,
-      month,
-      ...summary,
-      notes: notes || "Auto generated payroll",
-    };
-
-    // Ensure month + employeeId unique
     const payroll = await Payroll.findOneAndUpdate(
-      { employeeId: employee._id, month },
-      { $set: payload },
+      { employeeId, month },
+      {
+        employeeId,
+        employeeCode: employee.employeeCode,
+        companyId: employee.companyId,
+        name: employee.name,
+        avatar: employee.avatar,
+        month,
+        ...summary,
+        notes: notes || "Auto generated",
+      },
       { upsert: true, new: true }
     );
 
-    res.status(200).json(payroll);
+    res.json(payroll);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -235,19 +246,14 @@ export const getPayrolls = async (req, res) => {
 };
 
 /* ---------------------------------
-   4️ Single Employee Payroll
+   Employee Payroll Detail
 ---------------------------------- */
 export const getEmployeePayroll = async (req, res) => {
-  try {
-    const { employeeId, month } = req.query;
-    const employee = await Employee.findById(employeeId);
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+  const { employeeId, month } = req.query;
+  const employee = await Employee.findById(employeeId);
 
-    const data = await calculatePayroll(employee, month);
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  const data = await calculatePayroll(employee, month);
+  res.json(data);
 };
 
 /* ---------------------------------

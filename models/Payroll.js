@@ -9,7 +9,7 @@ const payrollSummarySchema = new Schema(
     name: { type: String, required: true },
     avatar: { type: String, default: "" },
     month: { type: String, required: true }, // e.g., "Jan 2026"
-    totalDays: Number,
+     totalWorking: Number,
     present: Number,
     paidLeaves: Number,
     unpaidLeaves: Number,
