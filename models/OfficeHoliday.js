@@ -25,7 +25,7 @@ const officeHolidaySchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
-
+    totalDays: { type: Number },
     title: {
       type: String,
       required: true,

@@ -24,15 +24,10 @@ const getMonthRange = (month) => {
 /* ---------------------------------
    1️ Calculate Payroll (Core Logic)
 ---------------------------------- */
-export const calculatePayroll = async (employee, month) => {
+const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
-
-  //  Running month ke liye aaj tak ka end
   const today = new Date();
-  const effectiveEnd =
-    end > today
-      ? new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
-      : end;
+  const effectiveEnd = end > today ? today : end;
 
   const attendances = await Attendance.find({
     employeeId: employee._id,
@@ -57,9 +52,7 @@ export const calculatePayroll = async (employee, month) => {
 
   /* ---- Maps ---- */
   const attendanceMap = {};
-  attendances.forEach(a => {
-    attendanceMap[new Date(a.date).toDateString()] = a;
-  });
+  attendances.forEach(a => attendanceMap[new Date(a.date).toDateString()] = a);
 
   const holidaySet = new Set();
   holidays.forEach(h => {
@@ -71,7 +64,7 @@ export const calculatePayroll = async (employee, month) => {
   });
 
   /* ---- Counters ---- */
-  let totalDays = 0;          
+  let totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
   let present = 0;
   let paidLeaves = 0;
   let unpaidLeaves = 0;
@@ -82,14 +75,6 @@ export const calculatePayroll = async (employee, month) => {
 
   const payrollData = [];
 
-  /*  Total days in month */
-  const totalCursor = new Date(start);
-  while (totalCursor <= end) {
-    totalDays++;
-    totalCursor.setDate(totalCursor.getDate() + 1);
-  }
-
-  /*  Attendance / Payroll Loop = sirf effectiveEnd tak */
   const cursor = new Date(start);
   while (cursor <= effectiveEnd) {
     const dateStr = cursor.toDateString();
@@ -98,10 +83,8 @@ export const calculatePayroll = async (employee, month) => {
     const attendance = attendanceMap[dateStr];
     const isHoliday = holidaySet.has(dateStr);
 
-    // Find leave for this day (multi-day leave)
-    const leave = leaves.find(
-      l => cursor >= new Date(l.startDate) && cursor <= new Date(l.endDate)
-    );
+    // Approved Leave for this day
+    const leave = leaves.find(l => cursor >= new Date(l.startDate) && cursor <= new Date(l.endDate));
 
     let status = "missing";
     let checkIn = "";
@@ -112,17 +95,15 @@ export const calculatePayroll = async (employee, month) => {
     if (isHoliday) {
       status = "holiday";
       officeHolidays++;
-    } 
-    else if (leave) {
+    } else if (leave) {
       const leaveType = leave.type?.toLowerCase();
       status = leaveType === "paid" ? "paid leave" : "unpaid leave";
-      leaveType === "paid" ? paidLeaves++ : unpaidLeaves++;
-    } 
-    else if (weeklyOffs.includes(dayName) && !attendance) {
+      const leaveDays = 1; // each date loop is 1 day
+      leaveType === "paid" ? paidLeaves += leaveDays : unpaidLeaves += leaveDays;
+    } else if (weeklyOffs.includes(dayName) && !attendance) {
       status = "weekly off";
       weeklyOffCount++;
-    } 
-    else if (attendance) {
+    } else if (attendance) {
       status = attendance.status;
       checkIn = attendance.checkIn || "";
       checkOut = attendance.checkOut || "";
@@ -133,9 +114,7 @@ export const calculatePayroll = async (employee, month) => {
       if (status === "half-day") present += 0.5;
 
       overtimeHours += dayOvertime;
-    } 
-    else {
-      // Missing only for past days
+    } else {
       missingDays++;
     }
 
@@ -156,13 +135,13 @@ export const calculatePayroll = async (employee, month) => {
 
   return {
     summary: {
-      totalDays,        // poora month
-      present,          
+      totalDays,
+      present,
       paidLeaves,
       unpaidLeaves,
       officeHolidays,
       weeklyOffCount,
-      missingDays,      
+      missingDays,
       overtimeHours,
     },
     payrollData,
@@ -192,17 +171,20 @@ export const generatePayroll = async (req, res) => {
       notes: notes || "Auto generated payroll",
     };
 
+    // Ensure month + employeeId unique
     const payroll = await Payroll.findOneAndUpdate(
-      { employeeId, month },
-      payload,
+      { employeeId: employee._id, month },
+      { $set: payload },
       { upsert: true, new: true }
     );
 
     res.status(200).json(payroll);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: err.message });
   }
 };
+
 
 /* ---------------------------------
    3️ Get Payroll Table (ALL EMP)

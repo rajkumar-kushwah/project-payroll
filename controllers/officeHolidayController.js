@@ -18,6 +18,7 @@ const getDatesBetween = (start, end) => {
   return dates;
 };
 
+
 /* ------------------------------------------------
    ADD OFFICE HOLIDAY (MULTI-DAY)
 ------------------------------------------------ */
@@ -38,11 +39,14 @@ export const addOfficeHoliday = async (req, res) => {
       return res.status(400).json({ message: "startDate cannot be after endDate" });
     }
 
+    const dates = getDatesBetween(startDate, endDate);
+
     const holiday = await OfficeHoliday.create({
       companyId: req.user.companyId,
       title,
       startDate,
       endDate,
+      totalDays: dates.length, // 🔹 totalDays added
       type,
       isPaid: type === "PAID",
       description,
@@ -51,10 +55,8 @@ export const addOfficeHoliday = async (req, res) => {
 
     // 🔹 AUTO CREATE ATTENDANCE FOR EACH HOLIDAY DATE
     const employees = await Employee.find({ companyId: req.user.companyId });
-    const dates = getDatesBetween(startDate, endDate);
 
     const bulkOps = [];
-
     employees.forEach(emp => {
       dates.forEach(date => {
         bulkOps.push({
@@ -85,9 +87,7 @@ export const addOfficeHoliday = async (req, res) => {
       });
     });
 
-    if (bulkOps.length) {
-      await Attendance.bulkWrite(bulkOps);
-    }
+    if (bulkOps.length) await Attendance.bulkWrite(bulkOps);
 
     res.status(201).json({
       success: true,
@@ -154,6 +154,7 @@ export const deleteOfficeHoliday = async (req, res) => {
   }
 };
 
+
 /* ------------------------------------------------
    UPDATE OFFICE HOLIDAY (RANGE)
 ------------------------------------------------ */
@@ -189,9 +190,12 @@ export const updateOfficeHoliday = async (req, res) => {
     });
 
     // 🔹 UPDATE HOLIDAY
+    const dates = getDatesBetween(startDate, endDate);
+
     holiday.title = title;
     holiday.startDate = startDate;
     holiday.endDate = endDate;
+    holiday.totalDays = dates.length; // 🔹 totalDays updated
     holiday.type = type.toUpperCase();
     holiday.isPaid = type.toUpperCase() === "PAID";
     holiday.description = description;
@@ -200,10 +204,8 @@ export const updateOfficeHoliday = async (req, res) => {
 
     // 🔹 RE-CREATE ATTENDANCE
     const employees = await Employee.find({ companyId: req.user.companyId });
-    const dates = getDatesBetween(startDate, endDate);
 
     const bulkOps = [];
-
     employees.forEach(emp => {
       dates.forEach(date => {
         bulkOps.push({
@@ -229,9 +231,7 @@ export const updateOfficeHoliday = async (req, res) => {
       });
     });
 
-    if (bulkOps.length) {
-      await Attendance.bulkWrite(bulkOps);
-    }
+    if (bulkOps.length) await Attendance.bulkWrite(bulkOps);
 
     res.json({
       success: true,
