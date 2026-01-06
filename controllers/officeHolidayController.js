@@ -4,11 +4,16 @@ import Employee from "../models/Employee.js";
 import Attendance from "../models/Attendance.js";
 
 /* ------------------------------------------------
-   Helper: dates between start & end
+   Helper: dates between start & end (inclusive)
 ------------------------------------------------ */
 const getDatesBetween = (start, end) => {
   const dates = [];
   const current = new Date(start);
+
+  // normalize time to midnight to avoid timezone issues
+  current.setHours(0, 0, 0, 0);
+  end = new Date(end);
+  end.setHours(0, 0, 0, 0);
 
   while (current <= end) {
     dates.push(new Date(current));
@@ -17,7 +22,6 @@ const getDatesBetween = (start, end) => {
 
   return dates;
 };
-
 
 /* ------------------------------------------------
    ADD OFFICE HOLIDAY (MULTI-DAY)
@@ -35,7 +39,10 @@ export const addOfficeHoliday = async (req, res) => {
       return res.status(400).json({ message: "startDate and endDate are required" });
     }
 
-    if (new Date(startDate) > new Date(endDate)) {
+    startDate = new Date(startDate);
+    endDate = new Date(endDate);
+
+    if (startDate > endDate) {
       return res.status(400).json({ message: "startDate cannot be after endDate" });
     }
 
@@ -46,26 +53,22 @@ export const addOfficeHoliday = async (req, res) => {
       title,
       startDate,
       endDate,
-      totalDays: dates.length, // 🔹 totalDays added
+      totalDays: dates.length, // totalDays corrected
       type,
       isPaid: type === "PAID",
       description,
       createdBy: req.user._id,
     });
 
-    // 🔹 AUTO CREATE ATTENDANCE FOR EACH HOLIDAY DATE
+    // AUTO CREATE ATTENDANCE FOR EACH HOLIDAY DATE
     const employees = await Employee.find({ companyId: req.user.companyId });
-
     const bulkOps = [];
+
     employees.forEach(emp => {
       dates.forEach(date => {
         bulkOps.push({
           updateOne: {
-            filter: {
-              employeeId: emp._id,
-              companyId: emp.companyId,
-              date,
-            },
+            filter: { employeeId: emp._id, companyId: emp.companyId, date },
             update: {
               $set: {
                 employeeId: emp._id,
@@ -89,12 +92,7 @@ export const addOfficeHoliday = async (req, res) => {
 
     if (bulkOps.length) await Attendance.bulkWrite(bulkOps);
 
-    res.status(201).json({
-      success: true,
-      message: "Office holiday added successfully",
-      data: holiday,
-    });
-
+    res.status(201).json({ success: true, message: "Office holiday added successfully", data: holiday });
   } catch (err) {
     console.error("Add Office Holiday Error:", err);
     res.status(500).json({ message: err.message });
@@ -106,12 +104,8 @@ export const addOfficeHoliday = async (req, res) => {
 ------------------------------------------------ */
 export const getOfficeHolidays = async (req, res) => {
   try {
-    const holidays = await OfficeHoliday.find({
-      companyId: req.user.companyId,
-    }).sort({ startDate: -1 });
-
+    const holidays = await OfficeHoliday.find({ companyId: req.user.companyId }).sort({ startDate: -1 });
     res.json({ success: true, data: holidays });
-
   } catch (err) {
     console.error("Get Office Holidays Error:", err);
     res.status(500).json({ message: err.message });
@@ -119,7 +113,7 @@ export const getOfficeHolidays = async (req, res) => {
 };
 
 /* ------------------------------------------------
-   DELETE OFFICE HOLIDAY (RANGE)
+   DELETE OFFICE HOLIDAY
 ------------------------------------------------ */
 export const deleteOfficeHoliday = async (req, res) => {
   try {
@@ -127,36 +121,25 @@ export const deleteOfficeHoliday = async (req, res) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    const holiday = await OfficeHoliday.findOneAndDelete({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    });
+    const holiday = await OfficeHoliday.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
+    if (!holiday) return res.status(404).json({ message: "Holiday not found" });
 
-    if (!holiday) {
-      return res.status(404).json({ message: "Holiday not found" });
-    }
-
-    // 🔹 DELETE ALL ATTENDANCE IN RANGE
+    // DELETE ATTENDANCE IN RANGE
     await Attendance.deleteMany({
       companyId: req.user.companyId,
-      date: {
-        $gte: holiday.startDate,
-        $lte: holiday.endDate,
-      },
+      date: { $gte: holiday.startDate, $lte: holiday.endDate },
       status: "holiday",
     });
 
     res.json({ success: true, message: "Holiday deleted successfully" });
-
   } catch (err) {
     console.error("Delete Office Holiday Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-
 /* ------------------------------------------------
-   UPDATE OFFICE HOLIDAY (RANGE)
+   UPDATE OFFICE HOLIDAY
 ------------------------------------------------ */
 export const updateOfficeHoliday = async (req, res) => {
   try {
@@ -164,57 +147,46 @@ export const updateOfficeHoliday = async (req, res) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    const { title, startDate, endDate, type, description } = req.body;
+    let { title, startDate, endDate, type, description } = req.body;
+    type = type.toUpperCase();
 
-    if (new Date(startDate) > new Date(endDate)) {
-      return res.status(400).json({ message: "startDate cannot be after endDate" });
-    }
+    startDate = new Date(startDate);
+    endDate = new Date(endDate);
 
-    const holiday = await OfficeHoliday.findOne({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    });
+    if (startDate > endDate) return res.status(400).json({ message: "startDate cannot be after endDate" });
 
-    if (!holiday) {
-      return res.status(404).json({ message: "Holiday not found" });
-    }
+    const holiday = await OfficeHoliday.findOne({ _id: req.params.id, companyId: req.user.companyId });
+    if (!holiday) return res.status(404).json({ message: "Holiday not found" });
 
-    // 🔹 DELETE OLD ATTENDANCE
+    // DELETE OLD ATTENDANCE
     await Attendance.deleteMany({
       companyId: req.user.companyId,
-      date: {
-        $gte: holiday.startDate,
-        $lte: holiday.endDate,
-      },
+      date: { $gte: holiday.startDate, $lte: holiday.endDate },
       status: "holiday",
     });
 
-    // 🔹 UPDATE HOLIDAY
+    // RE-CREATE HOLIDAY
     const dates = getDatesBetween(startDate, endDate);
 
     holiday.title = title;
     holiday.startDate = startDate;
     holiday.endDate = endDate;
-    holiday.totalDays = dates.length; // 🔹 totalDays updated
-    holiday.type = type.toUpperCase();
-    holiday.isPaid = type.toUpperCase() === "PAID";
+    holiday.totalDays = dates.length;
+    holiday.type = type;
+    holiday.isPaid = type === "PAID";
     holiday.description = description;
 
     await holiday.save();
 
-    // 🔹 RE-CREATE ATTENDANCE
+    // RE-CREATE ATTENDANCE
     const employees = await Employee.find({ companyId: req.user.companyId });
-
     const bulkOps = [];
+
     employees.forEach(emp => {
       dates.forEach(date => {
         bulkOps.push({
           updateOne: {
-            filter: {
-              employeeId: emp._id,
-              companyId: emp.companyId,
-              date,
-            },
+            filter: { employeeId: emp._id, companyId: emp.companyId, date },
             update: {
               $set: {
                 employeeId: emp._id,
@@ -233,12 +205,7 @@ export const updateOfficeHoliday = async (req, res) => {
 
     if (bulkOps.length) await Attendance.bulkWrite(bulkOps);
 
-    res.json({
-      success: true,
-      message: "Holiday updated successfully",
-      data: holiday,
-    });
-
+    res.json({ success: true, message: "Holiday updated successfully", data: holiday });
   } catch (err) {
     console.error("Update Office Holiday Error:", err);
     res.status(500).json({ message: err.message });
