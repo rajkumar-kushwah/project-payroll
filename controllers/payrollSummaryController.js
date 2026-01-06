@@ -29,11 +29,13 @@ const calculatePayroll = async (employee, month) => {
   const today = new Date();
   const effectiveEnd = end > today ? today : end;
 
+  // Attendance
   const attendances = await Attendance.find({
     employeeId: employee._id,
     date: { $gte: start, $lte: effectiveEnd },
   });
 
+  // Approved Leaves
   const leaves = await Leave.find({
     employeeId: employee._id,
     status: "approved",
@@ -41,30 +43,34 @@ const calculatePayroll = async (employee, month) => {
     endDate: { $gte: start },
   });
 
+  // Office Holidays
   const holidays = await OfficeHoliday.find({
     companyId: employee.companyId,
     startDate: { $lte: effectiveEnd },
     endDate: { $gte: start },
   });
 
+  // Work schedule for weekly offs
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
   const weeklyOffs = schedule?.weeklyOff || ["Sunday"];
 
-  /* ---- Maps ---- */
+  // Maps for fast lookup
   const attendanceMap = {};
   attendances.forEach(a => attendanceMap[new Date(a.date).toDateString()] = a);
 
   const holidaySet = new Set();
   holidays.forEach(h => {
+    if (h.type?.toUpperCase() !== "PAID") return; // sirf paid holidays
     const startH = new Date(h.startDate);
     const endH = new Date(h.endDate);
     for (let d = new Date(startH); d <= endH; d.setDate(d.getDate() + 1)) {
+      if (d > effectiveEnd) break; // future date skip
       holidaySet.add(d.toDateString());
     }
   });
 
-  /* ---- Counters ---- */
-  let totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  // Counters
+  let totalDays = Math.ceil((effectiveEnd - start) / (1000 * 60 * 60 * 24)) + 1;
   let present = 0;
   let paidLeaves = 0;
   let unpaidLeaves = 0;
@@ -84,7 +90,9 @@ const calculatePayroll = async (employee, month) => {
     const isHoliday = holidaySet.has(dateStr);
 
     // Approved Leave for this day
-    const leave = leaves.find(l => cursor >= new Date(l.startDate) && cursor <= new Date(l.endDate));
+    const leave = leaves.find(
+      l => cursor >= new Date(l.startDate) && cursor <= new Date(l.endDate)
+    );
 
     let status = "missing";
     let checkIn = "";
@@ -96,10 +104,11 @@ const calculatePayroll = async (employee, month) => {
       status = "holiday";
       officeHolidays++;
     } else if (leave) {
-      const leaveType = leave.type?.toLowerCase();
-      status = leaveType === "paid" ? "paid leave" : "unpaid leave";
-      const leaveDays = 1; // each date loop is 1 day
-      leaveType === "paid" ? paidLeaves += leaveDays : unpaidLeaves += leaveDays;
+      const leaveType = leave.type?.toUpperCase();
+      status = leaveType === "PAID" ? "paid leave" : "unpaid leave";
+
+      if (leaveType === "PAID") paidLeaves++;
+      else unpaidLeaves++;
     } else if (weeklyOffs.includes(dayName) && !attendance) {
       status = "weekly off";
       weeklyOffCount++;
@@ -147,6 +156,7 @@ const calculatePayroll = async (employee, month) => {
     payrollData,
   };
 };
+
 
 /* ---------------------------------
    2️ Generate / Save Payroll
