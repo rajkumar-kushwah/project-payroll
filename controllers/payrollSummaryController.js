@@ -27,7 +27,7 @@ const getMonthRange = (month) => {
 export const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
 
-  //  NEW: running month ke liye aaj tak ka end
+  //  Running month ke liye aaj tak ka end
   const today = new Date();
   const effectiveEnd =
     end > today
@@ -48,7 +48,8 @@ export const calculatePayroll = async (employee, month) => {
 
   const holidays = await OfficeHoliday.find({
     companyId: employee.companyId,
-    date: { $gte: start, $lte: effectiveEnd },
+    startDate: { $lte: effectiveEnd },
+    endDate: { $gte: start },
   });
 
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
@@ -60,12 +61,17 @@ export const calculatePayroll = async (employee, month) => {
     attendanceMap[new Date(a.date).toDateString()] = a;
   });
 
-  const holidaySet = new Set(
-    holidays.map(h => new Date(h.date).toDateString())
-  );
+  const holidaySet = new Set();
+  holidays.forEach(h => {
+    const startH = new Date(h.startDate);
+    const endH = new Date(h.endDate);
+    for (let d = new Date(startH); d <= endH; d.setDate(d.getDate() + 1)) {
+      holidaySet.add(d.toDateString());
+    }
+  });
 
   /* ---- Counters ---- */
-  let totalDays = 0;          // calendar days (poora month)
+  let totalDays = 0;          
   let present = 0;
   let paidLeaves = 0;
   let unpaidLeaves = 0;
@@ -76,14 +82,14 @@ export const calculatePayroll = async (employee, month) => {
 
   const payrollData = [];
 
-  /*  totalDays = poora month */
+  /*  Total days in month */
   const totalCursor = new Date(start);
   while (totalCursor <= end) {
     totalDays++;
     totalCursor.setDate(totalCursor.getDate() + 1);
   }
 
-  /*  Attendance loop = sirf effectiveEnd (aaj tak) */
+  /*  Attendance / Payroll Loop = sirf effectiveEnd tak */
   const cursor = new Date(start);
   while (cursor <= effectiveEnd) {
     const dateStr = cursor.toDateString();
@@ -91,6 +97,8 @@ export const calculatePayroll = async (employee, month) => {
 
     const attendance = attendanceMap[dateStr];
     const isHoliday = holidaySet.has(dateStr);
+
+    // Find leave for this day (multi-day leave)
     const leave = leaves.find(
       l => cursor >= new Date(l.startDate) && cursor <= new Date(l.endDate)
     );
@@ -106,8 +114,9 @@ export const calculatePayroll = async (employee, month) => {
       officeHolidays++;
     } 
     else if (leave) {
-      status = leave.type === "paid" ? "paid leave" : "unpaid leave";
-      leave.type === "paid" ? paidLeaves++ : unpaidLeaves++;
+      const leaveType = leave.type?.toLowerCase();
+      status = leaveType === "paid" ? "paid leave" : "unpaid leave";
+      leaveType === "paid" ? paidLeaves++ : unpaidLeaves++;
     } 
     else if (weeklyOffs.includes(dayName) && !attendance) {
       status = "weekly off";
@@ -126,7 +135,7 @@ export const calculatePayroll = async (employee, month) => {
       overtimeHours += dayOvertime;
     } 
     else {
-      //  Ab missing sirf PAST days ke liye hoga
+      // Missing only for past days
       missingDays++;
     }
 
@@ -147,19 +156,18 @@ export const calculatePayroll = async (employee, month) => {
 
   return {
     summary: {
-      totalDays,        // poora month (31)
-      present,          // actual attendance
+      totalDays,        // poora month
+      present,          
       paidLeaves,
       unpaidLeaves,
       officeHolidays,
       weeklyOffCount,
-      missingDays,      //  future days include nahi honge
+      missingDays,      
       overtimeHours,
     },
     payrollData,
   };
 };
-
 
 /* ---------------------------------
    2️ Generate / Save Payroll
@@ -301,6 +309,10 @@ export const exportPayrollPdf = async (req, res) => {
         `).join("")}
       </table>
       <p><b>Present:</b> ${summary.present}</p>
+      <p><b>Paid Leaves:</b> ${summary.paidLeaves}</p>
+      <p><b>Unpaid Leaves:</b> ${summary.unpaidLeaves}</p>
+      <p><b>Holidays:</b> ${summary.officeHolidays}</p>
+      <p><b>Weekly Offs:</b> ${summary.weeklyOffCount}</p>
       <p><b>Missing:</b> ${summary.missingDays}</p>
     `;
 

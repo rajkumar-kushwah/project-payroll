@@ -1,3 +1,5 @@
+// controllers/attendanceController.js
+
 import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
@@ -5,6 +7,60 @@ import Company from "../models/Company.js";
 import WorkSchedule from "../models/Worksechudule.js";
 import Leave from "../models/Leave.js";
 import { hhmmToDate, minutesBetween, minutesToHoursDecimal } from "../utils/time.js";
+import OfficeHoliday from "../models/OfficeHoliday.js";
+
+
+
+/* ======================================================
+   SYNC OFFICE LEAVES INTO ATTENDANCE
+====================================================== */
+
+
+export const syncOfficeLeaves = async (companyId) => {
+  try {
+    // 1️ Sabhi active employees
+    const employees = await Employee.find({ companyId, status: "active" });
+
+    // 2️ Sabhi Office Leaves for this company
+    const leaves = await OfficeHoliday.find({ companyId });
+
+    for (const leave of leaves) {
+      const leaveStart = new Date(leave.startDate);
+      const leaveEnd = new Date(leave.endDate);
+
+      for (const emp of employees) {
+        // 🔹 Remove old attendance entries for this period for this employee
+        await Attendance.deleteMany({
+          employeeId: emp._id,
+          companyId,
+          date: { $gte: leaveStart, $lte: leaveEnd },
+        });
+
+        // 🔹 Create new leave attendance for each day
+        for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
+          await Attendance.create({
+            employeeId: emp._id,
+            employeeCode: emp.employeeCode,
+            name: emp.name,
+            avatar: emp.avatar,
+            companyId: companyId,
+            date: new Date(d),
+            checkIn: null,
+            checkOut: null,
+            totalMinutes: 0,
+            totalHours: 0,
+            status: "office leave",
+            logType: "system",
+          });
+        }
+      }
+    }
+
+    console.log("Office leaves synced into Attendance successfully!");
+  } catch (err) {
+    console.error("SyncOfficeLeaves Error:", err);
+  }
+};
 
 /* ======================================================
    HELPERS
@@ -20,12 +76,78 @@ const getEmployeeFromToken = async (req) => {
 };
 
 /* ======================================================
+   AUTO CHECKOUT BY WORK SCHEDULE
+====================================================== */
+export const autoCheckoutBySchedule = async () => {
+  try {
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
+
+    // 🔹 Attendances with checkIn but no checkOut
+    const attendances = await Attendance.find({
+      date: todayStr,
+      checkIn: { $ne: null },
+      checkOut: null,
+    });
+
+    console.log("Attendances to process:", attendances.length);
+
+    for (const record of attendances) {
+      const emp = await Employee.findById(record.employeeId);
+      if (!emp) continue;
+
+      // 🔹 Skip if employee has approved leave
+      const leave = await Leave.findOne({
+        employeeId: emp._id,
+        companyId: record.companyId,
+        startDate: { $lte: new Date(todayStr) },
+        endDate: { $gte: new Date(todayStr) },
+        status: "approved",
+      });
+      if (leave) continue;
+
+      // 🔹 Get active work schedule
+      const schedule = await WorkSchedule.findOne({
+        employeeId: emp._id,
+        companyId: record.companyId,
+        status: "active",
+      });
+      if (!schedule) continue;
+
+      // 🔹 Skip if weekly off
+      const dayName = new Date(todayStr).toLocaleDateString("en-US", { weekday: "long" });
+      if (schedule.weeklyOff?.includes(dayName)) continue;
+
+      // 🔹 Scheduled out and grace
+      const scheduledOut = hhmmToDate(todayStr, schedule.outTime); 
+      const outWithGrace = new Date(scheduledOut.getTime() + (schedule.gracePeriod || 0) * 60000);
+
+      // 🔹 Only auto-checkout if time passed and checkout missing
+      if (now >= outWithGrace) {
+        // ✅ Use current time, not fixed outTime
+        record.checkOut = now;
+        record.autoCheckout = true;
+
+        // Recalculate totalHours, status, etc.
+        const { computeDerivedFields } = require("./attendanceController"); // ya apne import hisaab se
+        computeDerivedFields(record, schedule);
+
+        await record.save();
+        console.log(`Auto-checkout: ${emp.employeeCode} at ${now.toLocaleTimeString()}`);
+      } else {
+        console.log(`Not yet time for auto-checkout: ${emp.employeeCode}`);
+      }
+    }
+  } catch (err) {
+    console.error("AutoCheckout Error:", err);
+  }
+};
+
+
+/* ======================================================
    DERIVED FIELDS CALCULATION
 ====================================================== */
 export const computeDerivedFields = (record, schedule) => {
-  //  Skip holiday attendance
-  if (record.status === "holiday") return;
-
   if (!record.checkIn || !record.checkOut) {
     record.totalMinutes = 0;
     record.totalHours = 0;
@@ -69,36 +191,6 @@ export const getSchedule = async (emp, companyId) => {
     inTime: company?.fixedIn || "10:00",
     outTime: company?.fixedOut || "18:30",
   };
-};
-
-/* ======================================================
-   GET ATTENDANCE LIST
-====================================================== */
-export const getAttendance = async (req, res) => {
-  try {
-    let query = { companyId: req.user.companyId };
-
-    if (req.user.role === "employee") {
-      const emp = await getEmployeeFromToken(req);
-      if (!emp) return res.json({ success: true, data: [] });
-      query.employeeId = emp._id;
-    }
-
-    if (["admin", "owner", "hr"].includes(req.user.role)) {
-      if (req.query.employeeId) query.employeeId = req.query.employeeId;
-      //  Allow all status including "holiday"
-      if (req.query.status && req.query.status !== "all") query.status = req.query.status;
-    }
-
-    const data = await Attendance.find(query)
-      .populate("employeeId", "name employeeCode department avatar")
-      .sort({ date: -1 });
-
-    res.json({ success: true, data });
-  } catch (err) {
-    console.error("GetAttendance Error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
 };
 
 /* ======================================================
@@ -252,51 +344,30 @@ export const deleteAttendance = async (req, res) => {
 };
 
 /* ======================================================
-   AUTO CHECKOUT BY WORK SCHEDULE
+   GET ATTENDANCE LIST
 ====================================================== */
-export const autoCheckoutBySchedule = async () => {
+export const getAttendance = async (req, res) => {
   try {
-    const now = new Date();
-    const todayStr = toDateString(now); // YYYY-MM-DD
+    let query = { companyId: req.user.companyId };
 
-    // 🔹 Attendances with checkIn but no checkOut
-    const attendances = await Attendance.find({
-      date: todayStr,
-      checkIn: { $ne: null },
-      checkOut: null,
-    });
-
-    for (const record of attendances) {
-      const emp = await Employee.findById(record.employeeId);
-      if (!emp) continue;
-
-      // 🔹 Skip if employee has approved leave
-      const leave = await Leave.findOne({
-        employeeId: emp._id,
-        companyId: record.companyId,
-        startDate: { $lte: new Date(todayStr) },
-        endDate: { $gte: new Date(todayStr) },
-        status: "approved",
-      });
-      if (leave) continue;
-
-      const schedule = await getSchedule(emp, record.companyId);
-      if (!schedule) continue;
-
-      const dayName = new Date(todayStr).toLocaleDateString("en-US", { weekday: "long" });
-      if (schedule.weeklyOff?.includes(dayName)) continue;
-
-      const scheduledOut = hhmmToDate(todayStr, schedule.outTime); 
-      const outWithGrace = new Date(scheduledOut.getTime() + (schedule.gracePeriod || 0) * 60000);
-
-      if (now >= outWithGrace) {
-        record.checkOut = now;
-        record.autoCheckout = true;
-        computeDerivedFields(record, schedule);
-        await record.save();
-      }
+    if (req.user.role === "employee") {
+      const emp = await getEmployeeFromToken(req);
+      if (!emp) return res.json({ success: true, data: [] });
+      query.employeeId = emp._id;
     }
+
+    if (["admin", "owner", "hr"].includes(req.user.role)) {
+      if (req.query.employeeId) query.employeeId = req.query.employeeId;
+      if (req.query.status) query.status = req.query.status;
+    }
+
+    const data = await Attendance.find(query)
+      .populate("employeeId", "name employeeCode department avatar")
+      .sort({ date: -1 });
+
+    res.json({ success: true, data });
   } catch (err) {
-    console.error("AutoCheckout Error:", err);
+    console.error("GetAttendance Error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
