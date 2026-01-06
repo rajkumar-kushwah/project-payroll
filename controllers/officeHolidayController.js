@@ -48,7 +48,7 @@ export const addOfficeHoliday = async (req, res) => {
 
     const dates = getDatesBetween(startDate, endDate);
 
-    const normalizedType = String(type).trim().toUpperCase();
+    
 
     const holiday = await OfficeHoliday.create({
       companyId: req.user.companyId,
@@ -56,8 +56,8 @@ export const addOfficeHoliday = async (req, res) => {
       startDate,
       endDate,
       totalDays: dates.length,
-      type: normalizedType,
-      isPaid: normalizedType === "PAID",
+      type: "COMPANY", // optional, reporting purpose
+      isPaid: true,    // always paid for office holidays
       description,
       createdBy: req.user._id,
     });
