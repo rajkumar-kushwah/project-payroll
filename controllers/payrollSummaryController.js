@@ -18,33 +18,26 @@ const normalizeDate = (date) => {
 
 const getMonthRange = (month) => {
   const [monthName, year] = month.split(" ");
-
   const monthMap = {
     Jan: 0, Feb: 1, Mar: 2, Apr: 3,
     May: 4, Jun: 5, Jul: 6, Aug: 7,
     Sep: 8, Oct: 9, Nov: 10, Dec: 11
   };
-
   const monthIndex = monthMap[monthName];
-  if (monthIndex === undefined) {
-    throw new Error("Invalid month format");
-  }
-
+  if (monthIndex === undefined) throw new Error("Invalid month format");
   const start = new Date(Date.UTC(year, monthIndex, 1));
   const end = new Date(Date.UTC(year, monthIndex + 1, 0));
-
   return { start, end };
 };
 
 /* ---------------------------------
-   CORE PAYROLL CALCULATION (FINAL)
+   CORE PAYROLL CALCULATION
 ---------------------------------- */
 const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
   const today = normalizeDate(new Date());
   const effectiveEnd = normalizeDate(end > today ? today : end);
 
-  /* ---------- DB DATA ---------- */
   const attendances = await Attendance.find({
     employeeId: employee._id,
     date: { $gte: start, $lte: effectiveEnd },
@@ -66,25 +59,17 @@ const calculatePayroll = async (employee, month) => {
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
   const weeklyOffs = schedule?.weeklyOff || ["Sunday"];
 
-  /* ---------- MAPS ---------- */
   const attendanceMap = {};
   attendances.forEach(a => {
     attendanceMap[normalizeDate(a.date).toDateString()] = a;
   });
 
-  /* ---------- COUNTERS ---------- */
-  let present = 0;
-  let paidLeaves = 0;
-  let unpaidLeaves = 0;
-  let officeHolidays = 0;
-  let weeklyOffCount = 0;
-  let missingDays = 0;
-  let overtimeHours = 0;
+  let present = 0, paidLeaves = 0, unpaidLeaves = 0;
+  let officeHolidays = 0, weeklyOffCount = 0, missingDays = 0, overtimeHours = 0;
 
   const payrollData = [];
   const cursor = normalizeDate(start);
 
-  /* ---------- DAY LOOP ---------- */
   while (cursor <= effectiveEnd) {
     const dateStr = cursor.toDateString();
     const dayName = cursor.toLocaleString("en-US", { weekday: "long" });
@@ -103,20 +88,15 @@ const calculatePayroll = async (employee, month) => {
 
     let status = "missing";
 
-    /* ---------- PRIORITY ---------- */
-
-    // 1️⃣ Office Holiday
+    // 1️⃣ Office Holiday (always paid)
     if (holiday) {
       status = "office holiday";
       officeHolidays++;
-       if (holiday.isPaid) {
-    paidLeaves++; // office holiday counted as paid leave
-  }
+      paidLeaves++; // automatically counted as paid leave
     }
-
-    // 2️⃣ Leave (working day only)
+    // 2️⃣ Approved Leave
     else if (leave) {
-      if (leave.type?.toLowerCase() === "paid") {
+      if ((leave.type || "").toLowerCase() === "paid") {
         status = "paid leave";
         paidLeaves++;
       } else {
@@ -124,13 +104,11 @@ const calculatePayroll = async (employee, month) => {
         unpaidLeaves++;
       }
     }
-
-    // 3️⃣ Weekly Off (PAST ONLY)
+    // 3️⃣ Weekly Off
     else if (weeklyOffs.includes(dayName) && cursor <= today) {
       status = "weekly off";
       weeklyOffCount++;
     }
-
     // 4️⃣ Attendance
     else if (attendance) {
       status = attendance.status;
@@ -138,35 +116,19 @@ const calculatePayroll = async (employee, month) => {
       if (status === "half-day") present += 0.5;
       overtimeHours += attendance.overtimeHours || 0;
     }
-
-    // 5️⃣ Missing (PAST ONLY)
+    // 5️⃣ Missing (past)
     else if (cursor < today) {
       missingDays++;
     }
 
-    payrollData.push({
-      Date: dateStr,
-      Day: dayName,
-      Status: status,
-    });
-
+    payrollData.push({ Date: dateStr, Day: dayName, Status: status });
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  const totalWorking =
-    present + paidLeaves + weeklyOffCount + officeHolidays;
+  const totalWorking = present + paidLeaves + weeklyOffCount + officeHolidays;
 
   return {
-    summary: {
-      totalWorking,
-      present,
-      paidLeaves,
-      unpaidLeaves,
-      officeHolidays,
-      weeklyOffCount,
-      missingDays,
-      overtimeHours,
-    },
+    summary: { totalWorking, present, paidLeaves, unpaidLeaves, officeHolidays, weeklyOffCount, missingDays, overtimeHours },
     payrollData,
   };
 };
@@ -203,36 +165,32 @@ export const generatePayroll = async (req, res) => {
 };
 
 /* ---------------------------------
-   Payroll Table (ALL EMP)
+   Get All Payrolls
 ---------------------------------- */
 export const getPayrolls = async (req, res) => {
   const { month } = req.query;
-
   const employees = await Employee.find({});
   const payrolls = await Promise.all(
-    employees.map(async emp => {
-      const { summary } = await calculatePayroll(emp, month);
-      return {
+    employees.map(emp => {
+      return calculatePayroll(emp, month).then(({ summary }) => ({
         employeeId: emp._id,
         employeeCode: emp.employeeCode,
         name: emp.name,
         avatar: emp.avatar,
         month,
         ...summary,
-      };
+      }));
     })
   );
-
   res.json(payrolls);
 };
 
 /* ---------------------------------
-   Employee Payroll Detail
+   Get Employee Payroll Detail
 ---------------------------------- */
 export const getEmployeePayroll = async (req, res) => {
   const { employeeId, month } = req.query;
   const employee = await Employee.findById(employeeId);
-
   const data = await calculatePayroll(employee, month);
   res.json(data);
 };
@@ -243,8 +201,8 @@ export const getEmployeePayroll = async (req, res) => {
 export const exportPayrollCsv = async (req, res) => {
   const { employeeId, month } = req.query;
   const employee = await Employee.findById(employeeId);
-
   const { payrollData } = await calculatePayroll(employee, month);
+
   const parser = new Parser();
   const csv = parser.parse(payrollData);
 
@@ -254,13 +212,12 @@ export const exportPayrollCsv = async (req, res) => {
 };
 
 /* ---------------------------------
-   6️ Export PDF (Payslip)
+   Export PDF
 ---------------------------------- */
 export const exportPayrollPdf = async (req, res) => {
   try {
     const { employeeId, month } = req.query;
     const employee = await Employee.findById(employeeId);
-
     const { summary, payrollData } = await calculatePayroll(employee, month);
 
     const html = `
@@ -278,8 +235,8 @@ export const exportPayrollPdf = async (req, res) => {
             <td>${d.Status}</td>
             <td>${d.CheckIn || "-"}</td>
             <td>${d.CheckOut || "-"}</td>
-            <td>${d.TotalHours}</td>
-            <td>${d.OvertimeHours}</td>
+            <td>${d.TotalHours || "-"}</td>
+            <td>${d.OvertimeHours || "-"}</td>
           </tr>
         `).join("")}
       </table>
