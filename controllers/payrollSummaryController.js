@@ -22,32 +22,39 @@ const getMonthRange = (month) => {
 };
 
 /* ---------------------------------
-   1️⃣ Calculate Payroll (Core Logic)
+   1️ Calculate Payroll (Core Logic)
 ---------------------------------- */
 export const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
 
+  //  NEW: running month ke liye aaj tak ka end
+  const today = new Date();
+  const effectiveEnd =
+    end > today
+      ? new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
+      : end;
+
   const attendances = await Attendance.find({
     employeeId: employee._id,
-    date: { $gte: start, $lte: end },
+    date: { $gte: start, $lte: effectiveEnd },
   });
 
   const leaves = await Leave.find({
     employeeId: employee._id,
     status: "approved",
-    startDate: { $lte: end },
+    startDate: { $lte: effectiveEnd },
     endDate: { $gte: start },
   });
 
   const holidays = await OfficeHoliday.find({
     companyId: employee.companyId,
-    date: { $gte: start, $lte: end },
+    date: { $gte: start, $lte: effectiveEnd },
   });
 
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
   const weeklyOffs = schedule?.weeklyOff || ["Sunday"];
 
-  /* ---- Optimized Maps ---- */
+  /* ---- Maps ---- */
   const attendanceMap = {};
   attendances.forEach(a => {
     attendanceMap[new Date(a.date).toDateString()] = a;
@@ -58,7 +65,7 @@ export const calculatePayroll = async (employee, month) => {
   );
 
   /* ---- Counters ---- */
-  let totalDays = 0;
+  let totalDays = 0;          // calendar days (poora month)
   let present = 0;
   let paidLeaves = 0;
   let unpaidLeaves = 0;
@@ -68,10 +75,17 @@ export const calculatePayroll = async (employee, month) => {
   let overtimeHours = 0;
 
   const payrollData = [];
-  const cursor = new Date(start);
 
-  while (cursor <= end) {
+  /*  totalDays = poora month */
+  const totalCursor = new Date(start);
+  while (totalCursor <= end) {
     totalDays++;
+    totalCursor.setDate(totalCursor.getDate() + 1);
+  }
+
+  /*  Attendance loop = sirf effectiveEnd (aaj tak) */
+  const cursor = new Date(start);
+  while (cursor <= effectiveEnd) {
     const dateStr = cursor.toDateString();
     const dayName = cursor.toLocaleString("en-US", { weekday: "long" });
 
@@ -112,6 +126,7 @@ export const calculatePayroll = async (employee, month) => {
       overtimeHours += dayOvertime;
     } 
     else {
+      //  Ab missing sirf PAST days ke liye hoga
       missingDays++;
     }
 
@@ -132,21 +147,22 @@ export const calculatePayroll = async (employee, month) => {
 
   return {
     summary: {
-      totalDays,
-      present,
+      totalDays,        // poora month (31)
+      present,          // actual attendance
       paidLeaves,
       unpaidLeaves,
       officeHolidays,
       weeklyOffCount,
-      missingDays,
+      missingDays,      //  future days include nahi honge
       overtimeHours,
     },
     payrollData,
   };
 };
 
+
 /* ---------------------------------
-   2️⃣ Generate / Save Payroll
+   2️ Generate / Save Payroll
 ---------------------------------- */
 export const generatePayroll = async (req, res) => {
   try {
@@ -181,7 +197,7 @@ export const generatePayroll = async (req, res) => {
 };
 
 /* ---------------------------------
-   3️⃣ Get Payroll Table (ALL EMP)
+   3️ Get Payroll Table (ALL EMP)
 ---------------------------------- */
 export const getPayrolls = async (req, res) => {
   try {
@@ -219,7 +235,7 @@ export const getPayrolls = async (req, res) => {
 };
 
 /* ---------------------------------
-   4️⃣ Single Employee Payroll
+   4️ Single Employee Payroll
 ---------------------------------- */
 export const getEmployeePayroll = async (req, res) => {
   try {
@@ -235,7 +251,7 @@ export const getEmployeePayroll = async (req, res) => {
 };
 
 /* ---------------------------------
-   5️⃣ Export CSV (Single Employee)
+   5️ Export CSV (Single Employee)
 ---------------------------------- */
 export const exportPayrollCsv = async (req, res) => {
   try {
@@ -255,7 +271,7 @@ export const exportPayrollCsv = async (req, res) => {
 };
 
 /* ---------------------------------
-   6️⃣ Export PDF (Payslip)
+   6️ Export PDF (Payslip)
 ---------------------------------- */
 export const exportPayrollPdf = async (req, res) => {
   try {
