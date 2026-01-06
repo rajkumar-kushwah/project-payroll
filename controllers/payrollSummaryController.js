@@ -21,7 +21,7 @@ const getMonthRange = (month) => {
 };
 
 /* ---------------------------------
-   Core Payroll Calculation
+    Core Payroll Calculation
 ---------------------------------- */
 const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
