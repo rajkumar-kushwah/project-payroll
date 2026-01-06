@@ -21,12 +21,9 @@ const leaveSchema = new mongoose.Schema(
     endDate: { type: Date, required: true },
     totalDays: { type: Number },
 
-    type: {
-      type: String,
-      enum: ["casual", "sick", "paid", "unpaid"],
-      required: true,
-    },
-    reason: String,
+      type: { type: String, default: "personal" }, 
+
+    reason:{ type: String },
 
     status: {
       type: String,

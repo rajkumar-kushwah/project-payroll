@@ -101,7 +101,7 @@ export const applyLeave = async (req, res) => {
       startDate: start,
       endDate: end,
       totalDays,
-      type,
+      type: type || "personal",
       reason,
       status: "pending",
       createdBy: req.user.id,
