@@ -1,49 +1,64 @@
-
 import mongoose from "mongoose";
 
-const officeHolidaySchema = new mongoose.Schema({
-    
-        companyId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Company",
-            required: true,
-        },
-        employeeId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            required: false,
-        },
+const officeHolidaySchema = new mongoose.Schema(
+  {
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
 
-        date: {
-            type: Date,
-            required: true,
-        },
-        title: {
-            type: String,
-            required: true,
-        },
-        type: {
-            type: String,
-           enum: ["NATIONAL", "FESTIVAL", "COMPANY", "PAID", "UNPAID", "paid", "unpaid"],
-            required: true,
-        },
-        isPaid: {
-            type: Boolean,
-            default: true,
-        },
+    //  OPTIONAL: agar kisi specific employee ke liye holiday ho
+    employeeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+    },
 
-        description: {
-            type: String,
-        },
-        createdBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            required: true,
-        },
+    //  NEW: multi-day holiday support
+    startDate: {
+      type: Date,
+      required: true,
+    },
 
-    
-},{timestamps: true} )
+    endDate: {
+      type: Date,
+      required: true,
+    },
 
-officeHolidaySchema.index({companyId: 1, date: 1}, {unique:true});
+    title: {
+      type: String,
+      required: true,
+    },
+
+    type: {
+      type: String,
+      enum: ["NATIONAL", "FESTIVAL", "COMPANY", "PAID", "UNPAID", "paid", "unpaid"],
+      required: true,
+    },
+
+    isPaid: {
+      type: Boolean,
+      default: true,
+    },
+
+    description: {
+      type: String,
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
+
+//  Company + date range unique
+officeHolidaySchema.index(
+  { companyId: 1, startDate: 1, endDate: 1 },
+  { unique: true }
+);
 
 export default mongoose.model("OfficeHoliday", officeHolidaySchema);
