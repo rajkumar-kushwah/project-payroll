@@ -33,7 +33,7 @@ export const addOfficeHoliday = async (req, res) => {
     }
 
     let { title, startDate, endDate, type, description } = req.body;
-    type = type.toUpperCase();
+    type = (type || "COMPANY").toUpperCase();
 
     if (!startDate || !endDate) {
       return res.status(400).json({ message: "startDate and endDate are required" });
