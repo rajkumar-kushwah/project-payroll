@@ -20,8 +20,9 @@ const getMonthRange = (month) => {
   return { start, end };
 };
 
+
 /* ---------------------------------
-    Core Payroll Calculation
+    Core Payroll Calculation (Corrected)
 ---------------------------------- */
 const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
@@ -105,6 +106,17 @@ const calculatePayroll = async (employee, month) => {
     if (isHoliday) {
       status = "office holiday";
       officeHolidays++;
+
+      // Check if holiday is paid
+      const holiday = holidays.find(h => {
+        const hs = normalizeDate(h.startDate);
+        const he = normalizeDate(h.endDate);
+        return cursor >= hs && cursor <= he;
+      });
+
+      if (holiday?.type?.toLowerCase() === "paid") {
+        paidLeaves++;
+      }
     }
 
     // 2️⃣ Leave
@@ -160,7 +172,7 @@ const calculatePayroll = async (employee, month) => {
 
   /* ---------- FINAL TOTAL ---------- */
   const totalWorking =
-    present + paidLeaves + officeHolidays + weeklyOffCount;
+    present + paidLeaves + weeklyOffCount + officeHolidays;
 
   return {
     summary: {
@@ -176,6 +188,7 @@ const calculatePayroll = async (employee, month) => {
     payrollData,
   };
 };
+
 
 
 const normalizeDate = (date) => {

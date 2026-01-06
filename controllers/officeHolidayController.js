@@ -48,17 +48,20 @@ export const addOfficeHoliday = async (req, res) => {
 
     const dates = getDatesBetween(startDate, endDate);
 
+    const normalizedType = String(type).trim().toUpperCase();
+
     const holiday = await OfficeHoliday.create({
       companyId: req.user.companyId,
       title,
       startDate,
       endDate,
-      totalDays: dates.length, // totalDays corrected
-      type,
-      isPaid: type === "PAID",
+      totalDays: dates.length,
+      type: normalizedType,
+      isPaid: normalizedType === "PAID",
       description,
       createdBy: req.user._id,
     });
+
 
     // AUTO CREATE ATTENDANCE FOR EACH HOLIDAY DATE
     const employees = await Employee.find({ companyId: req.user.companyId });
