@@ -12,13 +12,24 @@ import puppeteer from "puppeteer";
 ---------------------------------- */
 const getMonthRange = (month) => {
   const [monthName, year] = month.split(" ");
-  const monthIndex = new Date(`${monthName} 1`).getMonth();
 
-  const start = new Date(year, monthIndex, 1);
-  const end = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+  const monthMap = {
+    Jan: 0, Feb: 1, Mar: 2, Apr: 3,
+    May: 4, Jun: 5, Jul: 6, Aug: 7,
+    Sep: 8, Oct: 9, Nov: 10, Dec: 11
+  };
+
+  const monthIndex = monthMap[monthName];
+  if (monthIndex === undefined) {
+    throw new Error("Invalid month format");
+  }
+
+  const start = new Date(Date.UTC(year, monthIndex, 1));
+  const end = new Date(Date.UTC(year, monthIndex + 1, 0, 23, 59, 59));
 
   return { start, end };
 };
+
 
 
 /* ---------------------------------
@@ -26,8 +37,7 @@ const getMonthRange = (month) => {
 ---------------------------------- */
 const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
-  const today = normalizeDate(new Date());
-  const effectiveEnd = normalizeDate(end > today ? today : end);
+  const effectiveEnd = normalizeDate(end); //  FULL MONTH
 
   /* ---------- DATA ---------- */
   const attendances = await Attendance.find({
@@ -57,17 +67,6 @@ const calculatePayroll = async (employee, month) => {
     attendanceMap[normalizeDate(a.date).toDateString()] = a;
   });
 
-  const holidaySet = new Set();
-  holidays.forEach(h => {
-    let d = normalizeDate(h.startDate);
-    const hEnd = normalizeDate(h.endDate);
-
-    while (d <= hEnd && d <= effectiveEnd) {
-      holidaySet.add(d.toDateString());
-      d.setDate(d.getDate() + 1);
-    }
-  });
-
   /* ---------- COUNTERS ---------- */
   let present = 0;
   let paidLeaves = 0;
@@ -80,46 +79,31 @@ const calculatePayroll = async (employee, month) => {
   const payrollData = [];
   const cursor = normalizeDate(start);
 
-  /* ---------- DAY BY DAY LOOP ---------- */
+  /* ---------- DAY LOOP ---------- */
   while (cursor <= effectiveEnd) {
     const dateStr = cursor.toDateString();
     const dayName = cursor.toLocaleString("en-US", { weekday: "long" });
 
     const attendance = attendanceMap[dateStr];
-    const isHoliday = holidaySet.has(dateStr);
 
-    const leave = leaves.find(l => {
-      const ls = normalizeDate(l.startDate);
-      const le = normalizeDate(l.endDate);
-      return cursor >= ls && cursor <= le;
-    });
+    const leave = leaves.find(l =>
+      cursor >= normalizeDate(l.startDate) &&
+      cursor <= normalizeDate(l.endDate)
+    );
+
+    const holiday = holidays.find(h =>
+      cursor >= normalizeDate(h.startDate) &&
+      cursor <= normalizeDate(h.endDate)
+    );
 
     let status = "missing";
-    let checkIn = "";
-    let checkOut = "";
-    let totalHours = 0;
-    let dayOT = 0;
 
-    /* ---- PRIORITY LOGIC ---- */
-
-    // 1️⃣ Office Holiday
-    if (isHoliday) {
+    /* PRIORITY */
+    if (holiday) {
       status = "office holiday";
       officeHolidays++;
-
-      // Check if holiday is paid
-      const holiday = holidays.find(h => {
-        const hs = normalizeDate(h.startDate);
-        const he = normalizeDate(h.endDate);
-        return cursor >= hs && cursor <= he;
-      });
-
-      if (holiday?.type?.toLowerCase() === "paid") {
-        paidLeaves++;
-      }
+      if (holiday.type?.toLowerCase() === "paid") paidLeaves++;
     }
-
-    // 2️⃣ Leave
     else if (leave) {
       if (leave.type?.toLowerCase() === "paid") {
         status = "paid leave";
@@ -129,48 +113,29 @@ const calculatePayroll = async (employee, month) => {
         unpaidLeaves++;
       }
     }
-
-    // 3️⃣ Weekly Off
-    else if (weeklyOffs.includes(dayName) && !attendance) {
+    else if (weeklyOffs.includes(dayName)) {
       status = "weekly off";
       weeklyOffCount++;
     }
-
-    // 4️⃣ Attendance
     else if (attendance) {
       status = attendance.status;
-      checkIn = attendance.checkIn || "";
-      checkOut = attendance.checkOut || "";
-      totalHours = attendance.totalHours || 0;
-      dayOT = attendance.overtimeHours || 0;
-
       if (status === "present") present++;
       if (status === "half-day") present += 0.5;
-
-      overtimeHours += dayOT;
+      overtimeHours += attendance.overtimeHours || 0;
     }
-
-    // 5️⃣ Missing
     else {
       missingDays++;
     }
 
     payrollData.push({
-      EmployeeCode: employee.employeeCode,
-      Name: employee.name,
       Date: dateStr,
       Day: dayName,
       Status: status,
-      CheckIn: checkIn,
-      CheckOut: checkOut,
-      TotalHours: totalHours,
-      OvertimeHours: dayOT,
     });
 
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  /* ---------- FINAL TOTAL ---------- */
   const totalWorking =
     present + paidLeaves + weeklyOffCount + officeHolidays;
 
@@ -188,6 +153,7 @@ const calculatePayroll = async (employee, month) => {
     payrollData,
   };
 };
+
 
 
 
