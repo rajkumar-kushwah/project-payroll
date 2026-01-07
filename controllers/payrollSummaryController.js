@@ -174,19 +174,49 @@ export const getPayrolls = async (req, res) => {
 ---------------------------------- */
 export const exportPayrollCsv = async (req, res) => {
   const { month } = req.query;
+
   const payrolls = await Payroll.find({ month });
 
+  if (!payrolls.length) {
+    return res.status(404).json({ message: "No payroll data found" });
+  }
+
   const rows = [];
+
   payrolls.forEach(p => {
+
+    // ---------- DAILY RECORDS ----------
     p.daily.forEach(d => {
       rows.push({
         Employee: p.name,
+        EmployeeCode: p.employeeCode,
         Month: month,
         Date: d.date,
         Day: d.day,
         Status: d.status,
+        OvertimeHours: d.overtimeHours || 0,
       });
     });
+
+    // ---------- SUMMARY ROW ----------
+    rows.push({
+      Employee: p.name,
+      EmployeeCode: p.employeeCode,
+      Month: month,
+      Date: "SUMMARY",
+      Day: "",
+      Status: "",
+      Present: p.present,
+      Leave: p.leave,
+      OfficeHolidays: p.officeHolidays,
+      WeeklyOff: p.weeklyOff,
+      MissingDays: p.missingDays,
+      TotalWorking: p.totalWorking,
+      OvertimeHours: p.overtimeHours,
+    });
+
+    // empty line between employees
+    rows.push({});
   });
 
   const parser = new Parser();
@@ -196,6 +226,7 @@ export const exportPayrollCsv = async (req, res) => {
   res.attachment(`Payroll_${month}.csv`);
   res.send(csv);
 };
+
 
 /* ---------------------------------
    Export Payroll PDF
