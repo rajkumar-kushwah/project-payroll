@@ -6,7 +6,7 @@ import OfficeHoliday from "../models/OfficeHoliday.js";
 import WorkSchedule from "../models/WorkSchedule.js";
 import { Parser } from "json2csv";
 import puppeteer from "puppeteer";
-import pdf from "html-pdf";
+import PDFDocument from "pdfkit";
 
 /* ---------------------------------
    Helpers
@@ -309,148 +309,61 @@ export const exportPayrollCsv = async (req, res) => {
 
 
 
+
+
 export const exportPayrollPdf = async (req, res) => {
   try {
     const { month, employeeId } = req.query;
-    if (!employeeId) return res.status(400).json({ message: "employeeId is required" });
 
-    // Fetch payroll + related data
     const payroll = await Payroll.findOne({ month, employeeId });
-    if (!payroll) return res.status(404).json({ message: "Payroll not found" });
-
-    const { start, end } = getMonthRange(month);
-    const employeeIdObj = payroll.employeeId;
-
-    const attendances = await Attendance.find({
-      employeeId: employeeIdObj,
-      date: { $gte: start, $lte: end }
-    });
-
-    const leaves = await Leave.find({
-      employeeId: employeeIdObj,
-      status: "approved",
-      startDate: { $lte: end },
-      endDate: { $gte: start }
-    });
-
-    const holidays = await OfficeHoliday.find({
-      companyId: payroll.companyId,
-      startDate: { $lte: end },
-      endDate: { $gte: start }
-    });
-
-    const schedule = await WorkSchedule.findOne({ employeeId: employeeIdObj });
-    const weeklyOffs = schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
-
-    // Build daily data
-    const dailyRows = [];
-    let present=0, leaveCount=0, officeHolidays=0, weeklyOff=0, missingDays=0, overtimeHours=0, halfDay=0;
-
-    const cursor = new Date(start);
-    while(cursor <= end){
-      const dateKey = normalizeDate(cursor).toDateString();
-      const dayName = cursor.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-      let status="missing";
-      let checkIn=null, checkOut=null, totalHours=0, overtime=0;
-
-      // Attendance
-      const att = attendances.find(a => normalizeDate(a.date).toDateString() === dateKey);
-
-      // Leave
-      const leaveRecord = leaves.find(l => normalizeDate(l.startDate) <= normalizeDate(cursor) && normalizeDate(l.endDate) >= normalizeDate(cursor));
-
-      // Holiday
-      const isHoliday = holidays.some(h => normalizeDate(h.startDate) <= normalizeDate(cursor) && normalizeDate(h.endDate) >= normalizeDate(cursor));
-
-      if(isHoliday){
-        status="office-holiday";
-        officeHolidays++;
-      }
-      else if(leaveRecord){
-        status="leave";
-        leaveCount++;
-      }
-      else if(weeklyOffs.includes(dayName)){
-        status="week-off";
-        weeklyOff++;
-      }
-      else if(att){
-        status=att.status;
-        if(att.status==="present") present++;
-        else if(att.status==="half-day") halfDay+=0.5;
-        totalHours = att.totalHours || 0;
-        overtime = att.overtimeHours || 0;
-        overtimeHours += overtime;
-        checkIn = att.checkIn || null;
-        checkOut = att.checkOut || null;
-      }
-      else{
-        missingDays++;
-      }
-
-      dailyRows.push({ date: dateKey, day: dayName, status, checkIn, checkOut, totalHours, overtime });
-      cursor.setDate(cursor.getDate()+1);
+    if (!payroll) {
+      return res.status(404).json({ message: "Payroll not found" });
     }
 
-    // Build HTML table
-    let html = `
-      <h2>${payroll.name} - Payslip (${month})</h2>
-      <p>Employee Code: ${payroll.employeeCode}</p>
-      <table border="1" cellspacing="0" cellpadding="5" style="width:100%; font-size:12px; border-collapse: collapse;">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Day</th>
-            <th>Status</th>
-            <th>Check-In</th>
-            <th>Check-Out</th>
-            <th>Total Hours</th>
-            <th>Overtime</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${dailyRows.map(d => `
-            <tr>
-              <td>${d.date}</td>
-              <td>${d.day}</td>
-              <td>${d.status}</td>
-              <td>${d.checkIn || "-"}</td>
-              <td>${d.checkOut || "-"}</td>
-              <td>${d.totalHours}</td>
-              <td>${d.overtime}</td>
-            </tr>
-          `).join('')}
-          <tr style="font-weight:bold;">
-            <td>SUMMARY</td>
-            <td>-</td>
-            <td>-</td>
-            <td>-</td>
-            <td>-</td>
-            <td>${present+halfDay+leaveCount}</td>
-            <td>${overtimeHours}</td>
-          </tr>
-          <tr style="font-weight:bold;">
-            <td colspan="7">
-              ${present} Present, ${halfDay} Half-Day, ${leaveCount} Leave, ${officeHolidays} Holidays, ${weeklyOff} Weekly Off, ${missingDays} Missing
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    `;
-
-    // Generate PDF using Puppeteer
-    const browser = await puppeteer.launch({ headless: true, args:["--no-sandbox"] });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
-    await browser.close();
-
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=Payslip_${payroll.name}_${month}.pdf`);
-    res.send(pdfBuffer);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Payslip_${payroll.name}_${month}.pdf`
+    );
 
-  } catch(err){
-    console.error("PDF export error:", err);
-    res.status(500).json({ message: "Server error exporting payroll PDF" });
+    const doc = new PDFDocument({ margin: 40 });
+    doc.pipe(res);
+
+    // ===== HEADER =====
+    doc.fontSize(16).text(`${payroll.name} - Payslip (${month})`, { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).text(`Employee Code: ${payroll.employeeCode}`);
+    doc.moveDown(1);
+
+    // ===== TABLE HEADER =====
+    doc.fontSize(9).text(
+      "Date     Day     Status     In     Out     Hours     OT"
+    );
+    doc.moveDown(0.5);
+
+    // ===== DAILY ROWS =====
+    payroll.daily.forEach(d => {
+      doc.text(
+        `${d.date}   ${d.day}   ${d.status}   ${d.checkIn || "-"}   ${d.checkOut || "-"}   ${d.totalHours || 0}   ${d.overtimeHours || 0}`
+      );
+    });
+
+    doc.moveDown(1);
+
+    // ===== SUMMARY =====
+    doc.fontSize(10).text("SUMMARY", { underline: true });
+    doc.fontSize(9).text(`Present: ${payroll.present}`);
+    doc.text(`Leave: ${payroll.leave}`);
+    doc.text(`Office Holidays: ${payroll.officeHolidays}`);
+    doc.text(`Weekly Off: ${payroll.weeklyOff}`);
+    doc.text(`Missing: ${payroll.missingDays}`);
+    doc.text(`Overtime Hours: ${payroll.overtimeHours}`);
+
+    doc.end();
+
+  } catch (err) {
+    console.error("PDF ERROR:", err);
+    res.status(500).json({ message: "PDF generation failed" });
   }
 };
+
