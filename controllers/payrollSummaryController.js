@@ -246,21 +246,37 @@ export const exportPayrollPdf = async (req, res) => {
       return res.status(400).json({ message: "employeeId is required" });
     }
 
-    const payroll = await Payroll.findOne({ month, employeeId });
-
-    if (!payroll) {
-      return res.status(404).json({ message: "Payroll data not found for this employee" });
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
     }
 
-    // Build HTML for PDF
+    // Filter attendance records by month if provided
+    let filter = { employeeId };
+    if (month) {
+      const [monthStr, yearStr] = month.split(" ");
+      const monthIndex = new Date(`${monthStr} 1, ${yearStr}`).getMonth();
+      const year = parseInt(yearStr);
+
+      filter.date = {
+        $gte: new Date(year, monthIndex, 1),
+        $lte: new Date(year, monthIndex + 1, 0),
+      };
+    }
+
+    const records = await Attendance.find(filter).sort({ date: 1 });
+    if (!records.length) {
+      return res.status(404).json({ message: "No attendance data found for this employee" });
+    }
+
+    // Build HTML
     let html = `
-      <h2>${payroll.name} - Payslip (${month})</h2>
-      <p>Employee Code: ${payroll.employeeCode}</p>
+      <h2>${employee.name} - Payslip (${month || "All Days"})</h2>
+      <p>Employee Code: ${employee.employeeCode}</p>
       <table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse: collapse; font-size: 12px;">
         <thead>
           <tr>
             <th>Date</th>
-            <th>Day</th>
             <th>Status</th>
             <th>Check-In</th>
             <th>Check-Out</th>
@@ -271,50 +287,51 @@ export const exportPayrollPdf = async (req, res) => {
         <tbody>
     `;
 
-    if (Array.isArray(payroll.daily)) {
-      payroll.daily.forEach(d => {
-        html += `
-          <tr>
-            <td>${d.date}</td>
-            <td>${d.day}</td>
-            <td>${d.status}</td>
-            <td>${d.checkIn || "-"}</td>
-            <td>${d.checkOut || "-"}</td>
-            <td>${d.totalHours || 0}</td>
-            <td>${d.overtimeHours || 0}</td>
-          </tr>
-        `;
-      });
-    }
+    let totalWorking = 0;
+    let totalOvertime = 0;
 
-    // Add summary row
+    records.forEach(r => {
+      html += `
+        <tr>
+          <td>${r.date.toISOString().split("T")[0]}</td>
+          <td>${r.status}</td>
+          <td>${r.status === "present" && r.checkIn ? r.checkIn.toISOString().split("T")[1].slice(0,5) : "-"}</td>
+          <td>${r.status === "present" && r.checkOut ? r.checkOut.toISOString().split("T")[1].slice(0,5) : "-"}</td>
+          <td>${r.status === "present" ? r.totalHours || 0 : "-"}</td>
+          <td>${r.status === "present" ? r.overtimeHours || 0 : "-"}</td>
+        </tr>
+      `;
+      if (r.status === "present") {
+        totalWorking += r.totalHours || 0;
+        totalOvertime += r.overtimeHours || 0;
+      }
+    });
+
+    // Summary row
     html += `
         <tr style="font-weight:bold;">
-          <td colspan="2">SUMMARY</td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td>${payroll.totalWorking || 0}</td>
-          <td>${payroll.overtimeHours || 0}</td>
+          <td colspan="4">TOTAL WORKING</td>
+          <td>${totalWorking.toFixed(2)}</td>
+          <td>${totalOvertime.toFixed(2)}</td>
         </tr>
       </tbody>
-    </table>
-  `;
+      </table>
+    `;
 
-    // Launch Puppeteer
     const browser = await puppeteer.launch({
       headless: "new",
       args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
-
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle0" });
     const pdf = await page.pdf({ format: "A4", printBackground: true });
     await browser.close();
 
-    // Send PDF
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=Payslip_${payroll.name}_${month}.pdf`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Payslip_${employee.name}_${month || "AllDays"}.pdf`
+    );
     res.send(pdf);
 
   } catch (err) {
