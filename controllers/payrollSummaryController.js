@@ -240,48 +240,85 @@ export const exportPayrollCsv = async (req, res) => {
 ---------------------------------- */
 export const exportPayrollPdf = async (req, res) => {
   try {
-    const { employeeId, month } = req.query;
-    const employee = await Employee.findById(employeeId);
-    const { summary, daily } = await calculatePayroll(employee, month);
+    const { month, employeeId } = req.query;
 
-    const html = `
-      <h2>${employee.name} - Payslip (${month})</h2>
-      <p>Employee Code: ${employee.employeeCode}</p>
-      <table border="1" width="100%" cellspacing="0" cellpadding="5">
-        <tr>
-          <th>Date</th><th>Day</th><th>Status</th>
-        </tr>
-        ${daily.map(d => `
+    if (!employeeId) {
+      return res.status(400).json({ message: "employeeId is required" });
+    }
+
+    const payroll = await Payroll.findOne({ month, employeeId });
+
+    if (!payroll) {
+      return res.status(404).json({ message: "Payroll data not found for this employee" });
+    }
+
+    // Build HTML for PDF
+    let html = `
+      <h2>${payroll.name} - Payslip (${month})</h2>
+      <p>Employee Code: ${payroll.employeeCode}</p>
+      <table border="1" cellspacing="0" cellpadding="5" style="width:100%; border-collapse: collapse; font-size: 12px;">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Day</th>
+            <th>Status</th>
+            <th>Check-In</th>
+            <th>Check-Out</th>
+            <th>Total Hours</th>
+            <th>Overtime Hours</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    if (Array.isArray(payroll.daily)) {
+      payroll.daily.forEach(d => {
+        html += `
           <tr>
             <td>${d.date}</td>
             <td>${d.day}</td>
             <td>${d.status}</td>
+            <td>${d.checkIn || "-"}</td>
+            <td>${d.checkOut || "-"}</td>
+            <td>${d.totalHours || 0}</td>
+            <td>${d.overtimeHours || 0}</td>
           </tr>
-        `).join("")}
-      </table>
-      <p><b>Present:</b> ${summary.present}</p>
-      <p><b>Leave:</b> ${summary.leave}</p>
-      <p><b>Holidays:</b> ${summary.officeHolidays}</p>
-      <p><b>Weekly Offs:</b> ${summary.weeklyOff}</p>
-      <p><b>Missing:</b> ${summary.missingDays}</p>
-      <p><b>Overtime:</b> ${summary.overtimeHours}</p>
-    `;
+        `;
+      });
+    }
 
+    // Add summary row
+    html += `
+        <tr style="font-weight:bold;">
+          <td colspan="2">SUMMARY</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td>${payroll.totalWorking || 0}</td>
+          <td>${payroll.overtimeHours || 0}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+
+    // Launch Puppeteer
     const browser = await puppeteer.launch({
       headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
 
     const page = await browser.newPage();
-    await page.setContent(html);
-    const pdf = await page.pdf({ format: "A4" });
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdf = await page.pdf({ format: "A4", printBackground: true });
     await browser.close();
 
+    // Send PDF
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=Payslip_${month}.pdf`);
+    res.setHeader("Content-Disposition", `attachment; filename=Payslip_${payroll.name}_${month}.pdf`);
     res.send(pdf);
+
   } catch (err) {
-    console.error(err);
-    res.status(500).send("PDF export error");
+    console.error("PDF export error:", err);
+    res.status(500).json({ message: "Server error exporting payroll PDF" });
   }
 };
