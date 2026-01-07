@@ -24,53 +24,51 @@ const getMonthRange = (month) => {
     Sep: 8, Oct: 9, Nov: 10, Dec: 11
   };
   const monthIndex = monthMap[monthName];
+  if (monthIndex === undefined) throw new Error("Invalid month format");
   const start = new Date(Date.UTC(year, monthIndex, 1));
   const end = new Date(Date.UTC(year, monthIndex + 1, 0));
   return { start, end };
 };
 
-const calculatePayroll = async (employee, month) => {
+export const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
   const today = normalizeDate(new Date());
   const effectiveEnd = normalizeDate(end > today ? today : end);
 
-  // Fetch attendance
+  // Fetch data
   const attendances = await Attendance.find({
     employeeId: employee._id,
     date: { $gte: start, $lte: effectiveEnd },
   });
 
-  // Fetch approved leaves in month
   const leaves = await Leave.find({
     employeeId: employee._id,
     status: "approved",
     startDate: { $lte: effectiveEnd },
-    endDate: { $gte: start }
+    endDate: { $gte: start },
   });
 
-  // Fetch company holidays in month
   const holidays = await OfficeHoliday.find({
     companyId: employee.companyId,
     startDate: { $lte: effectiveEnd },
-    endDate: { $gte: start }
+    endDate: { $gte: start },
   });
 
-  // Weekly offs
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
-  const weeklyOffsNormalized = (schedule?.weeklyOff || ["Sunday"]).map(d => d.toLowerCase());
+  const weeklyOffs = (schedule?.weeklyOff || ["Sunday"]).map(d => d.toLowerCase());
 
-  // Map attendances by date string
+  // Map attendances by date
   const attendanceMap = {};
   attendances.forEach(a => {
     attendanceMap[normalizeDate(a.date).toDateString()] = a;
   });
 
   let present = 0,
-      leaveCount = 0,
       halfDay = 0,
-      officeHoliday = 0,
-      weekOff = 0,
-      missing = 0,
+      leaveCount = 0,
+      officeHolidays = 0,
+      weekOffCount = 0,
+      missingDays = 0,
       overtimeHours = 0;
 
   const daily = [];
@@ -81,24 +79,24 @@ const calculatePayroll = async (employee, month) => {
     const dayName = cursor.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
 
     let status = "missing";
+    const attendance = attendanceMap[dateKey];
 
-    // Check holiday
+    // Holiday check
     const isHoliday = holidays.some(h =>
       normalizeDate(h.startDate) <= normalizeDate(cursor) &&
       normalizeDate(h.endDate) >= normalizeDate(cursor)
     );
 
-    // Check leave
+    // Leave check
     const leaveRecord = leaves.find(l =>
       normalizeDate(l.startDate) <= normalizeDate(cursor) &&
       normalizeDate(l.endDate) >= normalizeDate(cursor)
     );
 
-    const attendance = attendanceMap[dateKey];
-
+    // Assign status
     if (isHoliday) {
       status = "office-holiday";
-      officeHoliday++;
+      officeHolidays++;
     } else if (leaveRecord) {
       status = "leave";
       leaveCount++;
@@ -107,11 +105,11 @@ const calculatePayroll = async (employee, month) => {
       if (attendance.status === "present") present++;
       else if (attendance.status === "half-day") halfDay += 0.5;
       overtimeHours += attendance.overtimeHours || 0;
-    } else if (weeklyOffsNormalized.includes(dayName)) {
+    } else if (weeklyOffs.includes(dayName)) {
       status = "week-off";
-      weekOff++;
+      weekOffCount++;
     } else {
-      missing++;
+      missingDays++;
     }
 
     daily.push({
@@ -129,12 +127,16 @@ const calculatePayroll = async (employee, month) => {
 
   return {
     summary: {
+      employeeId: employee._id,
+      employeeCode: employee.employeeCode,
+      name: employee.name,
+      avatar: employee.avatar,
       present,
       halfDay,
       leave: leaveCount,
-      officeHoliday,
-      weekOffCount: weekOff,
-      missingDays: missing,
+      officeHolidays,
+      weekOffCount,
+      missingDays,
       overtimeHours,
       totalWorking: present + halfDay + leaveCount
     },
@@ -144,36 +146,20 @@ const calculatePayroll = async (employee, month) => {
 
 
 
-/* ---------------------------------
-   Get All Payrolls
----------------------------------- */
+// Get all payrolls
 export const getPayrolls = async (req, res) => {
   const { month } = req.query;
   const companyId = req.user.companyId;
 
-  const employees = await Employee.find({
-    companyId,
-    status: "active",
-  });
+  const employees = await Employee.find({ companyId, status: "active" });
 
   const payrolls = [];
-
   for (const emp of employees) {
     const { summary, daily } = await calculatePayroll(emp, month);
 
     const payroll = await Payroll.findOneAndUpdate(
       { employeeId: emp._id, month },
-      {
-        employeeId: emp._id,
-        employeeCode: emp.employeeCode,
-        companyId,
-        name: emp.name,
-        avatar: emp.avatar,
-        month,
-        ...summary,
-        daily,
-        autoSaved: true,
-      },
+      { ...summary, month, daily, companyId },
       { upsert: true, new: true }
     );
 

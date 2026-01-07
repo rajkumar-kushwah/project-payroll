@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-const payrollSummarySchema = new Schema(
+const payrollSchema = new Schema(
   {
     employeeCode: { type: String, required: true },
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
@@ -12,15 +12,14 @@ const payrollSummarySchema = new Schema(
 
     totalWorking: Number,
     present: Number,
-    leave: Number,          
-    // unpaidLeaves removed
+    leave: Number,
     officeHolidays: Number,
     weeklyOffCount: Number,
-    missingDays: Number,    
+    missingDays: Number,
     overtimeHours: Number,
     notes: String,
   },
   { timestamps: true }
 );
 
-export default mongoose.model("Payroll", payrollSummarySchema);
+export default mongoose.model("Payroll", payrollSchema);
