@@ -35,16 +35,40 @@ export const minutesToHoursDecimal = (mins) => {
 /**
  * Format Date object → "h:mm AM/PM" string
  */
+// export const formatTime12H = (date) => {
+//   if (!date) return "-";
+//   const d = new Date(date);
+//   let hours = d.getHours();
+//   const minutes = d.getMinutes().toString().padStart(2, "0");
+//   const ampm = hours >= 12 ? "PM" : "AM";
+//   hours = hours % 12;
+//   if (hours === 0) hours = 12;
+//   return `${hours}:${minutes} ${ampm}`;
+// };
+
 export const formatTime12H = (date) => {
   if (!date) return "-";
   const d = new Date(date);
-  let hours = d.getHours();
-  const minutes = d.getMinutes().toString().padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12;
-  if (hours === 0) hours = 12;
-  return `${hours}:${minutes} ${ampm}`;
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 };
+
+export const formatTimeIST = (date) => {
+  if (!date) return "-";
+
+  return new Date(date).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+
 
 
 /**

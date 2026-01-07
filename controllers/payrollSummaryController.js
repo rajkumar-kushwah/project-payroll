@@ -8,8 +8,9 @@ import { Parser } from "json2csv";
 import puppeteer from "puppeteer";
 import PDFDocument from "pdfkit";
 import {
-  formatTime,
+  
   formatDateYYYYMMDD,
+  formatTimeIST,
 } from "../utils/time.js";
 /* ---------------------------------
    Helpers
@@ -317,7 +318,6 @@ export const exportPayrollCsv = async (req, res) => {
 export const exportPayrollPdf = async (req, res) => {
   try {
     const { employeeId, month } = req.query;
-
     if (!employeeId || !month) {
       return res.status(400).json({ message: "employeeId & month required" });
     }
@@ -351,10 +351,10 @@ export const exportPayrollPdf = async (req, res) => {
     const weeklyOffs =
       schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
 
-    /* ---------- Attendance Map ---------- */
+    /* ---------- Attendance Map (DATE SAFE) ---------- */
     const attendanceMap = {};
     attendances.forEach(a => {
-      attendanceMap[new Date(a.date).toDateString()] = a;
+      attendanceMap[normalizeDate(a.date).toDateString()] = a;
     });
 
     /* ---------- Build Rows ---------- */
@@ -362,35 +362,39 @@ export const exportPayrollPdf = async (req, res) => {
     const cursor = new Date(start);
 
     while (cursor <= end) {
-      const key = cursor.toDateString();
-      const day = cursor.toLocaleDateString("en-US", { weekday: "long" });
+      const current = normalizeDate(cursor);
+      const key = current.toDateString();
+
+      const day = current.toLocaleDateString("en-IN", { weekday: "long" });
       const dayLower = day.toLowerCase();
 
       const attendance = attendanceMap[key];
 
       const leave = leaves.find(l =>
-        cursor >= l.startDate && cursor <= l.endDate
+        normalizeDate(l.startDate) <= current &&
+        normalizeDate(l.endDate) >= current
       );
 
       const holiday = holidays.find(h =>
-        cursor >= h.startDate && cursor <= h.endDate
+        normalizeDate(h.startDate) <= current &&
+        normalizeDate(h.endDate) >= current
       );
 
       let row = null;
 
       if (attendance) {
         row = {
-          date: formatDateYYYYMMDD(cursor),
+          date: formatDateYYYYMMDD(current),
           day,
           status: attendance.status,
-          in: formatTime(attendance.checkIn),
-          out: formatTime(attendance.checkOut),
+          in: formatTimeIST(attendance.checkIn),
+          out: formatTimeIST(attendance.checkOut),
           hrs: attendance.totalHours || 0,
           ot: attendance.overtimeHours || 0,
         };
       } else if (leave) {
         row = {
-          date: formatDateYYYYMMDD(cursor),
+          date: formatDateYYYYMMDD(current),
           day,
           status: "leave",
           in: "-",
@@ -400,7 +404,7 @@ export const exportPayrollPdf = async (req, res) => {
         };
       } else if (holiday) {
         row = {
-          date: formatDateYYYYMMDD(cursor),
+          date: formatDateYYYYMMDD(current),
           day,
           status: "office-holiday",
           in: "-",
@@ -410,7 +414,7 @@ export const exportPayrollPdf = async (req, res) => {
         };
       } else if (weeklyOffs.includes(dayLower)) {
         row = {
-          date: formatDateYYYYMMDD(cursor),
+          date: formatDateYYYYMMDD(current),
           day,
           status: "weekly-off",
           in: "-",
@@ -443,28 +447,27 @@ export const exportPayrollPdf = async (req, res) => {
 
     /* ---------- Table Header ---------- */
     doc.fontSize(11);
-    doc.text("Date", 40, doc.y, { width: 70 });
-    doc.text("Day", 115, doc.y, { width: 70 });
-    doc.text("Status", 190, doc.y, { width: 90 });
-    doc.text("In", 285, doc.y, { width: 50 });
-    doc.text("Out", 340, doc.y, { width: 50 });
-    doc.text("Hrs", 395, doc.y, { width: 40 });
-    doc.text("OT", 440, doc.y, { width: 40 });
+    doc.text("Date", 40);
+    doc.text("Day", 105);
+    doc.text("Status", 170);
+    doc.text("In", 265);
+    doc.text("Out", 325);
+    doc.text("Hrs", 395);
+    doc.text("OT", 435);
 
     doc.moveDown();
     doc.moveTo(40, doc.y).lineTo(520, doc.y).stroke();
 
     /* ---------- Rows ---------- */
     rows.forEach(r => {
-      const y = doc.y + 5;
-      doc.text(r.date, 40, y, { width: 70 });
-      doc.text(r.day, 115, y, { width: 70 });
-      doc.text(r.status, 190, y, { width: 90 });
-      doc.text(r.in, 285, y, { width: 50 });
-      doc.text(r.out, 340, y, { width: 50 });
-      doc.text(String(r.hrs), 395, y, { width: 40 });
-      doc.text(String(r.ot), 440, y, { width: 40 });
-      doc.moveDown();
+      doc.moveDown(0.7);
+      doc.text(r.date, 40);
+      doc.text(r.day, 105);
+      doc.text(r.status, 170);
+      doc.text(r.in, 265);
+      doc.text(r.out, 325);
+      doc.text(String(r.hrs), 395);
+      doc.text(String(r.ot), 435);
     });
 
     doc.end();
@@ -476,3 +479,4 @@ export const exportPayrollPdf = async (req, res) => {
     }
   }
 };
+
