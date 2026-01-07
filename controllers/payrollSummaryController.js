@@ -30,17 +30,21 @@ const getMonthRange = (month) => {
   return { start, end };
 };
 
-
+/* ---------------------------------
+   CORE PAYROLL CALCULATION
+---------------------------------- */
 const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
   const today = normalizeDate(new Date());
   const effectiveEnd = normalizeDate(end > today ? today : end);
 
+  // Get attendances
   const attendances = await Attendance.find({
     employeeId: employee._id,
     date: { $gte: start, $lte: effectiveEnd },
   });
 
+  // Get approved leaves
   const leaves = await Leave.find({
     employeeId: employee._id,
     status: "approved",
@@ -48,27 +52,24 @@ const calculatePayroll = async (employee, month) => {
     endDate: { $gte: start },
   });
 
+  // Office holidays
   const holidays = await OfficeHoliday.find({
     companyId: employee.companyId,
     startDate: { $lte: effectiveEnd },
     endDate: { $gte: start },
   });
 
+  // Employee schedule for weekly offs
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
   const weeklyOffs = schedule?.weeklyOff || ["Sunday"];
 
+  // Map attendances for quick lookup
   const attendanceMap = {};
   attendances.forEach(a => {
     attendanceMap[normalizeDate(a.date).toDateString()] = a;
   });
 
-  let present = 0,
-      leave = 0,
-      weekOff = 0,
-      officeHoliday = 0,
-      absent = 0,
-      missing = 0,
-      halfDay = 0;
+  let present = 0, halfDay = 0, leaveCount = 0, weekOff = 0, officeHoliday = 0, missing = 0;
 
   const daily = [];
   const cursor = new Date(start);
@@ -79,36 +80,30 @@ const calculatePayroll = async (employee, month) => {
 
     let status = "missing";
 
-    const isHoliday = holidays.find(h =>
-      cursor >= normalizeDate(h.startDate) &&
-      cursor <= normalizeDate(h.endDate)
-    );
-
-    const leaveRecord = leaves.find(l =>
-      cursor >= normalizeDate(l.startDate) &&
-      cursor <= normalizeDate(l.endDate)
-    );
-
-    const attendance = attendanceMap[dateKey];
-
-    if (isHoliday) {
-      status = "office-holiday";
-      officeHoliday++;
-    }
-    else if (leaveRecord) {
-      status = "leave";  // ✅ leave only
-      leave++;
-    }
-    else if (attendance) {
-      status = attendance.status;
-      if (attendance.status === "present") present++;
-      else if (attendance.status === "half-day") halfDay += 0.5;
-      else if (attendance.status === "absent") absent++;
-    }
-    else if (weeklyOffs.includes(dayName)) {
+    // 1️⃣ Weekly Off from schedule
+    if (weeklyOffs.includes(dayName)) {
       status = "week-off";
       weekOff++;
     }
+    // 2️⃣ Office holiday
+    else if (holidays.find(h => cursor >= normalizeDate(h.startDate) && cursor <= normalizeDate(h.endDate))) {
+      status = "office-holiday";
+      officeHoliday++;
+    }
+    // 3️⃣ Approved leave
+    else if (leaves.find(l => cursor >= normalizeDate(l.startDate) && cursor <= normalizeDate(l.endDate))) {
+      status = "leave";
+      leaveCount++;
+    }
+    // 4️⃣ Attendance
+    else if (attendanceMap[dateKey]) {
+      const a = attendanceMap[dateKey];
+      status = a.status;
+      if (a.status === "present") present++;
+      else if (a.status === "half-day") halfDay += 0.5;
+      else if (a.status === "absent") missing++;
+    }
+    // 5️⃣ Missing
     else {
       missing++;
     }
@@ -122,13 +117,13 @@ const calculatePayroll = async (employee, month) => {
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  const totalWorked = present + halfDay + leave;
+  const totalWorked = present + halfDay + leaveCount;
 
   return {
     summary: {
       present,
       halfDay,
-      leave,           // ✅ leave only
+      leave: leaveCount,
       officeHoliday,
       weekOffCount: weekOff,
       missingDays: missing,
@@ -138,10 +133,6 @@ const calculatePayroll = async (employee, month) => {
     daily,
   };
 };
-
-
-
-
 
 /* ---------------------------------
    Get All Payrolls
@@ -158,14 +149,10 @@ export const getPayrolls = async (req, res) => {
   const payrolls = [];
 
   for (const emp of employees) {
-    const { summary, daily } =
-      await calculatePayrollForEmployee(emp, month);
+    const { summary, daily } = await calculatePayroll(emp, month);
 
     const payroll = await Payroll.findOneAndUpdate(
-      {
-        employeeId: emp._id,
-        month,
-      },
+      { employeeId: emp._id, month },
       {
         employeeId: emp._id,
         employeeCode: emp.employeeCode,
@@ -186,19 +173,14 @@ export const getPayrolls = async (req, res) => {
   res.json({ success: true, data: payrolls });
 };
 
-
-
-
 /* ---------------------------------
    Export CSV
 ---------------------------------- */
 export const exportPayrollCsv = async (req, res) => {
   const { month } = req.query;
-
   const payrolls = await Payroll.find({ month });
 
   const rows = [];
-
   payrolls.forEach(p => {
     p.daily.forEach(d => {
       rows.push({
@@ -219,7 +201,6 @@ export const exportPayrollCsv = async (req, res) => {
   res.send(csv);
 };
 
-
 /* ---------------------------------
    Export PDF
 ---------------------------------- */
@@ -227,7 +208,7 @@ export const exportPayrollPdf = async (req, res) => {
   try {
     const { employeeId, month } = req.query;
     const employee = await Employee.findById(employeeId);
-    const { summary, payrollData } = await calculatePayroll(employee, month);
+    const { summary, daily } = await calculatePayroll(employee, month);
 
     const html = `
       <h2>${employee.name} - Payslip (${month})</h2>
@@ -235,26 +216,21 @@ export const exportPayrollPdf = async (req, res) => {
       <table border="1" width="100%" cellspacing="0" cellpadding="5">
         <tr>
           <th>Date</th><th>Day</th><th>Status</th>
-          <th>In</th><th>Out</th><th>Hours</th><th>OT</th>
         </tr>
-        ${payrollData.map(d => `
+        ${daily.map(d => `
           <tr>
-            <td>${d.Date}</td>
-            <td>${d.Day}</td>
-            <td>${d.Status}</td>
-            <td>${d.CheckIn || "-"}</td>
-            <td>${d.CheckOut || "-"}</td>
-            <td>${d.TotalHours || "-"}</td>
-            <td>${d.OvertimeHours || "-"}</td>
+            <td>${d.date}</td>
+            <td>${d.day}</td>
+            <td>${d.status}</td>
           </tr>
         `).join("")}
       </table>
       <p><b>Present:</b> ${summary.present}</p>
-      <p><b>Paid Leaves:</b> ${summary.paidLeaves}</p>
-      <p><b>Unpaid Leaves:</b> ${summary.unpaidLeaves}</p>
-      <p><b>Holidays:</b> ${summary.officeHolidays}</p>
-      <p><b>Weekly Offs:</b> ${summary.weeklyOffCount}</p>
+      <p><b>Leave:</b> ${summary.leave}</p>
+      <p><b>Holidays:</b> ${summary.officeHoliday}</p>
+      <p><b>Weekly Offs:</b> ${summary.weekOffCount}</p>
       <p><b>Missing:</b> ${summary.missingDays}</p>
+      <p><b>Overtime:</b> ${summary.overtimeHours}</p>
     `;
 
     const browser = await puppeteer.launch({
@@ -270,7 +246,8 @@ export const exportPayrollPdf = async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=Payslip_${month}.pdf`);
     res.send(pdf);
-  } catch {
+  } catch (err) {
+    console.error(err);
     res.status(500).send("PDF export error");
   }
 };
