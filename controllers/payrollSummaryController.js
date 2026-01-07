@@ -24,27 +24,22 @@ const getMonthRange = (month) => {
     Sep: 8, Oct: 9, Nov: 10, Dec: 11
   };
   const monthIndex = monthMap[monthName];
-  if (monthIndex === undefined) throw new Error("Invalid month format");
   const start = new Date(Date.UTC(year, monthIndex, 1));
   const end = new Date(Date.UTC(year, monthIndex + 1, 0));
   return { start, end };
 };
 
-/* ---------------------------------
-   CORE PAYROLL CALCULATION
----------------------------------- */
 const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
   const today = normalizeDate(new Date());
   const effectiveEnd = normalizeDate(end > today ? today : end);
 
-  // Get attendances
+  // Attendance, leaves, holidays
   const attendances = await Attendance.find({
     employeeId: employee._id,
     date: { $gte: start, $lte: effectiveEnd },
   });
 
-  // Get approved leaves
   const leaves = await Leave.find({
     employeeId: employee._id,
     status: "approved",
@@ -52,59 +47,68 @@ const calculatePayroll = async (employee, month) => {
     endDate: { $gte: start },
   });
 
-  // Office holidays
   const holidays = await OfficeHoliday.find({
     companyId: employee.companyId,
     startDate: { $lte: effectiveEnd },
     endDate: { $gte: start },
   });
 
-  // Employee schedule for weekly offs
+  // Weekly off schedule
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
-  const weeklyOffs = schedule?.weeklyOff || ["Sunday"];
+  const weeklyOffsNormalized = (schedule?.weeklyOff || ["Sunday"]).map(d => d.toLowerCase());
 
-  // Map attendances for quick lookup
   const attendanceMap = {};
   attendances.forEach(a => {
     attendanceMap[normalizeDate(a.date).toDateString()] = a;
   });
 
-  let present = 0, halfDay = 0, leaveCount = 0, weekOff = 0, officeHoliday = 0, missing = 0;
+  let present = 0,
+      leaveCount = 0,
+      halfDay = 0,
+      officeHoliday = 0,
+      weekOff = 0,
+      missing = 0,
+      overtimeHours = 0;
 
   const daily = [];
   const cursor = new Date(start);
 
   while (cursor <= effectiveEnd) {
     const dateKey = normalizeDate(cursor).toDateString();
-    const dayName = cursor.toLocaleDateString("en-US", { weekday: "long" });
+    const dayName = cursor.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
 
     let status = "missing";
 
-    // 1️⃣ Weekly Off from schedule
-    if (weeklyOffs.includes(dayName)) {
-      status = "week-off";
-      weekOff++;
-    }
-    // 2️⃣ Office holiday
-    else if (holidays.find(h => cursor >= normalizeDate(h.startDate) && cursor <= normalizeDate(h.endDate))) {
+    // Holiday check
+    const isHoliday = holidays.some(h =>
+      cursor >= normalizeDate(h.startDate) &&
+      cursor <= normalizeDate(h.endDate)
+    );
+
+    // Leave check
+    const leaveRecord = leaves.find(l =>
+      cursor >= normalizeDate(l.startDate) &&
+      cursor <= normalizeDate(l.endDate)
+    );
+
+    // Attendance check
+    const attendance = attendanceMap[dateKey];
+
+    if (isHoliday) {
       status = "office-holiday";
       officeHoliday++;
-    }
-    // 3️⃣ Approved leave
-    else if (leaves.find(l => cursor >= normalizeDate(l.startDate) && cursor <= normalizeDate(l.endDate))) {
+    } else if (leaveRecord) {
       status = "leave";
       leaveCount++;
-    }
-    // 4️⃣ Attendance
-    else if (attendanceMap[dateKey]) {
-      const a = attendanceMap[dateKey];
-      status = a.status;
-      if (a.status === "present") present++;
-      else if (a.status === "half-day") halfDay += 0.5;
-      else if (a.status === "absent") missing++;
-    }
-    // 5️⃣ Missing
-    else {
+    } else if (attendance) {
+      status = attendance.status;
+      if (attendance.status === "present") present++;
+      else if (attendance.status === "half-day") halfDay += 0.5;
+      overtimeHours += attendance.overtimeHours || 0;
+    } else if (weeklyOffsNormalized.includes(dayName)) {
+      status = "week-off";
+      weekOff++;
+    } else {
       missing++;
     }
 
@@ -112,6 +116,10 @@ const calculatePayroll = async (employee, month) => {
       date: dateKey,
       day: dayName,
       status,
+      checkIn: attendance?.checkIn || null,
+      checkOut: attendance?.checkOut || null,
+      totalHours: attendance?.totalHours || 0,
+      overtimeHours: attendance?.overtimeHours || 0
     });
 
     cursor.setDate(cursor.getDate() + 1);
@@ -127,12 +135,13 @@ const calculatePayroll = async (employee, month) => {
       officeHoliday,
       weekOffCount: weekOff,
       missingDays: missing,
-      overtimeHours: attendances.reduce((sum, a) => sum + (a.overtimeHours || 0), 0),
+      overtimeHours,
       totalWorking: totalWorked,
     },
-    daily,
+    daily
   };
 };
+
 
 /* ---------------------------------
    Get All Payrolls
