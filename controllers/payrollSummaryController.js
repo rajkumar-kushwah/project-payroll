@@ -173,59 +173,58 @@ export const getPayrolls = async (req, res) => {
    Export Payroll CSV
 ---------------------------------- */
 export const exportPayrollCsv = async (req, res) => {
-  const { month } = req.query;
+  const { month, employeeId } = req.query;
 
-  const payrolls = await Payroll.find({ month });
+  if (!employeeId) {
+    return res.status(400).json({ message: "employeeId is required for single employee export" });
+  }
 
-  if (!payrolls.length) {
-    return res.status(404).json({ message: "No payroll data found" });
+  const payroll = await Payroll.findOne({ month, employeeId });
+
+  if (!payroll) {
+    return res.status(404).json({ message: "Payroll data not found for this employee" });
   }
 
   const rows = [];
 
-  payrolls.forEach(p => {
-
-    // ---------- DAILY RECORDS ----------
-    p.daily.forEach(d => {
-      rows.push({
-        Employee: p.name,
-        EmployeeCode: p.employeeCode,
-        Month: month,
-        Date: d.date,
-        Day: d.day,
-        Status: d.status,
-        OvertimeHours: d.overtimeHours || 0,
-      });
-    });
-
-    // ---------- SUMMARY ROW ----------
+  // DAILY RECORDS
+  payroll.daily.forEach(d => {
     rows.push({
-      Employee: p.name,
-      EmployeeCode: p.employeeCode,
+      Employee: payroll.name,
+      EmployeeCode: payroll.employeeCode,
       Month: month,
-      Date: "SUMMARY",
-      Day: "",
-      Status: "",
-      Present: p.present,
-      Leave: p.leave,
-      OfficeHolidays: p.officeHolidays,
-      WeeklyOff: p.weeklyOff,
-      MissingDays: p.missingDays,
-      TotalWorking: p.totalWorking,
-      OvertimeHours: p.overtimeHours,
+      Date: d.date,
+      Day: d.day,
+      Status: d.status,
+      OvertimeHours: d.overtimeHours || 0,
     });
+  });
 
-    // empty line between employees
-    rows.push({});
+  // SUMMARY ROW
+  rows.push({
+    Employee: payroll.name,
+    EmployeeCode: payroll.employeeCode,
+    Month: month,
+    Date: "SUMMARY",
+    Day: "",
+    Status: "",
+    Present: payroll.present,
+    Leave: payroll.leave,
+    OfficeHolidays: payroll.officeHolidays,
+    WeeklyOff: payroll.weeklyOff,
+    MissingDays: payroll.missingDays,
+    TotalWorking: payroll.totalWorking,
+    OvertimeHours: payroll.overtimeHours,
   });
 
   const parser = new Parser();
   const csv = parser.parse(rows);
 
   res.header("Content-Type", "text/csv");
-  res.attachment(`Payroll_${month}.csv`);
+  res.attachment(`Payroll_${payroll.name}_${month}.csv`);
   res.send(csv);
 };
+
 
 
 /* ---------------------------------
