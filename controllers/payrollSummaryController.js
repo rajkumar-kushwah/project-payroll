@@ -240,92 +240,182 @@ export const exportPayrollCsv = async (req, res) => {
 
 
 
-/* ---------------------------------
-   Export Payroll PDF
----------------------------------- */
 
 
 // export const exportPayrollPdf = async (req, res) => {
 //   try {
-//     const { month, employeeId } = req.query;
-//     const payroll = await Payroll.findOne({ month, employeeId });
+//     const { employeeId, month } = req.query;
+//     if (!employeeId || !month) {
+//       return res.status(400).json({ message: "employeeId & month required" });
+//     }
 
-//     if (!payroll) return res.status(404).json({ message: "Payroll not found" });
+//     const employee = await Employee.findById(employeeId);
+//     if (!employee) {
+//       return res.status(404).json({ message: "Employee not found" });
+//     }
 
-//     const dailyArray = Array.isArray(payroll.daily) ? payroll.daily : [];
+//     const { start, end } = getMonthRange(month);
 
-//     const html = `
-//       <h2>${payroll.name} - Payslip (${month})</h2>
-//       <p>Employee Code: ${payroll.employeeCode}</p>
-//       <table border="1" cellspacing="0" cellpadding="5" style="width:100%; font-size:12px; border-collapse:collapse;">
-//         <thead>
-//           <tr>
-//             <th>Date</th>
-//             <th>Day</th>
-//             <th>Status</th>
-//             <th>Check-In</th>
-//             <th>Check-Out</th>
-//             <th>Total Hours</th>
-//             <th>Overtime</th>
-//           </tr>
-//         </thead>
-//         <tbody>
-//           ${dailyArray.map(d => `
-//             <tr>
-//               <td>${d.date}</td>
-//               <td>${d.day}</td>
-//               <td>${d.status}</td>
-//               <td>${d.checkIn || "-"}</td>
-//               <td>${d.checkOut || "-"}</td>
-//               <td>${d.totalHours || 0}</td>
-//               <td>${d.overtimeHours || 0}</td>
-//             </tr>
-//           `).join("")}
-//           <tr style="font-weight:bold;">
-//             <td colspan="2">SUMMARY</td>
-//             <td>${payroll.present} Present, ${payroll.leave} Leave, ${payroll.officeHolidays} Holidays, ${payroll.weeklyOff} Weekly Off, ${payroll.missingDays} Missing</td>
-//             <td></td>
-//             <td></td>
-//             <td>${payroll.totalWorking}</td>
-//             <td>${payroll.overtimeHours}</td>
-//           </tr>
-//         </tbody>
-//       </table>
-//     `;
-
-//     const fileName = `Payslip_${payroll.name.replace(/\s+/g,'_')}_${month}.pdf`;
-
-//     pdf.create(html).toBuffer((err, buffer) => {
-//       if (err) {
-//         console.error("PDF creation error:", err);
-//         return res.status(500).json({ message: "Error creating PDF" });
-//       }
-//       res.setHeader("Content-Type", "application/pdf");
-//       res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
-//       res.send(buffer);
+//     const attendances = await Attendance.find({
+//       employeeId,
+//       date: { $gte: start, $lte: end },
 //     });
 
+//     const leaves = await Leave.find({
+//       employeeId,
+//       status: "approved",
+//       startDate: { $lte: end },
+//       endDate: { $gte: start },
+//     });
+
+//     const holidays = await OfficeHoliday.find({
+//       companyId: employee.companyId,
+//       startDate: { $lte: end },
+//       endDate: { $gte: start },
+//     });
+
+//     const schedule = await WorkSchedule.findOne({ employeeId });
+//     const weeklyOffs =
+//       schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
+
+//     /* ---------- Attendance Map (DATE SAFE) ---------- */
+//     const attendanceMap = {};
+//     attendances.forEach(a => {
+//       attendanceMap[normalizeDate(a.date).toDateString()] = a;
+//     });
+
+//     /* ---------- Build Rows ---------- */
+//     const rows = [];
+//     const cursor = new Date(start);
+
+//     while (cursor <= end) {
+//       const current = normalizeDate(cursor);
+//       const key = current.toDateString();
+
+//       const day = current.toLocaleDateString("en-IN", { weekday: "long" });
+//       const dayLower = day.toLowerCase();
+
+//       const attendance = attendanceMap[key];
+
+//       const leave = leaves.find(l =>
+//         normalizeDate(l.startDate) <= current &&
+//         normalizeDate(l.endDate) >= current
+//       );
+
+//       const holiday = holidays.find(h =>
+//         normalizeDate(h.startDate) <= current &&
+//         normalizeDate(h.endDate) >= current
+//       );
+
+//       let row = null;
+
+//       if (attendance) {
+//         row = {
+//           date: formatDateYYYYMMDD(current),
+//           day,
+//           status: attendance.status,
+//           in: formatTimeIST(attendance.checkIn),
+//           out: formatTimeIST(attendance.checkOut),
+//           hrs: attendance.totalHours || 0,
+//           ot: attendance.overtimeHours || 0,
+//         };
+//       } else if (leave) {
+//         row = {
+//           date: formatDateYYYYMMDD(current),
+//           day,
+//           status: "leave",
+//           in: "-",
+//           out: "-",
+//           hrs: 0,
+//           ot: 0,
+//         };
+//       } else if (holiday) {
+//         row = {
+//           date: formatDateYYYYMMDD(current),
+//           day,
+//           status: "office-holiday",
+//           in: "-",
+//           out: "-",
+//           hrs: 0,
+//           ot: 0,
+//         };
+//       } else if (weeklyOffs.includes(dayLower)) {
+//         row = {
+//           date: formatDateYYYYMMDD(current),
+//           day,
+//           status: "weekly-off",
+//           in: "-",
+//           out: "-",
+//           hrs: 0,
+//           ot: 0,
+//         };
+//       }
+
+//       if (row) rows.push(row);
+//       cursor.setDate(cursor.getDate() + 1);
+//     }
+
+//     /* ---------- PDF ---------- */
+//     res.setHeader("Content-Type", "application/pdf");
+//     res.setHeader(
+//       "Content-Disposition",
+//       `attachment; filename=Payslip_${employee.name}_${month}.pdf`
+//     );
+
+//     const doc = new PDFDocument({ margin: 40, size: "A4" });
+//     doc.pipe(res);
+
+//     doc.fontSize(18).text("Payslip", { align: "center" });
+//     doc.moveDown();
+//     doc.fontSize(12).text(`Employee: ${employee.name}`);
+//     doc.text(`Employee Code: ${employee.employeeCode}`);
+//     doc.text(`Month: ${month}`);
+//     doc.moveDown(2);
+
+//     /* ---------- Table Header ---------- */
+//     doc.fontSize(11);
+//     doc.text("Date", 40);
+//     doc.text("Day", 105);
+//     doc.text("Status", 170);
+//     doc.text("In", 265);
+//     doc.text("Out", 325);
+//     doc.text("Hrs", 395);
+//     doc.text("OT", 435);
+
+//     doc.moveDown();
+//     doc.moveTo(40, doc.y).lineTo(520, doc.y).stroke();
+
+//     /* ---------- Rows ---------- */
+//     rows.forEach(r => {
+//       doc.moveDown(0.7);
+//       doc.text(r.date, 40);
+//       doc.text(r.day, 105);
+//       doc.text(r.status, 170);
+//       doc.text(r.in, 265);
+//       doc.text(r.out, 325);
+//       doc.text(String(r.hrs), 395);
+//       doc.text(String(r.ot), 435);
+//     });
+
+//     doc.end();
+
 //   } catch (err) {
-//     console.error("PDF export error:", err);
-//     res.status(500).json({ message: "Server error exporting payroll PDF" });
+//     console.error("PDF ERROR:", err);
+//     if (!res.headersSent) {
+//       res.status(500).json({ message: "PDF generation failed" });
+//     }
 //   }
 // };
-
-
-
 
 
 export const exportPayrollPdf = async (req, res) => {
   try {
     const { employeeId, month } = req.query;
-    if (!employeeId || !month) {
+    if (!employeeId || !month)
       return res.status(400).json({ message: "employeeId & month required" });
-    }
 
     const employee = await Employee.findById(employeeId);
-    if (!employee) {
-      return res.status(404).json({ message: "Employee not found" });
-    }
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
     const { start, end } = getMonthRange(month);
 
@@ -348,92 +438,58 @@ export const exportPayrollPdf = async (req, res) => {
     });
 
     const schedule = await WorkSchedule.findOne({ employeeId });
-    const weeklyOffs =
-      schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
+    const weeklyOffs = schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
 
-    /* ---------- Attendance Map (DATE SAFE) ---------- */
+    // Map attendances by date for fast lookup
     const attendanceMap = {};
     attendances.forEach(a => {
       attendanceMap[normalizeDate(a.date).toDateString()] = a;
     });
 
-    /* ---------- Build Rows ---------- */
+    // Build table rows
     const rows = [];
-    const cursor = new Date(start);
-
+    let cursor = new Date(start);
     while (cursor <= end) {
       const current = normalizeDate(cursor);
-      const key = current.toDateString();
-
       const day = current.toLocaleDateString("en-IN", { weekday: "long" });
       const dayLower = day.toLowerCase();
+      const key = current.toDateString();
 
       const attendance = attendanceMap[key];
+      const leave = leaves.find(l => normalizeDate(l.startDate) <= current && normalizeDate(l.endDate) >= current);
+      const holiday = holidays.find(h => normalizeDate(h.startDate) <= current && normalizeDate(h.endDate) >= current);
 
-      const leave = leaves.find(l =>
-        normalizeDate(l.startDate) <= current &&
-        normalizeDate(l.endDate) >= current
-      );
-
-      const holiday = holidays.find(h =>
-        normalizeDate(h.startDate) <= current &&
-        normalizeDate(h.endDate) >= current
-      );
-
-      let row = null;
+      let row = {
+        date: formatDateYYYYMMDD(current),
+        day,
+        status: "absent",
+        in: "-",
+        out: "-",
+        hrs: 0,
+        ot: 0
+      };
 
       if (attendance) {
-        row = {
-          date: formatDateYYYYMMDD(current),
-          day,
-          status: attendance.status,
-          in: formatTimeIST(attendance.checkIn),
-          out: formatTimeIST(attendance.checkOut),
-          hrs: attendance.totalHours || 0,
-          ot: attendance.overtimeHours || 0,
-        };
+        row.status = attendance.status || "present";
+        row.in = formatTimeIST(attendance.checkIn) || "-";
+        row.out = formatTimeIST(attendance.checkOut) || "-";
+        row.hrs = attendance.totalHours || 0;
+        row.ot = attendance.overtimeHours || 0;
       } else if (leave) {
-        row = {
-          date: formatDateYYYYMMDD(current),
-          day,
-          status: "leave",
-          in: "-",
-          out: "-",
-          hrs: 0,
-          ot: 0,
-        };
+        row.status = "leave";
       } else if (holiday) {
-        row = {
-          date: formatDateYYYYMMDD(current),
-          day,
-          status: "office-holiday",
-          in: "-",
-          out: "-",
-          hrs: 0,
-          ot: 0,
-        };
+        row.status = "office-holiday";
       } else if (weeklyOffs.includes(dayLower)) {
-        row = {
-          date: formatDateYYYYMMDD(current),
-          day,
-          status: "weekly-off",
-          in: "-",
-          out: "-",
-          hrs: 0,
-          ot: 0,
-        };
+        row.status = "weekly-off";
       }
 
-      if (row) rows.push(row);
+      rows.push(row);
       cursor.setDate(cursor.getDate() + 1);
     }
 
-    /* ---------- PDF ---------- */
+    // ---------- Generate PDF ----------
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=Payslip_${employee.name}_${month}.pdf`
-    );
+    res.setHeader("Content-Disposition", `attachment; filename=Payslip_${employee.name}_${month}.pdf`);
 
     const doc = new PDFDocument({ margin: 40, size: "A4" });
     doc.pipe(res);
@@ -443,40 +499,50 @@ export const exportPayrollPdf = async (req, res) => {
     doc.fontSize(12).text(`Employee: ${employee.name}`);
     doc.text(`Employee Code: ${employee.employeeCode}`);
     doc.text(`Month: ${month}`);
-    doc.moveDown(2);
+    doc.moveDown(1.5);
 
-    /* ---------- Table Header ---------- */
-    doc.fontSize(11);
-    doc.text("Date", 40);
-    doc.text("Day", 105);
-    doc.text("Status", 170);
-    doc.text("In", 265);
-    doc.text("Out", 325);
-    doc.text("Hrs", 395);
-    doc.text("OT", 435);
+    // Table headers
+    const startX = 40;
+    const columnPositions = {
+      date: 40,
+      day: 110,
+      status: 180,
+      in: 260,
+      out: 320,
+      hrs: 390,
+      ot: 440
+    };
 
-    doc.moveDown();
-    doc.moveTo(40, doc.y).lineTo(520, doc.y).stroke();
+    doc.fontSize(11).font("Helvetica-Bold");
+    doc.text("Date", columnPositions.date);
+    doc.text("Day", columnPositions.day);
+    doc.text("Status", columnPositions.status);
+    doc.text("In", columnPositions.in);
+    doc.text("Out", columnPositions.out);
+    doc.text("Hrs", columnPositions.hrs);
+    doc.text("OT", columnPositions.ot);
 
-    /* ---------- Rows ---------- */
+    doc.moveDown(0.5);
+    const tableTop = doc.y;
+    doc.moveTo(startX, tableTop).lineTo(520, tableTop).stroke();
+    doc.font("Helvetica");
+
+    // Table rows
     rows.forEach(r => {
-      doc.moveDown(0.7);
-      doc.text(r.date, 40);
-      doc.text(r.day, 105);
-      doc.text(r.status, 170);
-      doc.text(r.in, 265);
-      doc.text(r.out, 325);
-      doc.text(String(r.hrs), 395);
-      doc.text(String(r.ot), 435);
+      doc.moveDown(0.6);
+      doc.text(r.date, columnPositions.date);
+      doc.text(r.day, columnPositions.day);
+      doc.text(r.status, columnPositions.status);
+      doc.text(r.in, columnPositions.in);
+      doc.text(r.out, columnPositions.out);
+      doc.text(String(r.hrs), columnPositions.hrs);
+      doc.text(String(r.ot), columnPositions.ot);
     });
 
     doc.end();
 
   } catch (err) {
     console.error("PDF ERROR:", err);
-    if (!res.headersSent) {
-      res.status(500).json({ message: "PDF generation failed" });
-    }
+    if (!res.headersSent) res.status(500).json({ message: "PDF generation failed" });
   }
 };
-
