@@ -9,13 +9,14 @@ const payrollSummarySchema = new Schema(
     name: { type: String, required: true },
     avatar: { type: String, default: "" },
     month: { type: String, required: true }, // e.g., "Jan 2026"
-     totalWorking: Number,
+
+    totalWorking: Number,
     present: Number,
-    paidLeaves: Number,
-    // unpaidLeaves: Number,
+    leave: Number,          
+    // unpaidLeaves removed
     officeHolidays: Number,
     weeklyOffCount: Number,
-    missingDays: Number,   // <-- New: Missing days
+    missingDays: Number,    
     overtimeHours: Number,
     notes: String,
   },
