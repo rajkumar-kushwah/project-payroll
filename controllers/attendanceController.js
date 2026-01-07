@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
-import WorkSchedule from "../models/Worksechudule.js";
+import WorkSchedule from "../models/WorkSchedule.js";
 import Leave from "../models/Leave.js";
 import { hhmmToDate, minutesBetween, minutesToHoursDecimal } from "../utils/time.js";
 import OfficeHoliday from "../models/OfficeHoliday.js";

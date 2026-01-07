@@ -3,7 +3,7 @@ import Payroll from "../models/Payroll.js";
 import Attendance from "../models/Attendance.js";
 import Leave from "../models/Leave.js";
 import OfficeHoliday from "../models/OfficeHoliday.js";
-import WorkSchedule from "../models/Worksechudule.js";
+import WorkSchedule from "../models/WorkSchedule.js";
 import { Parser } from "json2csv";
 import puppeteer from "puppeteer";
 
@@ -30,6 +30,9 @@ const getMonthRange = (month) => {
   return { start, end };
 };
 
+/* ---------------------------------
+   Payroll Calculation
+---------------------------------- */
 export const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
   const today = normalizeDate(new Date());
@@ -55,9 +58,9 @@ export const calculatePayroll = async (employee, month) => {
   });
 
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
-  const weeklyOffs = (schedule?.weeklyOff || ["Sunday"]).map(d => d.toLowerCase());
+  const weeklyOffs = (schedule?.weeklyOff || ["Sunday"]).map(d => String(d).toLowerCase());
 
-  // Map attendances by date
+  // Map attendance by date
   const attendanceMap = {};
   attendances.forEach(a => {
     attendanceMap[normalizeDate(a.date).toDateString()] = a;
@@ -81,33 +84,33 @@ export const calculatePayroll = async (employee, month) => {
     let status = "missing";
     const attendance = attendanceMap[dateKey];
 
-    // Holiday check
+    // Check holiday
     const isHoliday = holidays.some(h =>
       normalizeDate(h.startDate) <= normalizeDate(cursor) &&
       normalizeDate(h.endDate) >= normalizeDate(cursor)
     );
 
-    // Leave check
+    // Check leave
     const leaveRecord = leaves.find(l =>
       normalizeDate(l.startDate) <= normalizeDate(cursor) &&
       normalizeDate(l.endDate) >= normalizeDate(cursor)
     );
 
-    // Assign status
+    // Assign status (order matters!)
     if (isHoliday) {
       status = "office-holiday";
       officeHolidays++;
     } else if (leaveRecord) {
       status = "leave";
       leaveCount++;
+    } else if (weeklyOffs.includes(dayName)) {
+      status = "week-off";
+      weekOffCount++;
     } else if (attendance) {
       status = attendance.status;
       if (attendance.status === "present") present++;
       else if (attendance.status === "half-day") halfDay += 0.5;
       overtimeHours += attendance.overtimeHours || 0;
-    } else if (weeklyOffs.includes(dayName)) {
-      status = "week-off";
-      weekOffCount++;
     } else {
       missingDays++;
     }
@@ -144,9 +147,9 @@ export const calculatePayroll = async (employee, month) => {
   };
 };
 
-
-
-// Get all payrolls
+/* ---------------------------------
+   Get All Payrolls
+---------------------------------- */
 export const getPayrolls = async (req, res) => {
   const { month } = req.query;
   const companyId = req.user.companyId;
@@ -170,7 +173,7 @@ export const getPayrolls = async (req, res) => {
 };
 
 /* ---------------------------------
-   Export CSV
+   Export Payroll CSV
 ---------------------------------- */
 export const exportPayrollCsv = async (req, res) => {
   const { month } = req.query;
@@ -198,7 +201,7 @@ export const exportPayrollCsv = async (req, res) => {
 };
 
 /* ---------------------------------
-   Export PDF
+   Export Payroll PDF
 ---------------------------------- */
 export const exportPayrollPdf = async (req, res) => {
   try {
@@ -223,7 +226,7 @@ export const exportPayrollPdf = async (req, res) => {
       </table>
       <p><b>Present:</b> ${summary.present}</p>
       <p><b>Leave:</b> ${summary.leave}</p>
-      <p><b>Holidays:</b> ${summary.officeHoliday}</p>
+      <p><b>Holidays:</b> ${summary.officeHolidays}</p>
       <p><b>Weekly Offs:</b> ${summary.weekOffCount}</p>
       <p><b>Missing:</b> ${summary.missingDays}</p>
       <p><b>Overtime:</b> ${summary.overtimeHours}</p>

@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import Employee from "../models/Employee.js";
 import Leave from "../models/Leave.js";
 import Attendance from "../models/Attendance.js";
-import WorkSchedule from "../models/Worksechudule.js";
+import WorkSchedule from "../models/WorkSchedule.js";
 
 // -------------------------------------------------------------------
 // APPLY LEAVE (START DATE - END DATE)
