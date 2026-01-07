@@ -173,56 +173,64 @@ export const getPayrolls = async (req, res) => {
    Export Payroll CSV
 ---------------------------------- */
 export const exportPayrollCsv = async (req, res) => {
-  const { month, employeeId } = req.query;
+  try {
+    const { month, employeeId } = req.query;
 
-  if (!employeeId) {
-    return res.status(400).json({ message: "employeeId is required for single employee export" });
-  }
+    if (!employeeId) {
+      return res.status(400).json({ message: "employeeId is required" });
+    }
 
-  const payroll = await Payroll.findOne({ month, employeeId });
+    const payroll = await Payroll.findOne({ month, employeeId });
 
-  if (!payroll) {
-    return res.status(404).json({ message: "Payroll data not found for this employee" });
-  }
+    if (!payroll) {
+      return res.status(404).json({ message: "Payroll data not found for this employee" });
+    }
 
-  const rows = [];
+    const rows = [];
 
-  // DAILY RECORDS
-  payroll.daily.forEach(d => {
+    // Ensure payroll.daily exists
+    if (Array.isArray(payroll.daily)) {
+      payroll.daily.forEach(d => {
+        rows.push({
+          Employee: payroll.name,
+          EmployeeCode: payroll.employeeCode,
+          Month: month,
+          Date: d.date,
+          Day: d.day,
+          Status: d.status,
+          OvertimeHours: d.overtimeHours || 0,
+        });
+      });
+    }
+
+    // Summary row
     rows.push({
       Employee: payroll.name,
       EmployeeCode: payroll.employeeCode,
       Month: month,
-      Date: d.date,
-      Day: d.day,
-      Status: d.status,
-      OvertimeHours: d.overtimeHours || 0,
+      Date: "SUMMARY",
+      Day: "",
+      Status: "",
+      Present: payroll.present || 0,
+      Leave: payroll.leave || 0,
+      OfficeHolidays: payroll.officeHolidays || 0,
+      WeeklyOff: payroll.weeklyOff || 0,
+      MissingDays: payroll.missingDays || 0,
+      TotalWorking: payroll.totalWorking || 0,
+      OvertimeHours: payroll.overtimeHours || 0,
     });
-  });
 
-  // SUMMARY ROW
-  rows.push({
-    Employee: payroll.name,
-    EmployeeCode: payroll.employeeCode,
-    Month: month,
-    Date: "SUMMARY",
-    Day: "",
-    Status: "",
-    Present: payroll.present,
-    Leave: payroll.leave,
-    OfficeHolidays: payroll.officeHolidays,
-    WeeklyOff: payroll.weeklyOff,
-    MissingDays: payroll.missingDays,
-    TotalWorking: payroll.totalWorking,
-    OvertimeHours: payroll.overtimeHours,
-  });
+    const parser = new Parser();
+    const csv = parser.parse(rows);
 
-  const parser = new Parser();
-  const csv = parser.parse(rows);
+    res.header("Content-Type", "text/csv");
+    res.attachment(`Payroll_${payroll.name}_${month}.csv`);
+    res.send(csv);
 
-  res.header("Content-Type", "text/csv");
-  res.attachment(`Payroll_${payroll.name}_${month}.csv`);
-  res.send(csv);
+  } catch (err) {
+    console.error("CSV export error:", err);
+    res.status(500).json({ message: "Server error exporting payroll CSV" });
+  }
 };
 
 
