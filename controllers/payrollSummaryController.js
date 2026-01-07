@@ -313,57 +313,165 @@ export const exportPayrollCsv = async (req, res) => {
 
 export const exportPayrollPdf = async (req, res) => {
   try {
-    const { month, employeeId } = req.query;
+    const { employeeId, month } = req.query;
 
-    const payroll = await Payroll.findOne({ month, employeeId });
-    if (!payroll) {
-      return res.status(404).json({ message: "Payroll not found" });
+    if (!employeeId || !month) {
+      return res.status(400).json({ message: "employeeId & month required" });
     }
+
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    const { start, end } = getMonthRange(month);
+
+    const attendances = await Attendance.find({
+      employeeId,
+      date: { $gte: start, $lte: end },
+    });
+
+    const leaves = await Leave.find({
+      employeeId,
+      status: "approved",
+      startDate: { $lte: end },
+      endDate: { $gte: start },
+    });
+
+    const holidays = await OfficeHoliday.find({
+      companyId: employee.companyId,
+      startDate: { $lte: end },
+      endDate: { $gte: start },
+    });
+
+    const schedule = await WorkSchedule.findOne({ employeeId });
+    const weeklyOffs = schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
+
+    /* ----------- Build Attendance Map ----------- */
+    const attendanceMap = {};
+    attendances.forEach(a => {
+      attendanceMap[normalizeDate(a.date).toDateString()] = a;
+    });
+
+    /* ----------- Build Date Rows ----------- */
+    const rows = [];
+    const cursor = new Date(start);
+
+    while (cursor <= end) {
+      const key = normalizeDate(cursor).toDateString();
+      const day = cursor.toLocaleDateString("en-US", { weekday: "long" });
+      const dayLower = day.toLowerCase();
+
+      let row = null;
+
+      const attendance = attendanceMap[key];
+
+      const leave = leaves.find(l =>
+        normalizeDate(l.startDate) <= cursor &&
+        normalizeDate(l.endDate) >= cursor
+      );
+
+      const holiday = holidays.find(h =>
+        normalizeDate(h.startDate) <= cursor &&
+        normalizeDate(h.endDate) >= cursor
+      );
+
+      if (attendance) {
+        row = {
+          date: cursor.toISOString().split("T")[0],
+          day,
+          status: attendance.status,
+          in: attendance.checkIn || "-",
+          out: attendance.checkOut || "-",
+          hrs: attendance.totalHours || 0,
+          ot: attendance.overtimeHours || 0,
+        };
+      } else if (leave) {
+        row = {
+          date: cursor.toISOString().split("T")[0],
+          day,
+          status: "leave",
+          in: "-",
+          out: "-",
+          hrs: 0,
+          ot: 0,
+        };
+      } else if (holiday) {
+        row = {
+          date: cursor.toISOString().split("T")[0],
+          day,
+          status: "office-holiday",
+          in: "-",
+          out: "-",
+          hrs: 0,
+          ot: 0,
+        };
+      } else if (weeklyOffs.includes(dayLower)) {
+        row = {
+          date: cursor.toISOString().split("T")[0],
+          day,
+          status: "weekly-off",
+          in: "-",
+          out: "-",
+          hrs: 0,
+          ot: 0,
+        };
+      }
+
+      if (row) rows.push(row);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    /* ---------------- PDF ---------------- */
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=Payslip_${payroll.name}_${month}.pdf`
+      `attachment; filename=Payslip_${employee.name}_${month}.pdf`
     );
 
-    const doc = new PDFDocument({ margin: 40 });
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
     doc.pipe(res);
 
-    // ===== HEADER =====
-    doc.fontSize(16).text(`${payroll.name} - Payslip (${month})`, { align: "center" });
+    doc.fontSize(18).text("Payslip", { align: "center" });
     doc.moveDown();
-    doc.fontSize(10).text(`Employee Code: ${payroll.employeeCode}`);
-    doc.moveDown(1);
+    doc.fontSize(12).text(`Employee: ${employee.name}`);
+    doc.text(`Employee Code: ${employee.employeeCode}`);
+    doc.text(`Month: ${month}`);
+    doc.moveDown(2);
 
-    // ===== TABLE HEADER =====
-    doc.fontSize(9).text(
-      "Date     Day     Status     In     Out     Hours     OT"
-    );
-    doc.moveDown(0.5);
+    /* -------- Table Header -------- */
+    doc.fontSize(11);
+    doc.text("Date", 40);
+    doc.text("Day", 100);
+    doc.text("Status", 160);
+    doc.text("In", 260);
+    doc.text("Out", 320);
+    doc.text("Hrs", 390);
+    doc.text("OT", 430);
 
-    // ===== DAILY ROWS =====
-    payroll.daily.forEach(d => {
-      doc.text(
-        `${d.date}   ${d.day}   ${d.status}   ${d.checkIn || "-"}   ${d.checkOut || "-"}   ${d.totalHours || 0}   ${d.overtimeHours || 0}`
-      );
+    doc.moveDown();
+    doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke();
+
+    /* -------- Table Rows -------- */
+    rows.forEach(r => {
+      doc.moveDown(0.8);
+      doc.text(r.date, 40);
+      doc.text(r.day, 100);
+      doc.text(r.status, 160);
+      doc.text(r.in, 260);
+      doc.text(r.out, 320);
+      doc.text(String(r.hrs), 390);
+      doc.text(String(r.ot), 430);
     });
-
-    doc.moveDown(1);
-
-    // ===== SUMMARY =====
-    doc.fontSize(10).text("SUMMARY", { underline: true });
-    doc.fontSize(9).text(`Present: ${payroll.present}`);
-    doc.text(`Leave: ${payroll.leave}`);
-    doc.text(`Office Holidays: ${payroll.officeHolidays}`);
-    doc.text(`Weekly Off: ${payroll.weeklyOff}`);
-    doc.text(`Missing: ${payroll.missingDays}`);
-    doc.text(`Overtime Hours: ${payroll.overtimeHours}`);
 
     doc.end();
 
   } catch (err) {
     console.error("PDF ERROR:", err);
-    res.status(500).json({ message: "PDF generation failed" });
+    if (!res.headersSent) {
+      res.status(500).json({ message: "PDF generation failed" });
+    }
   }
 };
 
