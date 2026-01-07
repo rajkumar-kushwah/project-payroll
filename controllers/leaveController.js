@@ -121,6 +121,9 @@ export const applyLeave = async (req, res) => {
 // -------------------------------------------------------------------
 // UPDATE LEAVE STATUS
 // -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// UPDATE LEAVE STATUS
+// -------------------------------------------------------------------
 export const updateLeaveStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -134,13 +137,30 @@ export const updateLeaveStatus = async (req, res) => {
     }
 
     const leave = await Leave.findById(req.params.id);
-    if (!leave) return res.status(404).json({ message: "Leave not found" });
+    if (!leave) {
+      return res.status(404).json({ message: "Leave not found" });
+    }
 
+    //  If leave was already approved and now rejected → cleanup
+    if (leave.status === "approved" && status === "rejected") {
+      await Attendance.deleteMany({
+        employeeId: leave.employeeId,
+        companyId: leave.companyId,
+        status: "leave",
+        logType: "system",
+        date: {
+          $gte: leave.startDate,
+          $lte: leave.endDate,
+        },
+      });
+    }
+
+    // Update leave status
     leave.status = status;
     leave.approvedBy = req.user.id;
     await leave.save();
 
-    // Auto-create attendance for approved leave
+    //  If approved → create attendance
     if (status === "approved") {
       const emp = await Employee.findById(leave.employeeId);
       if (emp) {
@@ -239,27 +259,53 @@ export const getLeaves = async (req, res) => {
   }
 };
 
+
 // -------------------------------------------------------------------
-// DELETE LEAVE
+// DELETE LEAVE (WITH AUTO ATTENDANCE CLEANUP)
 // -------------------------------------------------------------------
 export const deleteLeave = async (req, res) => {
   try {
     const leave = await Leave.findById(req.params.id);
-    if (!leave) return res.status(404).json({ message: "Leave not found" });
+    if (!leave) {
+      return res.status(404).json({ message: "Leave not found" });
+    }
 
+    // Employee permission check
     if (req.user.role === "employee") {
       const employee = await Employee.findOne({
         employeeId: req.user._id,
         companyId: req.user.companyId,
       });
 
-      if (!employee || leave.employeeId.toString() !== employee._id.toString()) {
+      if (
+        !employee ||
+        leave.employeeId.toString() !== employee._id.toString()
+      ) {
         return res.status(403).json({ message: "Access denied" });
       }
     }
 
+    //  If leave was approved → delete auto-generated attendance
+    if (leave.status === "approved") {
+      await Attendance.deleteMany({
+        employeeId: leave.employeeId,
+        companyId: leave.companyId,
+        status: "leave",
+        logType: "system",
+        date: {
+          $gte: leave.startDate,
+          $lte: leave.endDate,
+        },
+      });
+    }
+
+    // Delete leave
     await leave.deleteOne();
-    res.json({ success: true, message: "Leave deleted successfully" });
+
+    res.json({
+      success: true,
+      message: "Leave and related attendance deleted successfully",
+    });
   } catch (err) {
     console.error("Delete Leave Error:", err);
     res.status(500).json({ message: err.message });

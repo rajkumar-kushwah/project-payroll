@@ -12,7 +12,7 @@ const payrollSummarySchema = new Schema(
      totalWorking: Number,
     present: Number,
     paidLeaves: Number,
-    unpaidLeaves: Number,
+    // unpaidLeaves: Number,
     officeHolidays: Number,
     weeklyOffCount: Number,
     missingDays: Number,   // <-- New: Missing days
