@@ -242,6 +242,8 @@ export const exportPayrollCsv = async (req, res) => {
 
 
 
+
+
 // export const exportPayrollPdf = async (req, res) => {
 //   try {
 //     const { employeeId, month } = req.query;
@@ -254,8 +256,10 @@ export const exportPayrollCsv = async (req, res) => {
 //       return res.status(404).json({ message: "Employee not found" });
 //     }
 
+//     // Get start and end of month
 //     const { start, end } = getMonthRange(month);
 
+//     // Fetch data
 //     const attendances = await Attendance.find({
 //       employeeId,
 //       date: { $gte: start, $lte: end },
@@ -278,39 +282,69 @@ export const exportPayrollCsv = async (req, res) => {
 //     const weeklyOffs =
 //       schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
 
-//     /* ---------- Attendance Map (DATE SAFE) ---------- */
-//     const attendanceMap = {};
-//     attendances.forEach(a => {
-//       attendanceMap[normalizeDate(a.date).toDateString()] = a;
+//     // Get today's date (ignore future dates)
+//     const today = new Date();
+//     today.setHours(0, 0, 0, 0);
+
+//     /* ---------- Collect all relevant dates ---------- */
+//     const datesSet = new Set();
+
+//     // Attendance dates
+//     attendances.forEach(a => datesSet.add(normalizeDate(a.date).toDateString()));
+
+//     // Leave dates
+//     leaves.forEach(l => {
+//       let current = new Date(l.startDate);
+//       const leaveEnd = new Date(l.endDate);
+//       while (current <= leaveEnd && current <= today) {
+//         datesSet.add(normalizeDate(current).toDateString());
+//         current.setDate(current.getDate() + 1);
+//       }
 //     });
 
+//     // Holiday dates
+//     holidays.forEach(h => {
+//       let current = new Date(h.startDate);
+//       const holidayEnd = new Date(h.endDate);
+//       while (current <= holidayEnd && current <= today) {
+//         datesSet.add(normalizeDate(current).toDateString());
+//         current.setDate(current.getDate() + 1);
+//       }
+//     });
+
+//     // Weekly offs (from start of month to today)
+//     let current = new Date(start);
+//     while (current <= today) {
+//       const dayName = current.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+//       if (weeklyOffs.includes(dayName)) {
+//         datesSet.add(normalizeDate(current).toDateString());
+//       }
+//       current.setDate(current.getDate() + 1);
+//     }
+
+//     // Sort dates ascending
+//     const allDates = Array.from(datesSet)
+//       .map(d => new Date(d))
+//       .sort((a, b) => a - b);
+
 //     /* ---------- Build Rows ---------- */
-//     const rows = [];
-//     const cursor = new Date(start);
-
-//     while (cursor <= end) {
-//       const current = normalizeDate(cursor);
+//     const rows = allDates.map(current => {
 //       const key = current.toDateString();
-
 //       const day = current.toLocaleDateString("en-IN", { weekday: "long" });
 //       const dayLower = day.toLowerCase();
 
-//       const attendance = attendanceMap[key];
-
+//       const attendance = attendances.find(a => normalizeDate(a.date).toDateString() === key);
 //       const leave = leaves.find(l =>
 //         normalizeDate(l.startDate) <= current &&
 //         normalizeDate(l.endDate) >= current
 //       );
-
 //       const holiday = holidays.find(h =>
 //         normalizeDate(h.startDate) <= current &&
 //         normalizeDate(h.endDate) >= current
 //       );
 
-//       let row = null;
-
 //       if (attendance) {
-//         row = {
+//         return {
 //           date: formatDateYYYYMMDD(current),
 //           day,
 //           status: attendance.status,
@@ -320,7 +354,7 @@ export const exportPayrollCsv = async (req, res) => {
 //           ot: attendance.overtimeHours || 0,
 //         };
 //       } else if (leave) {
-//         row = {
+//         return {
 //           date: formatDateYYYYMMDD(current),
 //           day,
 //           status: "leave",
@@ -330,7 +364,7 @@ export const exportPayrollCsv = async (req, res) => {
 //           ot: 0,
 //         };
 //       } else if (holiday) {
-//         row = {
+//         return {
 //           date: formatDateYYYYMMDD(current),
 //           day,
 //           status: "office-holiday",
@@ -340,7 +374,7 @@ export const exportPayrollCsv = async (req, res) => {
 //           ot: 0,
 //         };
 //       } else if (weeklyOffs.includes(dayLower)) {
-//         row = {
+//         return {
 //           date: formatDateYYYYMMDD(current),
 //           day,
 //           status: "weekly-off",
@@ -351,9 +385,8 @@ export const exportPayrollCsv = async (req, res) => {
 //         };
 //       }
 
-//       if (row) rows.push(row);
-//       cursor.setDate(cursor.getDate() + 1);
-//     }
+//       return null;
+//     }).filter(Boolean); // remove nulls just in case
 
 //     /* ---------- PDF ---------- */
 //     res.setHeader("Content-Type", "application/pdf");
@@ -408,6 +441,7 @@ export const exportPayrollCsv = async (req, res) => {
 // };
 
 
+
 export const exportPayrollPdf = async (req, res) => {
   try {
     const { employeeId, month } = req.query;
@@ -416,11 +450,8 @@ export const exportPayrollPdf = async (req, res) => {
     }
 
     const employee = await Employee.findById(employeeId);
-    if (!employee) {
-      return res.status(404).json({ message: "Employee not found" });
-    }
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
-    // Get start and end of month
     const { start, end } = getMonthRange(month);
 
     // Fetch data
@@ -443,20 +474,17 @@ export const exportPayrollPdf = async (req, res) => {
     });
 
     const schedule = await WorkSchedule.findOne({ employeeId });
-    const weeklyOffs =
-      schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
+    const weeklyOffs = schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
 
-    // Get today's date (ignore future dates)
+    // Today's date (ignore future)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    /* ---------- Collect all relevant dates ---------- */
+    // ---------- Collect all relevant dates ----------
     const datesSet = new Set();
 
-    // Attendance dates
     attendances.forEach(a => datesSet.add(normalizeDate(a.date).toDateString()));
 
-    // Leave dates
     leaves.forEach(l => {
       let current = new Date(l.startDate);
       const leaveEnd = new Date(l.endDate);
@@ -466,7 +494,6 @@ export const exportPayrollPdf = async (req, res) => {
       }
     });
 
-    // Holiday dates
     holidays.forEach(h => {
       let current = new Date(h.startDate);
       const holidayEnd = new Date(h.endDate);
@@ -476,36 +503,26 @@ export const exportPayrollPdf = async (req, res) => {
       }
     });
 
-    // Weekly offs (from start of month to today)
+    // Weekly offs from start to today
     let current = new Date(start);
     while (current <= today) {
       const dayName = current.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-      if (weeklyOffs.includes(dayName)) {
-        datesSet.add(normalizeDate(current).toDateString());
-      }
+      if (weeklyOffs.includes(dayName)) datesSet.add(normalizeDate(current).toDateString());
       current.setDate(current.getDate() + 1);
     }
 
     // Sort dates ascending
-    const allDates = Array.from(datesSet)
-      .map(d => new Date(d))
-      .sort((a, b) => a - b);
+    const allDates = Array.from(datesSet).map(d => new Date(d)).sort((a, b) => a - b);
 
-    /* ---------- Build Rows ---------- */
+    // ---------- Build Rows ----------
     const rows = allDates.map(current => {
       const key = current.toDateString();
       const day = current.toLocaleDateString("en-IN", { weekday: "long" });
       const dayLower = day.toLowerCase();
 
       const attendance = attendances.find(a => normalizeDate(a.date).toDateString() === key);
-      const leave = leaves.find(l =>
-        normalizeDate(l.startDate) <= current &&
-        normalizeDate(l.endDate) >= current
-      );
-      const holiday = holidays.find(h =>
-        normalizeDate(h.startDate) <= current &&
-        normalizeDate(h.endDate) >= current
-      );
+      const leave = leaves.find(l => normalizeDate(l.startDate) <= current && normalizeDate(l.endDate) >= current);
+      const holiday = holidays.find(h => normalizeDate(h.startDate) <= current && normalizeDate(h.endDate) >= current);
 
       if (attendance) {
         return {
@@ -550,14 +567,11 @@ export const exportPayrollPdf = async (req, res) => {
       }
 
       return null;
-    }).filter(Boolean); // remove nulls just in case
+    }).filter(Boolean);
 
-    /* ---------- PDF ---------- */
+    // ---------- PDF ----------
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=Payslip_${employee.name}_${month}.pdf`
-    );
+    res.setHeader("Content-Disposition", `attachment; filename=Payslip_${employee.name}_${month}.pdf`);
 
     const doc = new PDFDocument({ margin: 40, size: "A4" });
     doc.pipe(res);
@@ -569,29 +583,42 @@ export const exportPayrollPdf = async (req, res) => {
     doc.text(`Month: ${month}`);
     doc.moveDown(2);
 
-    /* ---------- Table Header ---------- */
+    // ---------- Table Header ----------
+    const startX = 40;
+    const columns = [
+      { label: "Date", x: 40 },
+      { label: "Day", x: 105 },
+      { label: "Status", x: 170 },
+      { label: "In", x: 265 },
+      { label: "Out", x: 325 },
+      { label: "Hrs", x: 395 },
+      { label: "OT", x: 435 },
+    ];
+
     doc.fontSize(11);
-    doc.text("Date", 40);
-    doc.text("Day", 105);
-    doc.text("Status", 170);
-    doc.text("In", 265);
-    doc.text("Out", 325);
-    doc.text("Hrs", 395);
-    doc.text("OT", 435);
+    columns.forEach(col => doc.text(col.label, col.x, doc.y));
+    doc.moveDown(0.5);
+    doc.moveTo(startX, doc.y).lineTo(520, doc.y).stroke();
 
-    doc.moveDown();
-    doc.moveTo(40, doc.y).lineTo(520, doc.y).stroke();
+    // ---------- Rows ----------
+    const rowHeight = 20;
+    let currentY = doc.y + 5;
 
-    /* ---------- Rows ---------- */
     rows.forEach(r => {
-      doc.moveDown(0.7);
-      doc.text(r.date, 40);
-      doc.text(r.day, 105);
-      doc.text(r.status, 170);
-      doc.text(r.in, 265);
-      doc.text(r.out, 325);
-      doc.text(String(r.hrs), 395);
-      doc.text(String(r.ot), 435);
+      columns.forEach(col => {
+        let text = "";
+        switch (col.label) {
+          case "Date": text = r.date; break;
+          case "Day": text = r.day; break;
+          case "Status": text = r.status; break;
+          case "In": text = r.in; break;
+          case "Out": text = r.out; break;
+          case "Hrs": text = String(r.hrs); break;
+          case "OT": text = String(r.ot); break;
+        }
+        doc.text(text, col.x, currentY);
+      });
+      currentY += rowHeight;
     });
 
     doc.end();
