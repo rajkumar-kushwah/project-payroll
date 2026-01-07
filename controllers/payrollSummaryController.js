@@ -57,8 +57,12 @@ export const calculatePayroll = async (employee, month) => {
     endDate: { $gte: start },
   });
 
+  // Weekly off from schedule
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
-  const weeklyOffs = (schedule?.weeklyOff || ["Sunday"]).map(d => String(d).toLowerCase());
+  // ensure array of lowercase day names
+  const weeklyOffs = Array.isArray(schedule?.weeklyOff) && schedule.weeklyOff.length
+    ? schedule.weeklyOff.map(d => String(d).toLowerCase())
+    : ["sunday"];
 
   // Map attendance by date
   const attendanceMap = {};
@@ -70,7 +74,7 @@ export const calculatePayroll = async (employee, month) => {
       halfDay = 0,
       leaveCount = 0,
       officeHolidays = 0,
-      weekOffCount = 0,
+      weeklyOff = 0,
       missingDays = 0,
       overtimeHours = 0;
 
@@ -96,7 +100,7 @@ export const calculatePayroll = async (employee, month) => {
       normalizeDate(l.endDate) >= normalizeDate(cursor)
     );
 
-    // Assign status (order matters!)
+    // Assign status (priority: holiday > leave > weekly off > attendance > missing)
     if (isHoliday) {
       status = "office-holiday";
       officeHolidays++;
@@ -105,7 +109,7 @@ export const calculatePayroll = async (employee, month) => {
       leaveCount++;
     } else if (weeklyOffs.includes(dayName)) {
       status = "week-off";
-      weekOffCount++;
+      weeklyOff++;
     } else if (attendance) {
       status = attendance.status;
       if (attendance.status === "present") present++;
@@ -138,14 +142,15 @@ export const calculatePayroll = async (employee, month) => {
       halfDay,
       leave: leaveCount,
       officeHolidays,
-      weekOffCount,
+      weekOff: weeklyOff, // rename to match schema
       missingDays,
       overtimeHours,
-      totalWorking: present + halfDay + leaveCount
+      totalWorking: present + halfDay + leaveCount // weekly offs & holidays are not included in totalWorking
     },
     daily
   };
 };
+
 
 /* ---------------------------------
    Get All Payrolls

@@ -14,7 +14,7 @@ const payrollSchema = new Schema(
     present: Number,
     leave: Number,
     officeHolidays: Number,
-    weeklyOffCount: Number,
+    weeklyOff: { type: [String], default: ["Sunday"] },
     missingDays: Number,
     overtimeHours: Number,
     notes: String,
