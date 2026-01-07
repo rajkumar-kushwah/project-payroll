@@ -161,46 +161,51 @@ export const updateLeaveStatus = async (req, res) => {
     await leave.save();
 
     //  If approved → create attendance
-    if (status === "approved") {
-      const emp = await Employee.findById(leave.employeeId);
-      if (emp) {
-        let current = new Date(leave.startDate);
+   if (status === "approved") {
+  const emp = await Employee.findById(leave.employeeId);
+  if (emp) {
+    let current = new Date(leave.startDate);
+    const endDate = new Date(leave.endDate);
 
-        while (current <= leave.endDate) {
-          await Attendance.findOneAndUpdate(
-            {
-              employeeId: emp._id,
-              companyId: leave.companyId,
-              date: current,
-            },
-            {
-              employeeId: emp._id,
-              employeeCode: emp.employeeCode,
-              companyId: leave.companyId,
-              date: current,
-              status: "leave",
-              logType: "system",
-              isPaid: true,
-              checkIn: null,
-              checkOut: null,
-              totalHours: 0,
-              overtimeHours: 0,
-              missingHours: 0,
-              isLate: false,
-              lateByMinutes: 0,
-              isEarlyCheckout: false,
-              earlyByMinutes: 0,
-              isOvertime: false,
-              name: emp.name,
-              avatar: emp.avatar,
-            },
-            { upsert: true }
-          );
+    while (current <= endDate) {
+      // normalize current date
+      const dateOnly = new Date(current);
+      dateOnly.setHours(0, 0, 0, 0);
 
-          current.setDate(current.getDate() + 1);
-        }
-      }
+      await Attendance.findOneAndUpdate(
+        {
+          employeeId: emp._id,
+          companyId: leave.companyId,
+          date: dateOnly,
+        },
+        {
+          employeeId: emp._id,
+          employeeCode: emp.employeeCode,
+          companyId: leave.companyId,
+          date: dateOnly,
+          status: "leave",
+          logType: "system",
+          isPaid: true,
+          checkIn: null,
+          checkOut: null,
+          totalHours: 0,
+          overtimeHours: 0,
+          missingHours: 0,
+          isLate: false,
+          lateByMinutes: 0,
+          isEarlyCheckout: false,
+          earlyByMinutes: 0,
+          isOvertime: false,
+          name: emp.name,
+          avatar: emp.avatar,
+        },
+        { upsert: true }
+      );
+
+      current.setDate(current.getDate() + 1);
     }
+  }
+}
 
     res.json({
       success: true,
