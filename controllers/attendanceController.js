@@ -151,28 +151,37 @@ export const computeDerivedFields = (record, schedule) => {
   if (!record.checkIn || !record.checkOut) {
     record.totalMinutes = 0;
     record.totalHours = 0;
+    record.lateMinutes = 0;
+    record.earlyLeaveMinutes = 0;
+    record.overtimeMinutes = 0;
     record.status = "absent";
     return;
   }
 
   const checkIn = new Date(record.checkIn);
   const checkOut = new Date(record.checkOut);
-  const totalMins = minutesBetween(checkIn, checkOut);
-
-  record.totalMinutes = totalMins;
-  record.totalHours = minutesToHoursDecimal(totalMins);
 
   const fixedIn = hhmmToDate(record.date, schedule.inTime);
   const fixedOut = hhmmToDate(record.date, schedule.outTime);
 
+  // 1️⃣ Total worked minutes
+  const totalMins = minutesBetween(checkIn, checkOut);
+  record.totalMinutes = totalMins;
+  record.totalHours = minutesToHoursDecimal(totalMins);
+
+  // 2️⃣ Late / early leave
   record.lateMinutes = checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
   record.earlyLeaveMinutes = checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
+
+  // 3️⃣ Overtime = jitna kaam schedule ke baad kiya
   record.overtimeMinutes = checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
 
-  if (totalMins >= 480) record.status = "present";
-  else if (totalMins >= 240) record.status = "half-day";
+  // 4️⃣ Status
+  if (totalMins >= 480) record.status = "present"; // 8 hours
+  else if (totalMins >= 240) record.status = "half-day"; // 4 hours
   else record.status = "absent";
 };
+
 
 /* ======================================================
    GET WORK SCHEDULE
