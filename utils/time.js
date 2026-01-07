@@ -58,3 +58,16 @@ export const formatDateYYYYMMDD = (date) => {
   const day = d.getDate().toString().padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+
+const formatTime = (date) => {
+  if (!date) return "-";
+  const d = new Date(date);
+  return d.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+};
+
+export { formatTime };
