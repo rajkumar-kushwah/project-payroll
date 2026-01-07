@@ -38,7 +38,6 @@ export const calculatePayroll = async (employee, month) => {
   const today = normalizeDate(new Date());
   const effectiveEnd = normalizeDate(end > today ? today : end);
 
-  // Fetch data
   const attendances = await Attendance.find({
     employeeId: employee._id,
     date: { $gte: start, $lte: effectiveEnd },
@@ -57,14 +56,11 @@ export const calculatePayroll = async (employee, month) => {
     endDate: { $gte: start },
   });
 
-  // Weekly off from schedule
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
-  // ensure array of lowercase day names
   const weeklyOffs = Array.isArray(schedule?.weeklyOff) && schedule.weeklyOff.length
     ? schedule.weeklyOff.map(d => String(d).toLowerCase())
     : ["sunday"];
 
-  // Map attendance by date
   const attendanceMap = {};
   attendances.forEach(a => {
     attendanceMap[normalizeDate(a.date).toDateString()] = a;
@@ -84,23 +80,19 @@ export const calculatePayroll = async (employee, month) => {
   while (cursor <= effectiveEnd) {
     const dateKey = normalizeDate(cursor).toDateString();
     const dayName = cursor.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-
     let status = "missing";
     const attendance = attendanceMap[dateKey];
 
-    // Check holiday
     const isHoliday = holidays.some(h =>
       normalizeDate(h.startDate) <= normalizeDate(cursor) &&
       normalizeDate(h.endDate) >= normalizeDate(cursor)
     );
 
-    // Check leave
     const leaveRecord = leaves.find(l =>
       normalizeDate(l.startDate) <= normalizeDate(cursor) &&
       normalizeDate(l.endDate) >= normalizeDate(cursor)
     );
 
-    // Assign status (priority: holiday > leave > weekly off > attendance > missing)
     if (isHoliday) {
       status = "office-holiday";
       officeHolidays++;
@@ -142,14 +134,15 @@ export const calculatePayroll = async (employee, month) => {
       halfDay,
       leave: leaveCount,
       officeHolidays,
-      weekOff: weeklyOff, // rename to match schema
+      weeklyOff,   // <-- matches DB field
       missingDays,
       overtimeHours,
-      totalWorking: present + halfDay + leaveCount // weekly offs & holidays are not included in totalWorking
+      totalWorking: present + halfDay + leaveCount
     },
     daily
   };
 };
+
 
 
 /* ---------------------------------
@@ -158,7 +151,6 @@ export const calculatePayroll = async (employee, month) => {
 export const getPayrolls = async (req, res) => {
   const { month } = req.query;
   const companyId = req.user.companyId;
-
   const employees = await Employee.find({ companyId, status: "active" });
 
   const payrolls = [];
@@ -232,7 +224,7 @@ export const exportPayrollPdf = async (req, res) => {
       <p><b>Present:</b> ${summary.present}</p>
       <p><b>Leave:</b> ${summary.leave}</p>
       <p><b>Holidays:</b> ${summary.officeHolidays}</p>
-      <p><b>Weekly Offs:</b> ${summary.weekOffCount}</p>
+      <p><b>Weekly Offs:</b> ${summary.weeklyOff}</p>
       <p><b>Missing:</b> ${summary.missingDays}</p>
       <p><b>Overtime:</b> ${summary.overtimeHours}</p>
     `;
