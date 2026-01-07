@@ -411,14 +411,19 @@ export const exportPayrollCsv = async (req, res) => {
 export const exportPayrollPdf = async (req, res) => {
   try {
     const { employeeId, month } = req.query;
-    if (!employeeId || !month)
+    if (!employeeId || !month) {
       return res.status(400).json({ message: "employeeId & month required" });
+    }
 
     const employee = await Employee.findById(employeeId);
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
 
+    // Get start and end of month
     const { start, end } = getMonthRange(month);
 
+    // Fetch data
     const attendances = await Attendance.find({
       employeeId,
       date: { $gte: start, $lte: end },
@@ -438,58 +443,121 @@ export const exportPayrollPdf = async (req, res) => {
     });
 
     const schedule = await WorkSchedule.findOne({ employeeId });
-    const weeklyOffs = schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
+    const weeklyOffs =
+      schedule?.weeklyOff?.map(d => d.toLowerCase()) || ["sunday"];
 
-    // Map attendances by date for fast lookup
-    const attendanceMap = {};
-    attendances.forEach(a => {
-      attendanceMap[normalizeDate(a.date).toDateString()] = a;
+    // Get today's date (ignore future dates)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    /* ---------- Collect all relevant dates ---------- */
+    const datesSet = new Set();
+
+    // Attendance dates
+    attendances.forEach(a => datesSet.add(normalizeDate(a.date).toDateString()));
+
+    // Leave dates
+    leaves.forEach(l => {
+      let current = new Date(l.startDate);
+      const leaveEnd = new Date(l.endDate);
+      while (current <= leaveEnd && current <= today) {
+        datesSet.add(normalizeDate(current).toDateString());
+        current.setDate(current.getDate() + 1);
+      }
     });
 
-    // Build table rows
-    const rows = [];
-    let cursor = new Date(start);
-    while (cursor <= end) {
-      const current = normalizeDate(cursor);
-      const day = current.toLocaleDateString("en-IN", { weekday: "long" });
-      const dayLower = day.toLowerCase();
-      const key = current.toDateString();
-
-      const attendance = attendanceMap[key];
-      const leave = leaves.find(l => normalizeDate(l.startDate) <= current && normalizeDate(l.endDate) >= current);
-      const holiday = holidays.find(h => normalizeDate(h.startDate) <= current && normalizeDate(h.endDate) >= current);
-
-      let row = {
-        date: formatDateYYYYMMDD(current),
-        day,
-        status: "absent",
-        in: "-",
-        out: "-",
-        hrs: 0,
-        ot: 0
-      };
-
-      if (attendance) {
-        row.status = attendance.status || "present";
-        row.in = formatTimeIST(attendance.checkIn) || "-";
-        row.out = formatTimeIST(attendance.checkOut) || "-";
-        row.hrs = attendance.totalHours || 0;
-        row.ot = attendance.overtimeHours || 0;
-      } else if (leave) {
-        row.status = "leave";
-      } else if (holiday) {
-        row.status = "office-holiday";
-      } else if (weeklyOffs.includes(dayLower)) {
-        row.status = "weekly-off";
+    // Holiday dates
+    holidays.forEach(h => {
+      let current = new Date(h.startDate);
+      const holidayEnd = new Date(h.endDate);
+      while (current <= holidayEnd && current <= today) {
+        datesSet.add(normalizeDate(current).toDateString());
+        current.setDate(current.getDate() + 1);
       }
+    });
 
-      rows.push(row);
-      cursor.setDate(cursor.getDate() + 1);
+    // Weekly offs (from start of month to today)
+    let current = new Date(start);
+    while (current <= today) {
+      const dayName = current.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+      if (weeklyOffs.includes(dayName)) {
+        datesSet.add(normalizeDate(current).toDateString());
+      }
+      current.setDate(current.getDate() + 1);
     }
 
-    // ---------- Generate PDF ----------
+    // Sort dates ascending
+    const allDates = Array.from(datesSet)
+      .map(d => new Date(d))
+      .sort((a, b) => a - b);
+
+    /* ---------- Build Rows ---------- */
+    const rows = allDates.map(current => {
+      const key = current.toDateString();
+      const day = current.toLocaleDateString("en-IN", { weekday: "long" });
+      const dayLower = day.toLowerCase();
+
+      const attendance = attendances.find(a => normalizeDate(a.date).toDateString() === key);
+      const leave = leaves.find(l =>
+        normalizeDate(l.startDate) <= current &&
+        normalizeDate(l.endDate) >= current
+      );
+      const holiday = holidays.find(h =>
+        normalizeDate(h.startDate) <= current &&
+        normalizeDate(h.endDate) >= current
+      );
+
+      if (attendance) {
+        return {
+          date: formatDateYYYYMMDD(current),
+          day,
+          status: attendance.status,
+          in: formatTimeIST(attendance.checkIn),
+          out: formatTimeIST(attendance.checkOut),
+          hrs: attendance.totalHours || 0,
+          ot: attendance.overtimeHours || 0,
+        };
+      } else if (leave) {
+        return {
+          date: formatDateYYYYMMDD(current),
+          day,
+          status: "leave",
+          in: "-",
+          out: "-",
+          hrs: 0,
+          ot: 0,
+        };
+      } else if (holiday) {
+        return {
+          date: formatDateYYYYMMDD(current),
+          day,
+          status: "office-holiday",
+          in: "-",
+          out: "-",
+          hrs: 0,
+          ot: 0,
+        };
+      } else if (weeklyOffs.includes(dayLower)) {
+        return {
+          date: formatDateYYYYMMDD(current),
+          day,
+          status: "weekly-off",
+          in: "-",
+          out: "-",
+          hrs: 0,
+          ot: 0,
+        };
+      }
+
+      return null;
+    }).filter(Boolean); // remove nulls just in case
+
+    /* ---------- PDF ---------- */
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=Payslip_${employee.name}_${month}.pdf`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Payslip_${employee.name}_${month}.pdf`
+    );
 
     const doc = new PDFDocument({ margin: 40, size: "A4" });
     doc.pipe(res);
@@ -499,50 +567,39 @@ export const exportPayrollPdf = async (req, res) => {
     doc.fontSize(12).text(`Employee: ${employee.name}`);
     doc.text(`Employee Code: ${employee.employeeCode}`);
     doc.text(`Month: ${month}`);
-    doc.moveDown(1.5);
+    doc.moveDown(2);
 
-    // Table headers
-    const startX = 40;
-    const columnPositions = {
-      date: 40,
-      day: 110,
-      status: 180,
-      in: 260,
-      out: 320,
-      hrs: 390,
-      ot: 440
-    };
+    /* ---------- Table Header ---------- */
+    doc.fontSize(11);
+    doc.text("Date", 40);
+    doc.text("Day", 105);
+    doc.text("Status", 170);
+    doc.text("In", 265);
+    doc.text("Out", 325);
+    doc.text("Hrs", 395);
+    doc.text("OT", 435);
 
-    doc.fontSize(11).font("Helvetica-Bold");
-    doc.text("Date", columnPositions.date);
-    doc.text("Day", columnPositions.day);
-    doc.text("Status", columnPositions.status);
-    doc.text("In", columnPositions.in);
-    doc.text("Out", columnPositions.out);
-    doc.text("Hrs", columnPositions.hrs);
-    doc.text("OT", columnPositions.ot);
+    doc.moveDown();
+    doc.moveTo(40, doc.y).lineTo(520, doc.y).stroke();
 
-    doc.moveDown(0.5);
-    const tableTop = doc.y;
-    doc.moveTo(startX, tableTop).lineTo(520, tableTop).stroke();
-    doc.font("Helvetica");
-
-    // Table rows
+    /* ---------- Rows ---------- */
     rows.forEach(r => {
-      doc.moveDown(0.6);
-      doc.text(r.date, columnPositions.date);
-      doc.text(r.day, columnPositions.day);
-      doc.text(r.status, columnPositions.status);
-      doc.text(r.in, columnPositions.in);
-      doc.text(r.out, columnPositions.out);
-      doc.text(String(r.hrs), columnPositions.hrs);
-      doc.text(String(r.ot), columnPositions.ot);
+      doc.moveDown(0.7);
+      doc.text(r.date, 40);
+      doc.text(r.day, 105);
+      doc.text(r.status, 170);
+      doc.text(r.in, 265);
+      doc.text(r.out, 325);
+      doc.text(String(r.hrs), 395);
+      doc.text(String(r.ot), 435);
     });
 
     doc.end();
 
   } catch (err) {
     console.error("PDF ERROR:", err);
-    if (!res.headersSent) res.status(500).json({ message: "PDF generation failed" });
+    if (!res.headersSent) {
+      res.status(500).json({ message: "PDF generation failed" });
+    }
   }
 };
