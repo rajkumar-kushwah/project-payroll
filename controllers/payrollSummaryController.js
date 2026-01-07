@@ -34,29 +34,32 @@ const calculatePayroll = async (employee, month) => {
   const today = normalizeDate(new Date());
   const effectiveEnd = normalizeDate(end > today ? today : end);
 
-  // Attendance, leaves, holidays
+  // Fetch attendance
   const attendances = await Attendance.find({
     employeeId: employee._id,
     date: { $gte: start, $lte: effectiveEnd },
   });
 
+  // Fetch approved leaves in month
   const leaves = await Leave.find({
     employeeId: employee._id,
     status: "approved",
     startDate: { $lte: effectiveEnd },
-    endDate: { $gte: start },
+    endDate: { $gte: start }
   });
 
+  // Fetch company holidays in month
   const holidays = await OfficeHoliday.find({
     companyId: employee.companyId,
     startDate: { $lte: effectiveEnd },
-    endDate: { $gte: start },
+    endDate: { $gte: start }
   });
 
-  // Weekly off schedule
+  // Weekly offs
   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
   const weeklyOffsNormalized = (schedule?.weeklyOff || ["Sunday"]).map(d => d.toLowerCase());
 
+  // Map attendances by date string
   const attendanceMap = {};
   attendances.forEach(a => {
     attendanceMap[normalizeDate(a.date).toDateString()] = a;
@@ -79,19 +82,18 @@ const calculatePayroll = async (employee, month) => {
 
     let status = "missing";
 
-    // Holiday check
+    // Check holiday
     const isHoliday = holidays.some(h =>
-      cursor >= normalizeDate(h.startDate) &&
-      cursor <= normalizeDate(h.endDate)
+      normalizeDate(h.startDate) <= normalizeDate(cursor) &&
+      normalizeDate(h.endDate) >= normalizeDate(cursor)
     );
 
-    // Leave check
+    // Check leave
     const leaveRecord = leaves.find(l =>
-      cursor >= normalizeDate(l.startDate) &&
-      cursor <= normalizeDate(l.endDate)
+      normalizeDate(l.startDate) <= normalizeDate(cursor) &&
+      normalizeDate(l.endDate) >= normalizeDate(cursor)
     );
 
-    // Attendance check
     const attendance = attendanceMap[dateKey];
 
     if (isHoliday) {
@@ -125,8 +127,6 @@ const calculatePayroll = async (employee, month) => {
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  const totalWorked = present + halfDay + leaveCount;
-
   return {
     summary: {
       present,
@@ -136,11 +136,12 @@ const calculatePayroll = async (employee, month) => {
       weekOffCount: weekOff,
       missingDays: missing,
       overtimeHours,
-      totalWorking: totalWorked,
+      totalWorking: present + halfDay + leaveCount
     },
     daily
   };
 };
+
 
 
 /* ---------------------------------
