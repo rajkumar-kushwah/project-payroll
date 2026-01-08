@@ -168,40 +168,41 @@ export const computeDerivedFields = (record, schedule) => {
     return;
   }
 
-  // IST-safe schedule times
+  // Scheduled in/out times
   const [inH, inM] = schedule.inTime.split(":").map(Number);
   const [outH, outM] = schedule.outTime.split(":").map(Number);
 
-  const fixedIn = new Date(record.date);
-  fixedIn.setHours(inH, inM, 0, 0);
+  const scheduledIn = new Date(record.date);
+  scheduledIn.setHours(inH, inM, 0, 0);
 
-  const fixedOut = new Date(record.date);
-  fixedOut.setHours(outH, outM, 0, 0);
+  const scheduledOut = new Date(record.date);
+  scheduledOut.setHours(outH, outM, 0, 0);
 
-  // 1️⃣ Total work
+  // 1️⃣ Total worked hours
   const totalMinutes = minutesBetween(checkIn, checkOut);
   record.totalHours = minutesToHoursDecimal(totalMinutes);
 
   // 2️⃣ Late
-  record.lateByMinutes = checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
+  record.lateByMinutes = checkIn > scheduledIn ? minutesBetween(scheduledIn, checkIn) : 0;
   record.isLate = record.lateByMinutes > 0;
 
   // 3️⃣ Early checkout
-  record.earlyByMinutes = checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
+  record.earlyByMinutes = checkOut < scheduledOut ? minutesBetween(checkOut, scheduledOut) : 0;
   record.isEarlyCheckout = record.earlyByMinutes > 0;
 
-  // 4️⃣ Overtime
-  const overtimeMinutes = checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
+  // 4️⃣ Overtime (ONLY if checkout > scheduled out)
+  const overtimeMinutes = checkOut > scheduledOut ? minutesBetween(scheduledOut, checkOut) : 0;
   record.overtimeHours = minutesToHoursDecimal(overtimeMinutes);
   record.isOvertime = overtimeMinutes > 0;
 
   // 5️⃣ Status
   if (record.status !== "leave") {
-    if (totalMinutes >= 480) record.status = "present";
-    else if (totalMinutes >= 240) record.status = "half-day";
+    if (totalMinutes >= 480) record.status = "present";   // 8 hours full
+    else if (totalMinutes >= 240) record.status = "half-day"; // 4 hours min
     else record.status = "absent";
   }
 };
+
 
 
 
