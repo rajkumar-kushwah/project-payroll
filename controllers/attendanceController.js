@@ -147,7 +147,8 @@ export const autoCheckoutBySchedule = async () => {
 /* ======================================================
    DERIVED FIELDS CALCULATION
 ====================================================== */
-export const computeDerivedFields = (record, schedule) => {
+// Compute derived fields - timezone safe
+const computeDerivedFields = (record, schedule) => {
   if (!record.checkIn || !record.checkOut || !schedule) {
     record.totalHours = 0;
     record.overtimeHours = 0;
@@ -167,11 +168,17 @@ export const computeDerivedFields = (record, schedule) => {
     return;
   }
 
-  // UTC-safe scheduled time
-  const fixedIn = hhmmToDateUTC(record.date, schedule.inTime);
-  const fixedOut = hhmmToDateUTC(record.date, schedule.outTime);
+  // ✅ Convert schedule in/out to IST timezone Date
+  const [inH, inM] = schedule.inTime.split(":").map(Number);
+  const [outH, outM] = schedule.outTime.split(":").map(Number);
 
-  // 1️⃣ Total Work
+  const fixedIn = new Date(record.date);
+  fixedIn.setHours(inH, inM, 0, 0);
+
+  const fixedOut = new Date(record.date);
+  fixedOut.setHours(outH, outM, 0, 0);
+
+  // 1️⃣ Total work
   const totalMinutes = minutesBetween(checkIn, checkOut);
   record.totalHours = minutesToHoursDecimal(totalMinutes);
 
@@ -195,6 +202,7 @@ export const computeDerivedFields = (record, schedule) => {
     else record.status = "absent";
   }
 };
+
 
 
 
