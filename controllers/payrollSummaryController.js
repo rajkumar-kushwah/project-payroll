@@ -8,7 +8,7 @@ import { Parser } from "json2csv";
 import puppeteer from "puppeteer";
 import PDFDocument from "pdfkit";
 import {
-  
+
   formatDateYYYYMMDD,
   formatTimeIST,
 } from "../utils/time.js";
@@ -72,12 +72,12 @@ export const calculatePayroll = async (employee, month) => {
   });
 
   let present = 0,
-      halfDay = 0,
-      leaveCount = 0,
-      officeHolidays = 0,
-      weeklyOff = 0,
-      missingDays = 0,
-      overtimeHours = 0;
+    halfDay = 0,
+    leaveCount = 0,
+    officeHolidays = 0,
+    weeklyOff = 0,
+    missingDays = 0,
+    overtimeHours = 0;
 
   const daily = [];
   const cursor = new Date(start);
@@ -571,32 +571,40 @@ export const exportPayrollPdf = async (req, res) => {
 
     // ---------- PDF ----------
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=Payslip_${employee.name}_${month}.pdf`);
+    res.setHeader("Content-Disposition", `attachment; filename=AttendanceRecord_${employee.name}_${month}.pdf`);
 
     const doc = new PDFDocument({ margin: 40, size: "A4" });
     doc.pipe(res);
 
-    doc.fontSize(18).text("Payslip", { align: "center" });
+    doc.fontSize(18).text("Attendance Record", { align: "center" });
     doc.moveDown();
     doc.fontSize(12).text(`Employee: ${employee.name}`);
     doc.text(`Employee Code: ${employee.employeeCode}`);
     doc.text(`Month: ${month}`);
     doc.moveDown(2);
 
+
     // ---------- Table Header ----------
     const startX = 40;
     const columns = [
-      { label: "Date", x: 40 },
-      { label: "Day", x: 105 },
-      { label: "Status", x: 170 },
-      { label: "In", x: 265 },
-      { label: "Out", x: 325 },
-      { label: "Hrs", x: 395 },
-      { label: "OT", x: 435 },
+      { label: "Date", x: 40, width: 60 },
+      { label: "Day", x: 105, width: 60 },
+      { label: "Status", x: 170, width: 70 },
+      { label: "In", x: 265, width: 50 },
+      { label: "Out", x: 325, width: 50 },
+      { label: "Hrs", x: 395, width: 40 },
+      { label: "OT", x: 435, width: 40 },
     ];
 
     doc.fontSize(11);
-    columns.forEach(col => doc.text(col.label, col.x, doc.y));
+    const headerY = doc.y;
+    columns.forEach(col => {
+      doc.text(col.label, col.x, headerY, {
+        width: col.width,
+        align: "left",
+        baseline: "middle"
+      });
+    });
     doc.moveDown(0.5);
     doc.moveTo(startX, doc.y).lineTo(520, doc.y).stroke();
 
@@ -616,12 +624,18 @@ export const exportPayrollPdf = async (req, res) => {
           case "Hrs": text = String(r.hrs); break;
           case "OT": text = String(r.ot); break;
         }
-        doc.text(text, col.x, currentY);
+
+        doc.text(text, col.x, currentY, {
+          width: col.width,
+          align: "left",
+          baseline: "middle"
+        });
       });
       currentY += rowHeight;
     });
 
     doc.end();
+
 
   } catch (err) {
     console.error("PDF ERROR:", err);

@@ -178,31 +178,20 @@ export const computeDerivedFields = (record, schedule) => {
   const fixedOut = new Date(record.date);
   fixedOut.setHours(outH, outM, 0, 0);
 
-  // Helper: convert to IST milliseconds
-  const toIST = (d) => new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
-
-  const fixedInIST = toIST(fixedIn);
-  const fixedOutIST = toIST(fixedOut);
-  const checkInIST = toIST(checkIn);
-  const checkOutIST = toIST(checkOut);
-
   // 1️⃣ Total work
-  const totalMinutes = minutesBetween(checkInIST, checkOutIST);
+  const totalMinutes = minutesBetween(checkIn, checkOut);
   record.totalHours = minutesToHoursDecimal(totalMinutes);
 
   // 2️⃣ Late
-  record.lateByMinutes =
-    checkInIST > fixedInIST ? minutesBetween(fixedInIST, checkInIST) : 0;
+  record.lateByMinutes = checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
   record.isLate = record.lateByMinutes > 0;
 
   // 3️⃣ Early checkout
-  record.earlyByMinutes =
-    checkOutIST < fixedOutIST ? minutesBetween(checkOutIST, fixedOutIST) : 0;
+  record.earlyByMinutes = checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
   record.isEarlyCheckout = record.earlyByMinutes > 0;
 
   // 4️⃣ Overtime
-  const overtimeMinutes =
-    checkOutIST > fixedOutIST ? minutesBetween(fixedOutIST, checkOutIST) : 0;
+  const overtimeMinutes = checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
   record.overtimeHours = minutesToHoursDecimal(overtimeMinutes);
   record.isOvertime = overtimeMinutes > 0;
 
@@ -213,6 +202,7 @@ export const computeDerivedFields = (record, schedule) => {
     else record.status = "absent";
   }
 };
+
 
 
 
