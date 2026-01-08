@@ -148,7 +148,9 @@ export const autoCheckoutBySchedule = async () => {
    DERIVED FIELDS CALCULATION
 ====================================================== */
 export const computeDerivedFields = (record, schedule) => {
-  if (!record.checkIn || !record.checkOut) {
+
+  //  Safety checks
+  if (!record.checkIn || !record.checkOut || !schedule) {
     record.totalHours = 0;
     record.overtimeHours = 0;
     record.isOvertime = false;
@@ -159,35 +161,61 @@ export const computeDerivedFields = (record, schedule) => {
   const checkIn = new Date(record.checkIn);
   const checkOut = new Date(record.checkOut);
 
-  const fixedIn = hhmmToDate(record.date, schedule.inTime);
-  const fixedOut = hhmmToDate(record.date, schedule.outTime);
+  //  Invalid time safety
+  if (checkOut <= checkIn) {
+    record.totalHours = 0;
+    record.overtimeHours = 0;
+    record.isOvertime = false;
+    record.status = "absent";
+    return;
+  }
 
-  // 1️⃣ Total worked minutes
+  //  FIXED OFFICE TIME (DATE SAFE)
+  const fixedIn = hhmmToDate(new Date(record.date), schedule.inTime);
+  const fixedOut = hhmmToDate(new Date(record.date), schedule.outTime);
+
+  /* ===============================
+     1️ TOTAL WORK
+  =============================== */
   const totalMinutes = minutesBetween(checkIn, checkOut);
   record.totalHours = minutesToHoursDecimal(totalMinutes);
 
-  // 2️⃣ Late
+  /* ===============================
+     2️ LATE
+  =============================== */
   record.lateByMinutes =
     checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
   record.isLate = record.lateByMinutes > 0;
 
-  // 3️⃣ Early checkout
+  /* ===============================
+     3️ EARLY CHECKOUT
+  =============================== */
   record.earlyByMinutes =
     checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
   record.isEarlyCheckout = record.earlyByMinutes > 0;
 
-  // 4️⃣ ✅ OVERTIME (MAIN FIX)
-  const overtimeMinutes =
-    checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
+  /* ===============================
+     4️ OVERTIME (CORRECT)
+  =============================== */
+  let overtimeMinutes = 0;
+
+  if (checkOut > fixedOut) {
+    overtimeMinutes = minutesBetween(fixedOut, checkOut);
+  }
 
   record.overtimeHours = minutesToHoursDecimal(overtimeMinutes);
   record.isOvertime = overtimeMinutes > 0;
 
-  // 5️⃣ Status
-  if (totalMinutes >= 480) record.status = "present";
-  else if (totalMinutes >= 240) record.status = "half-day";
-  else record.status = "absent";
+  /* ===============================
+     5️ STATUS (DO NOT OVERRIDE MANUAL ABSENT)
+  =============================== */
+  if (record.status !== "leave") {
+    if (totalMinutes >= 480) record.status = "present";
+    else if (totalMinutes >= 240) record.status = "half-day";
+    else record.status = "absent";
+  }
 };
+
 
 
 
