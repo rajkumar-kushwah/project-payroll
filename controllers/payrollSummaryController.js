@@ -11,7 +11,6 @@ import {
 
   formatDateYYYYMMDD,
   formatTimeIST,
-  minutesBetween,
 } from "../utils/time.js";
 /* ---------------------------------
    Helpers
@@ -39,116 +38,6 @@ const getMonthRange = (month) => {
 /* ---------------------------------
    Payroll Calculation
 ---------------------------------- */
-// export const calculatePayroll = async (employee, month) => {
-//   const { start, end } = getMonthRange(month);
-//   const today = normalizeDate(new Date());
-//   const effectiveEnd = normalizeDate(end > today ? today : end);
-
-//   const attendances = await Attendance.find({
-//     employeeId: employee._id,
-//     date: { $gte: start, $lte: effectiveEnd },
-//   });
-
-//   const leaves = await Leave.find({
-//     employeeId: employee._id,
-//     status: "approved",
-//     startDate: { $lte: effectiveEnd },
-//     endDate: { $gte: start },
-//   });
-
-//   const holidays = await OfficeHoliday.find({
-//     companyId: employee.companyId,
-//     startDate: { $lte: effectiveEnd },
-//     endDate: { $gte: start },
-//   });
-
-//   const schedule = await WorkSchedule.findOne({ employeeId: employee._id });
-//   const weeklyOffs = Array.isArray(schedule?.weeklyOff) && schedule.weeklyOff.length
-//     ? schedule.weeklyOff.map(d => String(d).toLowerCase())
-//     : ["sunday"];
-
-//   const attendanceMap = {};
-//   attendances.forEach(a => {
-//     attendanceMap[normalizeDate(a.date).toDateString()] = a;
-//   });
-
-//   let present = 0,
-//     halfDay = 0,
-//     leaveCount = 0,
-//     officeHolidays = 0,
-//     weeklyOff = 0,
-//     missingDays = 0,
-//     overtimeHours = 0;
-
-//   const daily = [];
-//   const cursor = new Date(start);
-
-//   while (cursor <= effectiveEnd) {
-//     const dateKey = normalizeDate(cursor).toDateString();
-//     const dayName = cursor.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
-//     let status = "missing";
-//     const attendance = attendanceMap[dateKey];
-
-//     const isHoliday = holidays.some(h =>
-//       normalizeDate(h.startDate) <= normalizeDate(cursor) &&
-//       normalizeDate(h.endDate) >= normalizeDate(cursor)
-//     );
-
-//     const leaveRecord = leaves.find(l =>
-//       normalizeDate(l.startDate) <= normalizeDate(cursor) &&
-//       normalizeDate(l.endDate) >= normalizeDate(cursor)
-//     );
-
-//     if (isHoliday) {
-//       status = "office-holiday";
-//       officeHolidays++;
-//     } else if (leaveRecord) {
-//       status = "leave";
-//       leaveCount++;
-//     } else if (weeklyOffs.includes(dayName)) {
-//       status = "week-off";
-//       weeklyOff++;
-//     } else if (attendance) {
-//       status = attendance.status;
-//       if (attendance.status === "present") present++;
-//       else if (attendance.status === "half-day") halfDay += 0.5;
-//       overtimeHours += attendance.overtimeHours || 0;
-//     } else {
-//       missingDays++;
-//     }
-
-//     daily.push({
-//       date: dateKey,
-//       day: dayName,
-//       status,
-//       checkIn: attendance?.checkIn || null,
-//       checkOut: attendance?.checkOut || null,
-//       totalHours: attendance?.totalHours || 0,
-//       overtimeHours: attendance?.overtimeHours || 0
-//     });
-
-//     cursor.setDate(cursor.getDate() + 1);
-//   }
-
-//   return {
-//     summary: {
-//       employeeId: employee._id,
-//       employeeCode: employee.employeeCode,
-//       name: employee.name,
-//       avatar: employee.avatar,
-//       present,
-//       halfDay,
-//       leave: leaveCount,
-//       officeHolidays,
-//       weeklyOff,   // <-- matches DB field
-//       missingDays,
-//       overtimeHours,
-//       totalWorking: present + halfDay + leaveCount
-//     },
-//     daily
-//   };
-// };
-
 export const calculatePayroll = async (employee, month) => {
   const { start, end } = getMonthRange(month);
   const today = normalizeDate(new Date());
@@ -222,8 +111,6 @@ export const calculatePayroll = async (employee, month) => {
       status = attendance.status;
       if (attendance.status === "present") present++;
       else if (attendance.status === "half-day") halfDay += 0.5;
-
-      // ✅ Overtime: attendance.overtimeHours should already be HR decimal
       overtimeHours += attendance.overtimeHours || 0;
     } else {
       missingDays++;
@@ -242,9 +129,6 @@ export const calculatePayroll = async (employee, month) => {
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  // Round payroll overtime to 2 decimals for DB consistency
-  overtimeHours = +overtimeHours.toFixed(2);
-
   return {
     summary: {
       employeeId: employee._id,
@@ -255,7 +139,7 @@ export const calculatePayroll = async (employee, month) => {
       halfDay,
       leave: leaveCount,
       officeHolidays,
-      weeklyOff,
+      weeklyOff,   // <-- matches DB field
       missingDays,
       overtimeHours,
       totalWorking: present + halfDay + leaveCount
@@ -263,6 +147,7 @@ export const calculatePayroll = async (employee, month) => {
     daily
   };
 };
+
 
 
 /* ---------------------------------
