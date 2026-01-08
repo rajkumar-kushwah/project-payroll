@@ -587,30 +587,33 @@ export const exportPayrollPdf = async (req, res) => {
     // ---------- Table Header ----------
     const startX = 40;
     const columns = [
-      { label: "Date", x: 40, width: 40 },
-      { label: "Day", x: 105, width: 40 },
-      { label: "Status", x: 170, width: 40 },
-      { label: "In", x: 265, width: 40 },
-      { label: "Out", x: 325, width: 40 },
+      { label: "Date", x: 40, width: 60 },
+      { label: "Day", x: 105, width: 60 },
+      { label: "Status", x: 170, width: 70 },
+      { label: "In", x: 265, width: 50 },
+      { label: "Out", x: 325, width: 50 },
       { label: "Hrs", x: 395, width: 40 },
       { label: "OT", x: 435, width: 40 },
     ];
 
     doc.fontSize(11);
-    const headerY = doc.y;
+
+    // Header slightly higher
+    const headerY = doc.y - 5; // <-- move header a bit up
     columns.forEach(col => {
       doc.text(col.label, col.x, headerY, {
         width: col.width,
         align: "left",
-        baseline: "middle"
+        baseline: "middle",
       });
     });
-    doc.moveDown(0.5);
-    doc.moveTo(startX, doc.y).lineTo(520, doc.y).stroke();
+
+    // Border line slightly above rows
+    doc.moveTo(startX, headerY + 18).lineTo(520, headerY + 18).stroke();
 
     // ---------- Rows ----------
     const rowHeight = 20;
-    let currentY = doc.y + 5;
+    let currentY = headerY + 25; // <-- start rows a bit below header
 
     rows.forEach(r => {
       columns.forEach(col => {
@@ -628,13 +631,15 @@ export const exportPayrollPdf = async (req, res) => {
         doc.text(text, col.x, currentY, {
           width: col.width,
           align: "left",
-          baseline: "middle"
+          baseline: "middle",
         });
       });
+
       currentY += rowHeight;
     });
 
     doc.end();
+
 
 
   } catch (err) {
