@@ -68,6 +68,13 @@ export const formatTimeIST = (date) => {
   });
 };
 
+export const hhmmToDateUTC = (date, hhmm) => {
+  if (!hhmm) return null;
+  const [hours, minutes] = hhmm.split(":").map(Number);
+  const d = new Date(date);
+  d.setUTCHours(hours, minutes, 0, 0); // UTC-safe
+  return d;
+};
 
 
 

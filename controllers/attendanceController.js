@@ -6,7 +6,7 @@ import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
 import WorkSchedule from "../models/WorkSchedule.js";
 import Leave from "../models/Leave.js";
-import { hhmmToDate, minutesBetween, minutesToHoursDecimal } from "../utils/time.js";
+import { hhmmToDate,hhmmToDateUTC, minutesBetween, minutesToHoursDecimal } from "../utils/time.js";
 import OfficeHoliday from "../models/OfficeHoliday.js";
 
 
@@ -148,65 +148,53 @@ export const autoCheckoutBySchedule = async () => {
    DERIVED FIELDS CALCULATION
 ====================================================== */
 export const computeDerivedFields = (record, schedule) => {
-
-  // 1️ Safety checks
+  // Safety checks
   if (!record.checkIn || !record.checkOut || !schedule) {
     record.totalHours = 0;
     record.overtimeHours = 0;
     record.isOvertime = false;
     record.status = "absent";
-    record.lateByMinutes = 0;
-    record.isLate = false;
-    record.earlyByMinutes = 0;
-    record.isEarlyCheckout = false;
     return;
   }
 
-  // Parse checkIn/checkOut as Date objects (UTC)
   const checkIn = new Date(record.checkIn);
   const checkOut = new Date(record.checkOut);
 
+  // Invalid time safety
   if (checkOut <= checkIn) {
-    // Invalid times
     record.totalHours = 0;
     record.overtimeHours = 0;
     record.isOvertime = false;
     record.status = "absent";
-    record.lateByMinutes = 0;
-    record.isLate = false;
-    record.earlyByMinutes = 0;
-    record.isEarlyCheckout = false;
     return;
   }
 
-  // 2️ Build fixed office times (schedule) in UTC
-  // Use record.date as base
-  const recordDate = new Date(record.date);
-  const fixedIn = hhmmToDate(recordDate.toISOString().split("T")[0], schedule.inTime);
-  const fixedOut = hhmmToDate(recordDate.toISOString().split("T")[0], schedule.outTime);
+  // FIXED OFFICE TIME (UTC-safe)
+  const fixedIn = hhmmToDateUTC(record.date, schedule.inTime);
+  const fixedOut = hhmmToDateUTC(record.date, schedule.outTime);
 
-  // 3️ Total worked minutes
+  // 1️⃣ TOTAL WORK
   const totalMinutes = minutesBetween(checkIn, checkOut);
   record.totalHours = minutesToHoursDecimal(totalMinutes);
 
-  // 4️ Late
+  // 2️⃣ LATE
   record.lateByMinutes = checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
   record.isLate = record.lateByMinutes > 0;
 
-  // 5️ Early checkout
+  // 3️⃣ EARLY CHECKOUT
   record.earlyByMinutes = checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
   record.isEarlyCheckout = record.earlyByMinutes > 0;
 
-  // 6️ Overtime
+  // 4️⃣ OVERTIME
   const overtimeMinutes = checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
   record.overtimeHours = minutesToHoursDecimal(overtimeMinutes);
   record.isOvertime = overtimeMinutes > 0;
 
-  // 7️ Status (don't override manual leave)
+  // 5️⃣ STATUS (do not override manual leave)
   if (record.status !== "leave") {
-    if (totalMinutes >= 480) record.status = "present";        // 8h+
-    else if (totalMinutes >= 240) record.status = "half-day";   // 4h+
-    else record.status = "absent";                             // <4h
+    if (totalMinutes >= 480) record.status = "present";
+    else if (totalMinutes >= 240) record.status = "half-day";
+    else record.status = "absent";
   }
 };
 
@@ -282,6 +270,47 @@ export const checkIn = async (req, res) => {
 /* ======================================================
    CHECK-OUT
 ====================================================== */
+// export const checkOut = async (req, res) => {
+//   try {
+//     let emp;
+
+//     if (req.user.role === "employee") {
+//       emp = await getEmployeeFromToken(req);
+//       if (!emp) return res.status(404).json({ message: "Employee not found" });
+//     }
+
+//     if (["admin", "owner", "hr"].includes(req.user.role)) {
+//       if (!req.body.employeeId)
+//         return res.status(400).json({ message: "employeeId required" });
+//       emp = await Employee.findById(req.body.employeeId);
+//     }
+
+//     const today = toDateString(new Date());
+
+//     const record = await Attendance.findOne({
+//       employeeId: emp._id,
+//       companyId: req.user.companyId,
+//       date: new Date(today),
+//     });
+
+//     if (!record)
+//       return res.status(404).json({ message: "Check-in not found" });
+
+//     if (record.checkOut)
+//       return res.status(400).json({ message: "Already checked out" });
+
+//     record.checkOut = new Date();
+
+//     const schedule = await getSchedule(emp, req.user.companyId);
+//     computeDerivedFields(record, schedule);
+
+//     await record.save();
+//     res.json({ success: true, data: record });
+//   } catch (err) {
+//     console.error("CheckOut Error:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
 export const checkOut = async (req, res) => {
   try {
     let emp;
@@ -297,27 +326,31 @@ export const checkOut = async (req, res) => {
       emp = await Employee.findById(req.body.employeeId);
     }
 
-    const today = toDateString(new Date());
+    //  Use UTC-safe day range
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setUTCHours(23, 59, 59, 999);
 
     const record = await Attendance.findOne({
       employeeId: emp._id,
       companyId: req.user.companyId,
-      date: new Date(today),
+      date: { $gte: startOfDay, $lte: endOfDay },
     });
 
-    if (!record)
-      return res.status(404).json({ message: "Check-in not found" });
+    if (!record) return res.status(404).json({ message: "Check-in not found" });
+    if (record.checkOut) return res.status(400).json({ message: "Already checked out" });
 
-    if (record.checkOut)
-      return res.status(400).json({ message: "Already checked out" });
-
+    //  Current UTC time as checkOut
     record.checkOut = new Date();
 
+    //  Fetch schedule & compute derived fields
     const schedule = await getSchedule(emp, req.user.companyId);
     computeDerivedFields(record, schedule);
 
     await record.save();
     res.json({ success: true, data: record });
+
   } catch (err) {
     console.error("CheckOut Error:", err);
     res.status(500).json({ message: "Server error" });
