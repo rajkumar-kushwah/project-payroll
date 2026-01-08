@@ -152,10 +152,14 @@ export const autoCheckoutBySchedule = async () => {
 
 
 export const computeDerivedFields = (record, schedule) => {
-  if (!record.checkIn || !record.checkOut || !schedule?.outTime) {
+  if (!record.checkIn || !record.checkOut || !schedule?.outTime || !schedule?.inTime) {
     record.totalHours = 0;
     record.overtimeHours = 0;
     record.isOvertime = false;
+    record.isLate = false;
+    record.lateByMinutes = 0;
+    record.isEarlyCheckout = false;
+    record.earlyByMinutes = 0;
     return;
   }
 
@@ -168,30 +172,45 @@ export const computeDerivedFields = (record, schedule) => {
     new Date(record.checkOut).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
   );
 
-  // Schedule OUT time (from DB)
+  // Schedule IN and OUT time
+  const [inH, inM] = schedule.inTime.split(":").map(Number);
   const [outH, outM] = schedule.outTime.split(":").map(Number);
 
-  // Schedule OUT Date in IST
+  // Schedule IN & OUT Dates in IST
+  const scheduleInIST = new Date(
+    new Date(record.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+  );
+  scheduleInIST.setHours(inH, inM, 0, 0);
+
   const scheduleOutIST = new Date(
     new Date(record.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
   );
   scheduleOutIST.setHours(outH, outM, 0, 0);
 
   // 1️⃣ Total work
-  const totalMinutes = Math.floor((checkOutIST - checkInIST) / 60000);
-  record.totalHours = +(totalMinutes / 60).toFixed(2);
+  const totalMinutes = minutesBetween(checkInIST, checkOutIST);
+  record.totalHours = minutesToHRDecimal(totalMinutes);
 
-  // 2️⃣ Overtime (ONLY schedule compare)
-  if (checkOutIST > scheduleOutIST) {
-    const otMinutes = Math.floor((checkOutIST - scheduleOutIST) / 60000);
-    record.overtimeHours = +(otMinutes / 60).toFixed(2);
-    record.isOvertime = true;
-  } else {
-    record.overtimeHours = 0;
-    record.isOvertime = false;
+  // 2️⃣ Late
+  record.lateByMinutes = checkInIST > scheduleInIST ? minutesBetween(scheduleInIST, checkInIST) : 0;
+  record.isLate = record.lateByMinutes > 0;
+
+  // 3️⃣ Early checkout
+  record.earlyByMinutes = checkOutIST < scheduleOutIST ? minutesBetween(checkOutIST, scheduleOutIST) : 0;
+  record.isEarlyCheckout = record.earlyByMinutes > 0;
+
+  // 4️⃣ Overtime (compare only with schedule OUT)
+  const overtimeMinutes = checkOutIST > scheduleOutIST ? minutesBetween(scheduleOutIST, checkOutIST) : 0;
+  record.overtimeHours = minutesToHRDecimal(overtimeMinutes);
+  record.isOvertime = overtimeMinutes > 0;
+
+  // 5️⃣ Status (optional, can adjust your rules)
+  if (record.status !== "leave") {
+    if (totalMinutes >= 480) record.status = "present";
+    else if (totalMinutes >= 240) record.status = "half-day";
+    else record.status = "absent";
   }
 };
-
 
 
 
