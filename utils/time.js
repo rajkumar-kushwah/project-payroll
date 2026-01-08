@@ -22,12 +22,19 @@ export const minutesBetween = (start, end) => {
 };
 
 /**
- * Convert minutes → decimal hours (e.g., 510 → 8.5)
+ * Convert minutes → HR decimal (HH.MM)
+ * 7   → 0.07
+ * 65  → 1.05
  */
 export const minutesToHoursDecimal = (mins) => {
   if (!mins || mins <= 0) return 0;
-  return +(mins / 60).toFixed(2);
+
+  const hours = Math.floor(mins / 60);
+  const minutes = mins % 60;
+
+  return Number(`${hours}.${String(minutes).padStart(2, "0")}`);
 };
+
 
 /**
  * Format Date object → "HH:mm" string
