@@ -170,9 +170,10 @@ export const computeDerivedFields = (record, schedule) => {
     return;
   }
 
-  //  FIXED OFFICE TIME (DATE SAFE)
-  const fixedIn = hhmmToDate(new Date(record.date), schedule.inTime);
-  const fixedOut = hhmmToDate(new Date(record.date), schedule.outTime);
+  //  FIXED OFFICE TIME (LOCAL DATE SAFE)
+  const dateStr = new Date(record.date).toISOString().split("T")[0]; // "YYYY-MM-DD"
+  const fixedIn = hhmmToDate(dateStr, schedule.inTime);
+  const fixedOut = hhmmToDate(dateStr, schedule.outTime);
 
   /* ===============================
      1️ TOTAL WORK
@@ -197,12 +198,7 @@ export const computeDerivedFields = (record, schedule) => {
   /* ===============================
      4️ OVERTIME (CORRECT)
   =============================== */
-  let overtimeMinutes = 0;
-
-  if (checkOut > fixedOut) {
-    overtimeMinutes = minutesBetween(fixedOut, checkOut);
-  }
-
+  const overtimeMinutes = checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
   record.overtimeHours = minutesToHoursDecimal(overtimeMinutes);
   record.isOvertime = overtimeMinutes > 0;
 
@@ -215,6 +211,7 @@ export const computeDerivedFields = (record, schedule) => {
     else record.status = "absent";
   }
 };
+
 
 
 

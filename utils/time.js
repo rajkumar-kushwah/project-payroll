@@ -5,11 +5,11 @@
  */
 export const hhmmToDate = (dateStr, hhmm) => {
   if (!hhmm) return null;
+  const [year, month, day] = dateStr.split("-").map(Number);
   const [hours, minutes] = hhmm.split(":").map(Number);
-  const d = new Date(dateStr);
-  d.setHours(hours, minutes, 0, 0);
-  return d;
+  return new Date(year, month - 1, day, hours, minutes, 0, 0); // Local time
 };
+
 
 /**
  * Minutes difference between two Date objects
