@@ -148,6 +148,7 @@ export const autoCheckoutBySchedule = async () => {
    DERIVED FIELDS CALCULATION
 ====================================================== */
 // Compute derived fields - timezone safe
+// Compute derived fields - TIMEZONE SAFE & CORRECT OT
 export const computeDerivedFields = (record, schedule) => {
   if (!record.checkIn || !record.checkOut || !schedule) {
     record.totalHours = 0;
@@ -168,40 +169,49 @@ export const computeDerivedFields = (record, schedule) => {
     return;
   }
 
-  // Scheduled in/out times
+  // 🔹 Schedule time parts
   const [inH, inM] = schedule.inTime.split(":").map(Number);
   const [outH, outM] = schedule.outTime.split(":").map(Number);
 
-  const scheduledIn = new Date(record.date);
-  scheduledIn.setHours(inH, inM, 0, 0);
+  // ✅ IMPORTANT FIX:
+  // Schedule ko checkIn wali date pe banao (UTC safe)
+  const scheduledIn = new Date(checkIn);
+  scheduledIn.setUTCHours(inH, inM, 0, 0);
 
-  const scheduledOut = new Date(record.date);
-  scheduledOut.setHours(outH, outM, 0, 0);
+  const scheduledOut = new Date(checkIn);
+  scheduledOut.setUTCHours(outH, outM, 0, 0);
 
-  // 1️⃣ Total worked hours
+  // 🔹 Total worked minutes
   const totalMinutes = minutesBetween(checkIn, checkOut);
   record.totalHours = minutesToHoursDecimal(totalMinutes);
 
-  // 2️⃣ Late
-  record.lateByMinutes = checkIn > scheduledIn ? minutesBetween(scheduledIn, checkIn) : 0;
+  // 🔹 Late calculation
+  record.lateByMinutes =
+    checkIn > scheduledIn ? minutesBetween(scheduledIn, checkIn) : 0;
   record.isLate = record.lateByMinutes > 0;
 
-  // 3️⃣ Early checkout
-  record.earlyByMinutes = checkOut < scheduledOut ? minutesBetween(checkOut, scheduledOut) : 0;
+  // 🔹 Early checkout
+  record.earlyByMinutes =
+    checkOut < scheduledOut ? minutesBetween(checkOut, scheduledOut) : 0;
   record.isEarlyCheckout = record.earlyByMinutes > 0;
 
-  // 4️⃣ Overtime (ONLY if checkout > scheduled out)
-  const overtimeMinutes = checkOut > scheduledOut ? minutesBetween(scheduledOut, checkOut) : 0;
+  // 🔹 Overtime (AFTER scheduled out)
+  const overtimeMinutes =
+    checkOut > scheduledOut
+      ? minutesBetween(scheduledOut, checkOut)
+      : 0;
+
   record.overtimeHours = minutesToHoursDecimal(overtimeMinutes);
   record.isOvertime = overtimeMinutes > 0;
 
-  // 5️⃣ Status
-  if (record.status !== "leave") {
-    if (totalMinutes >= 480) record.status = "present";   // 8 hours full
-    else if (totalMinutes >= 240) record.status = "half-day"; // 4 hours min
+  // 🔹 Status
+  if (record.status !== "leave" && record.status !== "office leave") {
+    if (totalMinutes >= 480) record.status = "present";     // 8 hours
+    else if (totalMinutes >= 240) record.status = "half-day";
     else record.status = "absent";
   }
 };
+
 
 
 
