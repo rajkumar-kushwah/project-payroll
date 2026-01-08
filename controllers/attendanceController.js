@@ -152,62 +152,47 @@ export const autoCheckoutBySchedule = async () => {
 
 
 export const computeDerivedFields = (record, schedule) => {
-  if (!record.checkIn || !record.checkOut || !schedule) {
+  if (!record.checkIn || !record.checkOut || !schedule?.outTime) {
     record.totalHours = 0;
     record.overtimeHours = 0;
     record.isOvertime = false;
-    record.status = "absent";
     return;
   }
 
-  const checkIn = new Date(record.checkIn);   // UTC
-  const checkOut = new Date(record.checkOut); // UTC
+  // Convert actual logs to IST Date
+  const checkInIST = new Date(
+    new Date(record.checkIn).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+  );
 
-  if (checkOut <= checkIn) {
-    record.totalHours = 0;
+  const checkOutIST = new Date(
+    new Date(record.checkOut).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+  );
+
+  // Schedule OUT time (from DB)
+  const [outH, outM] = schedule.outTime.split(":").map(Number);
+
+  // Schedule OUT Date in IST
+  const scheduleOutIST = new Date(
+    new Date(record.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
+  );
+  scheduleOutIST.setHours(outH, outM, 0, 0);
+
+  // 1️⃣ Total work
+  const totalMinutes = Math.floor((checkOutIST - checkInIST) / 60000);
+  record.totalHours = +(totalMinutes / 60).toFixed(2);
+
+  // 2️⃣ Overtime (ONLY schedule compare)
+  if (checkOutIST > scheduleOutIST) {
+    const otMinutes = Math.floor((checkOutIST - scheduleOutIST) / 60000);
+    record.overtimeHours = +(otMinutes / 60).toFixed(2);
+    record.isOvertime = true;
+  } else {
     record.overtimeHours = 0;
     record.isOvertime = false;
-    record.status = "absent";
-    return;
-  }
-
-  // ✅ YYYY-MM-DD from record.date (UTC safe)
-  const dateStr = record.date.toISOString().split("T")[0];
-
-  // ✅ Schedule times converted to UTC properly
-  const scheduledIn = hhmmToDateUTC(dateStr, schedule.inTime);
-  const scheduledOut = hhmmToDateUTC(dateStr, schedule.outTime);
-
-  // 🔹 Total work
-  const totalMinutes = minutesBetween(checkIn, checkOut);
-  record.totalHours = minutesToHoursDecimal(totalMinutes);
-
-  // 🔹 Late
-  record.lateByMinutes =
-    checkIn > scheduledIn ? minutesBetween(scheduledIn, checkIn) : 0;
-  record.isLate = record.lateByMinutes > 0;
-
-  // 🔹 Early checkout
-  record.earlyByMinutes =
-    checkOut < scheduledOut ? minutesBetween(checkOut, scheduledOut) : 0;
-  record.isEarlyCheckout = record.earlyByMinutes > 0;
-
-  // 🔹 Overtime (ONLY after scheduled out)
-  const overtimeMinutes =
-    checkOut > scheduledOut
-      ? minutesBetween(scheduledOut, checkOut)
-      : 0;
-
-  record.overtimeHours = minutesToHoursDecimal(overtimeMinutes);
-  record.isOvertime = overtimeMinutes > 0;
-
-  // 🔹 Status
-  if (record.status !== "leave" && record.status !== "office leave") {
-    if (totalMinutes >= 480) record.status = "present";
-    else if (totalMinutes >= 240) record.status = "half-day";
-    else record.status = "absent";
   }
 };
+
+
 
 
 
