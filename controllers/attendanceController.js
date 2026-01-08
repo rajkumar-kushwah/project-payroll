@@ -148,7 +148,6 @@ export const autoCheckoutBySchedule = async () => {
    DERIVED FIELDS CALCULATION
 ====================================================== */
 export const computeDerivedFields = (record, schedule) => {
-  // Safety checks
   if (!record.checkIn || !record.checkOut || !schedule) {
     record.totalHours = 0;
     record.overtimeHours = 0;
@@ -160,7 +159,6 @@ export const computeDerivedFields = (record, schedule) => {
   const checkIn = new Date(record.checkIn);
   const checkOut = new Date(record.checkOut);
 
-  // Invalid time safety
   if (checkOut <= checkIn) {
     record.totalHours = 0;
     record.overtimeHours = 0;
@@ -169,28 +167,28 @@ export const computeDerivedFields = (record, schedule) => {
     return;
   }
 
-  // FIXED OFFICE TIME (UTC-safe)
+  // UTC-safe scheduled time
   const fixedIn = hhmmToDateUTC(record.date, schedule.inTime);
   const fixedOut = hhmmToDateUTC(record.date, schedule.outTime);
 
-  // 1️⃣ TOTAL WORK
+  // 1️⃣ Total Work
   const totalMinutes = minutesBetween(checkIn, checkOut);
   record.totalHours = minutesToHoursDecimal(totalMinutes);
 
-  // 2️⃣ LATE
+  // 2️⃣ Late
   record.lateByMinutes = checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
   record.isLate = record.lateByMinutes > 0;
 
-  // 3️⃣ EARLY CHECKOUT
+  // 3️⃣ Early checkout
   record.earlyByMinutes = checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
   record.isEarlyCheckout = record.earlyByMinutes > 0;
 
-  // 4️⃣ OVERTIME
+  // 4️⃣ Overtime
   const overtimeMinutes = checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
   record.overtimeHours = minutesToHoursDecimal(overtimeMinutes);
   record.isOvertime = overtimeMinutes > 0;
 
-  // 5️⃣ STATUS (do not override manual leave)
+  // 5️⃣ Status
   if (record.status !== "leave") {
     if (totalMinutes >= 480) record.status = "present";
     else if (totalMinutes >= 240) record.status = "half-day";
@@ -311,51 +309,67 @@ export const checkIn = async (req, res) => {
 //     res.status(500).json({ message: "Server error" });
 //   }
 // };
+// controllers/attendanceController.js
+
 export const checkOut = async (req, res) => {
   try {
     let emp;
 
+    // 🔹 Employee role
     if (req.user.role === "employee") {
       emp = await getEmployeeFromToken(req);
-      if (!emp) return res.status(404).json({ message: "Employee not found" });
+      if (!emp)
+        return res.status(404).json({ message: "Employee not found" });
     }
 
+    // 🔹 Admin / HR / Owner
     if (["admin", "owner", "hr"].includes(req.user.role)) {
       if (!req.body.employeeId)
         return res.status(400).json({ message: "employeeId required" });
       emp = await Employee.findById(req.body.employeeId);
+      if (!emp)
+        return res.status(404).json({ message: "Employee not found" });
     }
 
-    //  Use UTC-safe day range
+    // 🔹 UTC-safe day range
     const startOfDay = new Date();
     startOfDay.setUTCHours(0, 0, 0, 0);
+
     const endOfDay = new Date();
     endOfDay.setUTCHours(23, 59, 59, 999);
 
+    // 🔹 Get today's attendance
     const record = await Attendance.findOne({
       employeeId: emp._id,
       companyId: req.user.companyId,
       date: { $gte: startOfDay, $lte: endOfDay },
     });
 
-    if (!record) return res.status(404).json({ message: "Check-in not found" });
-    if (record.checkOut) return res.status(400).json({ message: "Already checked out" });
+    if (!record)
+      return res.status(404).json({ message: "Check-in not found" });
 
-    //  Current UTC time as checkOut
+    if (record.checkOut)
+      return res.status(400).json({ message: "Already checked out" });
+
+    // 🔹 Current UTC time as checkOut
     record.checkOut = new Date();
 
-    //  Fetch schedule & compute derived fields
+    // 🔹 Get work schedule
     const schedule = await getSchedule(emp, req.user.companyId);
+
+    // 🔹 Recalculate totalHours, overtime, late, early, status
     computeDerivedFields(record, schedule);
 
+    // 🔹 Save record
     await record.save();
-    res.json({ success: true, data: record });
 
+    res.json({ success: true, data: record });
   } catch (err) {
     console.error("CheckOut Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /* ======================================================
    UPDATE ATTENDANCE (HR / OWNER)
