@@ -149,66 +149,64 @@ export const autoCheckoutBySchedule = async () => {
 ====================================================== */
 export const computeDerivedFields = (record, schedule) => {
 
-  //  Safety checks
+  // 1️ Safety checks
   if (!record.checkIn || !record.checkOut || !schedule) {
     record.totalHours = 0;
     record.overtimeHours = 0;
     record.isOvertime = false;
     record.status = "absent";
+    record.lateByMinutes = 0;
+    record.isLate = false;
+    record.earlyByMinutes = 0;
+    record.isEarlyCheckout = false;
     return;
   }
 
+  // Parse checkIn/checkOut as Date objects (UTC)
   const checkIn = new Date(record.checkIn);
   const checkOut = new Date(record.checkOut);
 
-  //  Invalid time safety
   if (checkOut <= checkIn) {
+    // Invalid times
     record.totalHours = 0;
     record.overtimeHours = 0;
     record.isOvertime = false;
     record.status = "absent";
+    record.lateByMinutes = 0;
+    record.isLate = false;
+    record.earlyByMinutes = 0;
+    record.isEarlyCheckout = false;
     return;
   }
 
-  //  FIXED OFFICE TIME (LOCAL DATE SAFE)
-  const dateStr = new Date(record.date).toISOString().split("T")[0]; // "YYYY-MM-DD"
-  const fixedIn = hhmmToDate(dateStr, schedule.inTime);
-  const fixedOut = hhmmToDate(dateStr, schedule.outTime);
+  // 2️ Build fixed office times (schedule) in UTC
+  // Use record.date as base
+  const recordDate = new Date(record.date);
+  const fixedIn = hhmmToDate(recordDate.toISOString().split("T")[0], schedule.inTime);
+  const fixedOut = hhmmToDate(recordDate.toISOString().split("T")[0], schedule.outTime);
 
-  /* ===============================
-     1️ TOTAL WORK
-  =============================== */
+  // 3️ Total worked minutes
   const totalMinutes = minutesBetween(checkIn, checkOut);
   record.totalHours = minutesToHoursDecimal(totalMinutes);
 
-  /* ===============================
-     2️ LATE
-  =============================== */
-  record.lateByMinutes =
-    checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
+  // 4️ Late
+  record.lateByMinutes = checkIn > fixedIn ? minutesBetween(fixedIn, checkIn) : 0;
   record.isLate = record.lateByMinutes > 0;
 
-  /* ===============================
-     3️ EARLY CHECKOUT
-  =============================== */
-  record.earlyByMinutes =
-    checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
+  // 5️ Early checkout
+  record.earlyByMinutes = checkOut < fixedOut ? minutesBetween(checkOut, fixedOut) : 0;
   record.isEarlyCheckout = record.earlyByMinutes > 0;
 
-  /* ===============================
-     4️ OVERTIME (CORRECT)
-  =============================== */
+  // 6️ Overtime
   const overtimeMinutes = checkOut > fixedOut ? minutesBetween(fixedOut, checkOut) : 0;
   record.overtimeHours = minutesToHoursDecimal(overtimeMinutes);
   record.isOvertime = overtimeMinutes > 0;
 
-  /* ===============================
-     5️ STATUS (DO NOT OVERRIDE MANUAL ABSENT)
-  =============================== */
+  // 7️ Status (don't override manual leave)
   if (record.status !== "leave") {
-    if (totalMinutes >= 480) record.status = "present";
-    else if (totalMinutes >= 240) record.status = "half-day";
-    else record.status = "absent";
+    if (totalMinutes >= 480) record.status = "present";        // 8h+
+    else if (totalMinutes >= 240) record.status = "half-day";   // 4h+
+    else record.status = "absent";                             // <4h
   }
 };
 
