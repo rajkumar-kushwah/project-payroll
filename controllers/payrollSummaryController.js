@@ -587,11 +587,11 @@ export const exportPayrollPdf = async (req, res) => {
     // ---------- Table Header ----------
     const startX = 40;
     const columns = [
-      { label: "Date", x: 40, width: 60 },
-      { label: "Day", x: 105, width: 60 },
-      { label: "Status", x: 170, width: 70 },
-      { label: "In", x: 265, width: 50 },
-      { label: "Out", x: 325, width: 50 },
+      { label: "Date", x: 40, width: 40 },
+      { label: "Day", x: 105, width: 40 },
+      { label: "Status", x: 170, width: 40 },
+      { label: "In", x: 265, width: 40 },
+      { label: "Out", x: 325, width: 40 },
       { label: "Hrs", x: 395, width: 40 },
       { label: "OT", x: 435, width: 40 },
     ];
