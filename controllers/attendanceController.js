@@ -159,28 +159,41 @@ export const computeDerivedFields = (record, schedule) => {
     return;
   }
 
-  const checkIn = new Date(record.checkIn);
-  const checkOut = new Date(record.checkOut);
+  const checkIn = new Date(record.checkIn);   // UTC
+  const checkOut = new Date(record.checkOut); // UTC
 
-  // 🔹 Schedule IN/OUT UTC-safe
-  const scheduleIn = hhmmToDateUTC(record.date, schedule.inTime);
-  const scheduleOut = hhmmToDateUTC(record.date, schedule.outTime);
+  // 🔹 Schedule OUT (IST → UTC conversion)
+  const [outH, outM] = schedule.outTime.split(":").map(Number);
 
-  // 1️⃣ Total worked minutes
+  const scheduleOut = new Date(record.date); // date = 00:00 UTC
+  scheduleOut.setUTCHours(outH - 5, outM - 30, 0, 0); // IST → UTC ✅
+
+  // 🔹 Schedule IN (for late check)
+  const [inH, inM] = schedule.inTime.split(":").map(Number);
+  const scheduleIn = new Date(record.date);
+  scheduleIn.setUTCHours(inH - 5, inM - 30, 0, 0);
+
+  // 1️⃣ Total worked time (accurate)
   const totalMinutes = minutesBetween(checkIn, checkOut);
-  record.totalHours = +(totalMinutes / 60).toFixed(2); // DB me 8.63 etc
+  record.totalHours = +(totalMinutes / 60).toFixed(2); // 8.63
 
-  // 2️⃣ Overtime in HH.MM format
-  const otMinutes = checkOut > scheduleOut ? minutesBetween(scheduleOut, checkOut) : 0;
+  // 2️⃣ Overtime (HH.MM format)
+  let otMinutes = 0;
+  if (checkOut > scheduleOut) {
+    otMinutes = minutesBetween(scheduleOut, checkOut);
+  }
+
   record.overtimeHours = minutesToHoursDecimal(otMinutes); // 8 min → 0.08
   record.isOvertime = otMinutes > 0;
 
   // 3️⃣ Late
-  record.lateByMinutes = checkIn > scheduleIn ? minutesBetween(scheduleIn, checkIn) : 0;
+  record.lateByMinutes =
+    checkIn > scheduleIn ? minutesBetween(scheduleIn, checkIn) : 0;
   record.isLate = record.lateByMinutes > 0;
 
   // 4️⃣ Early checkout
-  record.earlyByMinutes = checkOut < scheduleOut ? minutesBetween(checkOut, scheduleOut) : 0;
+  record.earlyByMinutes =
+    checkOut < scheduleOut ? minutesBetween(checkOut, scheduleOut) : 0;
   record.isEarlyCheckout = record.earlyByMinutes > 0;
 
   // 5️⃣ Status
