@@ -233,7 +233,7 @@ export const checkIn = async (req, res) => {
     const exists = await Attendance.findOne({
       employeeId: emp._id,
       companyId: req.user.companyId,
-      date: today,
+      date: new Date(today),
     });
     if (exists)
       return res.status(400).json({ message: "Already checked in" });
@@ -244,7 +244,7 @@ export const checkIn = async (req, res) => {
       name: emp.name,
       avatar: emp.avatar,
       companyId: req.user.companyId,
-      date: today,
+      date: new Date(today),
       checkIn: new Date(),
       status: "present",
     });
@@ -279,7 +279,7 @@ export const checkOut = async (req, res) => {
     const record = await Attendance.findOne({
       employeeId: emp._id,
       companyId: req.user.companyId,
-      date: today,
+      date: new Date(today),
     });
 
     if (!record)
