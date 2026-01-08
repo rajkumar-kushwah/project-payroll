@@ -35,6 +35,15 @@ export const minutesToHoursDecimal = (mins) => {
   return Number(`${hours}.${String(minutes).padStart(2, "0")}`);
 };
 
+/**
+ * Convert decimal hours → human readable "8h 38m"
+ */
+export const formatHoursToHuman = (decimalHours) => {
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  return `${hours}h ${minutes}m`;
+};
+
 
 /**
  * Format Date object → "HH:mm" string

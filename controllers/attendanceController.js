@@ -6,7 +6,7 @@ import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
 import WorkSchedule from "../models/WorkSchedule.js";
 import Leave from "../models/Leave.js";
-import { hhmmToDate,hhmmToDateUTC, minutesBetween, minutesToHoursDecimal } from "../utils/time.js";
+import { hhmmToDate,hhmmToDateUTC, minutesBetween,formatHoursToHuman, minutesToHoursDecimal } from "../utils/time.js";
 import OfficeHoliday from "../models/OfficeHoliday.js";
 
 
@@ -159,31 +159,38 @@ export const computeDerivedFields = (record, schedule) => {
     return;
   }
 
-  const checkIn = new Date(record.checkIn);   // UTC stored
-  const checkOut = new Date(record.checkOut); // UTC stored
+  const checkIn = new Date(record.checkIn);
+  const checkOut = new Date(record.checkOut);
 
-  // 🕕 Schedule OUT time (from DB)
-  const [outH, outM] = schedule.outTime.split(":").map(Number);
+  // 🔹 Schedule IN/OUT UTC-safe
+  const scheduleIn = hhmmToDateUTC(record.date, schedule.inTime);
+  const scheduleOut = hhmmToDateUTC(record.date, schedule.outTime);
 
-  // 🔥 Schedule OUT Date (UTC-safe)
-  const scheduleOut = new Date(record.date);
-  scheduleOut.setUTCHours(outH - 5, outM - 30, 0, 0);
-  // IST → UTC conversion
+  // 1️⃣ Total worked minutes
+  const totalMinutes = minutesBetween(checkIn, checkOut);
+  record.totalHours = +(totalMinutes / 60).toFixed(2); // DB me 8.63 etc
 
-  // 1️⃣ Total hours
-  const totalMinutes = Math.floor((checkOut - checkIn) / 60000);
-  record.totalHours = +(totalMinutes / 60).toFixed(2);
+  // 2️⃣ Overtime in HH.MM format
+  const otMinutes = checkOut > scheduleOut ? minutesBetween(scheduleOut, checkOut) : 0;
+  record.overtimeHours = minutesToHoursDecimal(otMinutes); // 8 min → 0.08
+  record.isOvertime = otMinutes > 0;
 
-  // 2️⃣ Overtime (ONLY schedule se compare)
-  if (checkOut > scheduleOut) {
-    const otMinutes = Math.floor((checkOut - scheduleOut) / 60000);
-    record.overtimeHours = +(otMinutes / 60).toFixed(2);
-    record.isOvertime = true;
-  } else {
-    record.overtimeHours = 0;
-    record.isOvertime = false;
+  // 3️⃣ Late
+  record.lateByMinutes = checkIn > scheduleIn ? minutesBetween(scheduleIn, checkIn) : 0;
+  record.isLate = record.lateByMinutes > 0;
+
+  // 4️⃣ Early checkout
+  record.earlyByMinutes = checkOut < scheduleOut ? minutesBetween(checkOut, scheduleOut) : 0;
+  record.isEarlyCheckout = record.earlyByMinutes > 0;
+
+  // 5️⃣ Status
+  if (!["leave", "office leave"].includes(record.status)) {
+    if (totalMinutes >= 480) record.status = "present";
+    else if (totalMinutes >= 240) record.status = "half-day";
+    else record.status = "absent";
   }
 };
+
 
 
 
