@@ -129,23 +129,29 @@ export const calculatePayroll = async (employee, month) => {
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  return {
-    summary: {
-      employeeId: employee._id,
-      employeeCode: employee.employeeCode,
-      name: employee.name,
-      avatar: employee.avatar,
-      present,
-      halfDay,
-      leave: leaveCount,
-      officeHolidays,
-      weeklyOff,   // <-- matches DB field
-      missingDays,
-      overtimeHours,
-      totalWorking: present + halfDay + leaveCount
-    },
-    daily
-  };
+ return {
+  summary: {
+    employeeId: employee._id,
+    employeeCode: employee.employeeCode,
+    name: employee.name,
+    avatar: employee.avatar,
+    present,
+    halfDay,
+    leave: leaveCount,
+    officeHolidays,
+    weeklyOff,
+    missingDays,
+    overtimeHours,          // raw decimal for DB
+    overtimeHoursHHMM: decimalToHHMM(overtimeHours), // for display / PDF
+    totalWorking: present + halfDay + leaveCount
+  },
+  daily: daily.map(d => ({
+    ...d,
+    totalHoursHHMM: decimalToHHMM(d.totalHours),
+    overtimeHoursHHMM: decimalToHHMM(d.overtimeHours)
+  }))
+};
+
 };
 
 
@@ -441,6 +447,13 @@ export const exportPayrollCsv = async (req, res) => {
 // };
 
 
+// Helper: decimal hours → hh:mm
+const decimalToHHMM = (hoursDecimal) => {
+  if (!hoursDecimal) return "0:00";
+  const h = Math.floor(hoursDecimal);
+  const m = Math.round((hoursDecimal - h) * 60);
+  return `${h}:${m.toString().padStart(2, "0")}`;
+};
 
 export const exportPayrollPdf = async (req, res) => {
   try {
@@ -624,8 +637,8 @@ export const exportPayrollPdf = async (req, res) => {
           case "Status": text = r.status; break;
           case "In": text = r.in; break;
           case "Out": text = r.out; break;
-          case "Hrs": text = String(r.hrs); break;
-          case "OT": text = String(r.ot); break;
+          case "Hrs": text = decimalToHHMM(r.hrs); break;
+          case "OT": text = decimalToHHMM(r.ot); break;
         }
 
         doc.text(text, col.x, currentY, {
