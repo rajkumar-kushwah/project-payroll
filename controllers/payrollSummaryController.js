@@ -159,26 +159,74 @@ export const calculatePayroll = async (employee, month) => {
 /* ---------------------------------
    Get All Payrolls
 ---------------------------------- */
+// export const getPayrolls = async (req, res) => {
+//   const { month } = req.query;
+//   const companyId = req.user.companyId;
+//   const employees = await Employee.find({ companyId, status: "active" });
+
+//   const payrolls = [];
+//   for (const emp of employees) {
+//     const { summary, daily } = await calculatePayroll(emp, month);
+
+//     const payroll = await Payroll.findOneAndUpdate(
+//       { employeeId: emp._id, month },
+//       { ...summary, month, daily, companyId },
+//       { upsert: true, new: true }
+//     );
+
+//     payrolls.push(payroll);
+//   }
+
+//   res.json({ success: true, data: payrolls });
+// };
+
 export const getPayrolls = async (req, res) => {
-  const { month } = req.query;
-  const companyId = req.user.companyId;
-  const employees = await Employee.find({ companyId, status: "active" });
+  try {
+    const { month } = req.query;
+    if (!month) {
+      return res.status(400).json({ message: "Month required" });
+    }
 
-  const payrolls = [];
-  for (const emp of employees) {
-    const { summary, daily } = await calculatePayroll(emp, month);
+    const companyId = req.user.companyId;
+    let employees = [];
 
-    const payroll = await Payroll.findOneAndUpdate(
-      { employeeId: emp._id, month },
-      { ...summary, month, daily, companyId },
-      { upsert: true, new: true }
-    );
+    // 🔐 ROLE BASED EMPLOYEE FETCH
+    if (req.user.role === "employee") {
+      // employee → only self
+      employees = await Employee.find({
+        _id: req.user.employeeId,
+        companyId,
+        status: "active",
+      });
+    } else {
+      // admin / hr → all
+      employees = await Employee.find({
+        companyId,
+        status: "active",
+      });
+    }
 
-    payrolls.push(payroll);
+    const payrolls = [];
+
+    for (const emp of employees) {
+      const { summary, daily } = await calculatePayroll(emp, month);
+
+      const payroll = await Payroll.findOneAndUpdate(
+        { employeeId: emp._id, month },
+        { ...summary, month, daily, companyId },
+        { upsert: true, new: true }
+      );
+
+      payrolls.push(payroll);
+    }
+
+    res.json({ success: true, data: payrolls });
+  } catch (err) {
+    console.error("Payroll fetch error:", err);
+    res.status(500).json({ message: "Server error" });
   }
-
-  res.json({ success: true, data: payrolls });
 };
+
 
 /* ---------------------------------
    Export Payroll CSV
