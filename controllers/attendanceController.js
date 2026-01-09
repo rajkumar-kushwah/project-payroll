@@ -187,13 +187,6 @@ export const computeDerivedFields = (record, schedule) => {
 
 
 
-
-
-
-
-
-
-
 /* ======================================================
    GET WORK SCHEDULE
 ====================================================== */
@@ -231,7 +224,9 @@ export const checkIn = async (req, res) => {
       emp = await Employee.findById(req.body.employeeId);
     }
 
-    const today = toDateString(new Date());
+    // const today = toDateString(new Date());
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
 
     const exists = await Attendance.findOne({
       employeeId: emp._id,
