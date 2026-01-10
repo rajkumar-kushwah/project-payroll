@@ -8,7 +8,7 @@ import Leave from "../models/Leave.js";
 import Attendance from "../models/Attendance.js";
 import Payroll from "../models/Payroll.js";
 import Company from "../models/Company.js";
-
+import WorkSchedule from "../models/WorkSchedule.js";
 
 // -------------------------------------------------------------------
 // GET ALL EMPLOYEES
@@ -199,20 +199,59 @@ export const updateEmployeeProfile = async (req, res) => {
 // -------------------------------------------------------------------
 // DELETE EMPLOYEE
 // -------------------------------------------------------------------
+// export const deleteEmployee = async (req, res) => {
+//   try {
+//     const emp = await Employee.findOneAndDelete({
+//       _id: req.params.id,
+//       companyId: req.user.companyId,
+//     });
+
+//     if (!emp) return res.status(404).json({ message: "Employee not found" });
+
+//     res.json({ success: true, message: "Employee deleted" });
+//   } catch (err) {
+//     res.status(500).json({ message: "Server error", error: err.message });
+//   }
+// };
+
 export const deleteEmployee = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const emp = await Employee.findOneAndDelete({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    });
+    // 1️ Employee ko delete karo
+    const emp = await Employee.findOneAndDelete(
+      { _id: req.params.id, companyId: req.user.companyId },
+      { session }
+    );
 
-    if (!emp) return res.status(404).json({ message: "Employee not found" });
+    if (!emp) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: "Employee not found" });
+    }
 
-    res.json({ success: true, message: "Employee deleted" });
+    // 2️ Related User ko delete karo
+    await User.findOneAndDelete({ _id: emp.employeeId }, { session });
+
+    // Optional: related data bhi delete kar sakte ho
+    await Leave.deleteMany({ employeeId: emp._id }, { session });
+    await Attendance.deleteMany({ employeeId: emp._id }, { session });
+    await Payroll.deleteMany({ employeeId: emp._id }, { session });
+    await WorkSchedule.deleteMany({ employeeId: emp._id }, { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ success: true, message: "Employee and related user deleted successfully" });
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Delete Employee Error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 // -------------------------------------------------------------------
 // SEARCH EMPLOYEES
